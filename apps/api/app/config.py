@@ -1,12 +1,6 @@
-import os
-"""Configuracion tipada de EcoNexo.
-
-Los valores por defecto son exclusivamente para desarrollo local. En produccion,
-los secretos deben provenir de un gestor de secretos y el arranque valida que no
-se conserven credenciales de ejemplo.
-"""
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -81,44 +75,57 @@ class Settings(BaseSettings):
             origins.add("http://localhost:3000")
         return sorted(origins)
 
-    @property
-    def is_production(self) -> bool:
-        return self.environment.lower() in {"production", "prod"}
-
-    def insecure_production_values(self) -> list[str]:
+        def insecure_production_values(self) -> list[str]:
         findings: list[str] = []
+
         if not self.is_production:
             return findings
+
         if self.jwt_secret == "change_me_dev_secret" or len(self.jwt_secret) < 32:
             findings.append("JWT_SECRET")
+
         if (
             self.internal_service_token == "change_me_internal_service_token"
             or len(self.internal_service_token) < 32
         ):
             findings.append("INTERNAL_SERVICE_TOKEN")
+
         if self.postgres_password == "econexo_dev_pw":
             findings.append("POSTGRES_PASSWORD")
+
         if self.s3_secret_key == "econexo_dev_pw":
             findings.append("S3_SECRET_KEY")
-        if not self.public_app_url.startswith("https://") or "localhost" in self.public_app_url:
+
+        if (
+            not self.public_app_url.startswith("https://")
+            or "localhost" in self.public_app_url
+        ):
             findings.append("PUBLIC_APP_URL")
-        if not self.s3_public_endpoint.startswith("https://") or "localhost" in self.s3_public_endpoint:
+
+        if (
+            not self.s3_public_endpoint.startswith("https://")
+            or "localhost" in self.s3_public_endpoint
+        ):
             findings.append("S3_PUBLIC_ENDPOINT")
+
         if self.s3_server_side_encryption not in {"AES256", "aws:kms"}:
             findings.append("S3_SERVER_SIDE_ENCRYPTION")
+
         proxy_ips = self.forwarded_allow_ips.strip()
+        running_on_render = os.getenv("RENDER", "").lower() == "true"
 
         if proxy_ips in {"", "0.0.0.0/0"}:
-        findings.append("FORWARDED_ALLOW_IPS")
-        elif proxy_ips == "*" and os.getenv("RENDER", "").lower() != "true":
-        findings.append("FORWARDED_ALLOW_IPS")
+            findings.append("FORWARDED_ALLOW_IPS")
+        elif proxy_ips == "*" and not running_on_render:
+            findings.append("FORWARDED_ALLOW_IPS")
+
         if not self.cors_list or any(
             origin == "*" or not origin.startswith("https://") or "localhost" in origin
             for origin in self.cors_list
         ):
             findings.append("CORS_ORIGINS")
-        return findings
 
+        return findings
 
 @lru_cache
 def get_settings() -> Settings:
