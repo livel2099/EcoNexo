@@ -1,3 +1,5 @@
+BEGIN;
+
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -223,3 +225,5 @@ CREATE OR REPLACE FUNCTION nearby_devices(
       AND ST_DWithin(d.location, ST_MakePoint(p_lon, p_lat)::geography, p_radius_m)
     ORDER BY distance_m ASC;
 $fn$ LANGUAGE sql STABLE;
+
+COMMIT;

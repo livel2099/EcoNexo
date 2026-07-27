@@ -1,6 +1,8 @@
 -- EcoNexo Misiones 1.0.0-rc.2 - Copernicus runtime + sanidad forestal norte.
 -- Idempotente.
 
+BEGIN;
+
 ALTER TABLE environmental_source_settings
   ADD COLUMN IF NOT EXISTS copernicus_enabled BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS copernicus_wms_url TEXT,
@@ -22,7 +24,7 @@ BEGIN
         copernicus_wms_url ~ '^https://sh\.dataspace\.copernicus\.eu/ogc/wms/[A-Za-z0-9-]+/?$'
       ) NOT VALID;
   END IF;
-END
+END;
 $block$;
 
 ALTER TABLE organization_modules DROP CONSTRAINT IF EXISTS ck_organization_modules_key;
@@ -40,3 +42,5 @@ SELECT id, 'forestry_pests', 'trial', 'Vigilancia de plagas forestales', now() +
        '{"plain_language":true,"human_approval_required":true,"focus_area":"San Antonio - General Manuel Belgrano","priority_pests":["Sirex noctilio","escolitidos","anomalias sanitarias en Pinus y Eucalyptus"]}'::jsonb
 FROM organizations
 ON CONFLICT (org_id, module_key) DO NOTHING;
+
+COMMIT;

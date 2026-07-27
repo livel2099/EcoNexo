@@ -3,6 +3,8 @@
 -- sincronizar la geometría oficial desde GeoRef Argentina mediante
 -- POST /territory/sync-georef como administrador.
 
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS territory_boundaries (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   province text NOT NULL,
@@ -30,7 +32,7 @@ VALUES (
   'https://www.argentina.gob.ar/georef',
   false,
   ST_Multi(ST_GeomFromText(
-    'POLYGON((-54.64 -25.50,-54.24 -25.70,-53.92 -25.95,-53.63 -26.25,-53.70 -26.62,-53.88 -27.02,-54.20 -27.36,-54.64 -27.62,-55.12 -27.93,-55.66 -28.18,-55.86 -27.84,-55.96 -27.37,-55.72 -27.06,-55.42 -26.70,-55.08 -26.35,-54.82 -25.98,-54.68 -25.66,-54.64 -25.50))',
+    'POLYGON((-54.64 -25.50,-54.30 -25.58,-53.98 -25.62,-53.72 -25.78,-53.60 -26.05,-53.57 -26.30,-53.68 -26.62,-53.88 -27.02,-54.20 -27.36,-54.64 -27.62,-55.12 -27.93,-55.66 -28.18,-55.86 -27.84,-55.96 -27.37,-55.72 -27.06,-55.42 -26.70,-55.08 -26.35,-54.82 -25.98,-54.68 -25.66,-54.64 -25.50))',
     4326
   )),
   now()
@@ -67,3 +69,5 @@ ORDER BY is_official DESC, fetched_at DESC NULLS LAST, updated_at DESC;
 
 COMMENT ON TABLE territory_boundaries IS
   'Límites territoriales versionados. El registro oficial debe sincronizarse desde GeoRef antes del lanzamiento público.';
+
+COMMIT;

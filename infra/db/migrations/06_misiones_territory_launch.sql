@@ -2,6 +2,8 @@
 -- Idempotente. Los CHECK NOT VALID protegen nuevas escrituras sin bloquear
 -- la migración por datos históricos que deban revisarse manualmente.
 
+BEGIN;
+
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS province TEXT NOT NULL DEFAULT 'Misiones';
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS department TEXT;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS municipality TEXT;
@@ -15,14 +17,14 @@ BEGIN
     ALTER TABLE organizations ADD CONSTRAINT organizations_territory_scope_check
       CHECK (territory_scope IN ('provincial','departamental','municipal','area_operativa'));
   END IF;
-END
+END;
 $block$;
 
 CREATE OR REPLACE FUNCTION econexo_inside_misiones(point_value geography)
 RETURNS boolean AS $fn$
   SELECT ST_Covers(
     ST_GeomFromText(
-      'POLYGON((-54.64 -25.50,-54.24 -25.70,-53.92 -25.95,-53.63 -26.25,-53.70 -26.62,-53.88 -27.02,-54.20 -27.36,-54.64 -27.62,-55.12 -27.93,-55.66 -28.18,-55.86 -27.84,-55.96 -27.37,-55.72 -27.06,-55.42 -26.70,-55.08 -26.35,-54.82 -25.98,-54.68 -25.66,-54.64 -25.50))',
+      'POLYGON((-54.64 -25.50,-54.30 -25.58,-53.98 -25.62,-53.72 -25.78,-53.60 -26.05,-53.57 -26.30,-53.68 -26.62,-53.88 -27.02,-54.20 -27.36,-54.64 -27.62,-55.12 -27.93,-55.66 -28.18,-55.86 -27.84,-55.96 -27.37,-55.72 -27.06,-55.42 -26.70,-55.08 -26.35,-54.82 -25.98,-54.68 -25.66,-54.64 -25.50))',
       4326
     ),
     point_value::geometry
@@ -51,7 +53,7 @@ BEGIN
     ALTER TABLE risk_zones ADD CONSTRAINT risk_zones_inside_misiones_check
       CHECK (econexo_inside_misiones(center)) NOT VALID;
   END IF;
-END
+END;
 $block$;
 
 -- Corrige centros por defecto antiguos que hayan quedado fuera de Misiones.
@@ -69,3 +71,5 @@ WHERE module_key IN ('core','fire_smoke');
 
 CREATE INDEX IF NOT EXISTS idx_organizations_misiones_scope
   ON organizations(province, department, municipality, territory_scope);
+
+COMMIT;

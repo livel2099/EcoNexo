@@ -1,6 +1,8 @@
 -- EcoNexo 0.4 - licencias modulares, app movil y trazabilidad de Alerta IA.
 -- Idempotente: puede aplicarse sobre una base ya inicializada.
 
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS organization_modules (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     org_id      UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -53,3 +55,5 @@ SELECT id, 'fire_smoke', 'trial', 'Focos de incendio forestal y humo', now() + i
        '{"plain_language":true,"human_approval_required":true,"emergency_numbers":["911","100","103","105"]}'::jsonb
 FROM organizations
 ON CONFLICT (org_id, module_key) DO NOTHING;
+
+COMMIT;
