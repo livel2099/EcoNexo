@@ -1,0 +1,55 @@
+FROM node:22-slim AS base
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+
+FROM base AS deps
+COPY package.json package-lock.json ./
+RUN npm ci
+
+FROM base AS dev
+ENV NODE_ENV=development
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+EXPOSE 3000
+CMD ["npm", "run", "dev"]
+
+FROM base AS builder
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_WS_URL=ws://localhost:8000
+ARG NEXT_PUBLIC_MAP_PROVIDER=leaflet
+ARG NEXT_PUBLIC_MAPBOX_TOKEN=
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=
+ARG NEXT_PUBLIC_LEGAL_EMAIL=
+ARG NEXT_PUBLIC_APP_URL=http://localhost:3000
+ARG NEXT_PUBLIC_COPERNICUS_WMS_URL=
+ARG NEXT_PUBLIC_LEGAL_ENTITY_NAME=
+ARG NEXT_PUBLIC_LEGAL_CUIT=
+ARG NEXT_PUBLIC_LEGAL_ADDRESS="Misiones, Argentina"
+ARG NEXT_PUBLIC_LEGAL_JURISDICTION="Provincia de Misiones"
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL \
+    NEXT_PUBLIC_MAP_PROVIDER=$NEXT_PUBLIC_MAP_PROVIDER \
+    NEXT_PUBLIC_MAPBOX_TOKEN=$NEXT_PUBLIC_MAPBOX_TOKEN \
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID \
+    NEXT_PUBLIC_LEGAL_EMAIL=$NEXT_PUBLIC_LEGAL_EMAIL \
+    NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
+    NEXT_PUBLIC_COPERNICUS_WMS_URL=$NEXT_PUBLIC_COPERNICUS_WMS_URL \
+    NEXT_PUBLIC_LEGAL_ENTITY_NAME=$NEXT_PUBLIC_LEGAL_ENTITY_NAME \
+    NEXT_PUBLIC_LEGAL_CUIT=$NEXT_PUBLIC_LEGAL_CUIT \
+    NEXT_PUBLIC_LEGAL_ADDRESS="${NEXT_PUBLIC_LEGAL_ADDRESS}" \
+    NEXT_PUBLIC_LEGAL_JURISDICTION="${NEXT_PUBLIC_LEGAL_JURISDICTION}"
+RUN npm run build
+
+FROM node:22-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs nextjs
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+USER nextjs
+EXPOSE 3000
+CMD ["node", "server.js"]

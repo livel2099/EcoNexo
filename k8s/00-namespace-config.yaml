@@ -1,0 +1,50 @@
+# Valores de ejemplo. Reemplazar dominios y conectar secretos externos antes de aplicar.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: econexo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: econexo-config
+  namespace: econexo
+data:
+  ENVIRONMENT: "production"
+  POSTGRES_HOST: "REEMPLAZAR_RDS_HOST"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "econexo"
+  MQTT_HOST: "REEMPLAZAR_MQTT_HOST"
+  MQTT_PORT: "1883"
+  ANOMALY_SERVICE_URL: "http://anomaly:8100"
+  API_URL: "http://api:8000"
+  S3_ENDPOINT: "https://s3.amazonaws.com"
+  S3_PUBLIC_ENDPOINT: "https://s3.amazonaws.com"
+  S3_BUCKET: "REEMPLAZAR_BUCKET_PRIVADO"
+  S3_SERVER_SIDE_ENCRYPTION: "AES256"
+  MAX_REPORT_PHOTO_BYTES: "8388608"
+  CORS_ORIGINS: "https://app.econexo.example"
+  PUBLIC_APP_URL: "https://app.econexo.example"
+  FORWARDED_ALLOW_IPS: "REEMPLAZAR_CIDR_PROXY"
+  GOOGLE_CLIENT_ID: "REEMPLAZAR.apps.googleusercontent.com"
+  LEGAL_EMAIL: "privacidad@econexo.example"
+  FIRMS_POLL_SECONDS: "900"
+  ALLOW_DEMO_SATELLITE_FIXTURES: "false"
+  PROVINCE: "Misiones"
+  EMERGENCY_NUMBER: "911"
+---
+# Para producción, reemplazar por External Secrets Operator / Secrets Manager.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: econexo-secrets
+  namespace: econexo
+type: Opaque
+stringData:
+  POSTGRES_USER: "REEMPLAZAR"
+  POSTGRES_PASSWORD: "REEMPLAZAR_32_CARACTERES_MINIMO"
+  JWT_SECRET: "REEMPLAZAR_32_CARACTERES_MINIMO"
+  INTERNAL_SERVICE_TOKEN: "REEMPLAZAR_32_CARACTERES_MINIMO"
+  S3_ACCESS_KEY: "REEMPLAZAR"
+  S3_SECRET_KEY: "REEMPLAZAR"
+  NASA_FIRMS_KEY: ""

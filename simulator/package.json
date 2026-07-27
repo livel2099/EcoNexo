@@ -1,0 +1,12 @@
+{
+  "name": "econexo-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Emula nodos ESP32 publicando telemetria realista por MQTT (alimenta la demo)",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "mqtt": "^5.10.1",
+    "pg": "^8.13.1"
+  }
+}

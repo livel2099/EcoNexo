@@ -1,0 +1,10 @@
+import { LegalPage, LegalSection } from "../../components/LegalPage";
+
+export default function CookiesPage() {
+  return <LegalPage title="Política de Cookies y Almacenamiento" subtitle="Tecnologías necesarias para sesión, seguridad y funcionamiento.">
+    <LegalSection number="01" title="Enfoque"><p>EcoNexo no incorpora publicidad ni seguimiento comportamental por defecto. Utiliza almacenamiento del navegador y tecnologías equivalentes para funciones estrictamente necesarias, preferencias operativas y autenticación.</p></LegalSection>
+    <LegalSection number="02" title="Tecnologías propias"><div className="legal-table"><div><strong>Sesión de EcoNexo</strong><span>Se conserva en <code>sessionStorage</code> y se elimina al cerrar la pestaña o al salir. Contiene el token de acceso y datos mínimos del perfil.</span></div><div><strong>Demo autónoma</strong><span>Usa <code>localStorage</code> para conservar datos ficticios en ese navegador.</span></div><div><strong>Sesión ciudadana</strong><span>Token seudónimo firmado, almacenado localmente para limitar abuso y mantener reputación del emisor.</span></div><div><strong>Preferencias</strong><span>Capas, vistas u opciones de interfaz cuando se implementen.</span></div></div></LegalSection>
+    <LegalSection number="03" title="Google y terceros"><p>Al seleccionar “Continuar con Google”, Google Identity Services puede usar cookies o almacenamiento bajo sus propias políticas para autenticar la cuenta y prevenir fraude. Los mapas y fuentes ambientales externas pueden recibir datos técnicos como IP, agente de usuario y solicitudes de capa. Antes del despliegue se deberá inventariar cada proveedor real y configurar consentimiento cuando no sea estrictamente necesario.</p></LegalSection>
+    <LegalSection number="04" title="Gestión"><p>El navegador permite borrar o bloquear almacenamiento. Si se bloquean tecnologías esenciales, el inicio de sesión, la demo, los mapas o el reporte ciudadano pueden dejar de funcionar. EcoNexo implementará un panel de consentimiento antes de activar analítica opcional o tecnologías no esenciales.</p></LegalSection>
+  </LegalPage>;
+}

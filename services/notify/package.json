@@ -1,0 +1,12 @@
+{
+  "name": "econexo-notify",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Microservicio de despacho de notificaciones (in-app real; email/SMS/WhatsApp como adapters stub)",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "mqtt": "^5.10.1",
+    "pg": "^8.13.1"
+  }
+}

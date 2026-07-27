@@ -1,0 +1,48 @@
+# Secrets
+.env
+*.env
+!.env.example
+**/.env
+!**/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+.wrangler/
+out/
+dist/
+build/
+npm-debug.log*
+.turbo/
+
+# Data / volumes
+pgdata/
+minio-data/
+mosquitto/data/
+mosquitto/log/
+*.log
+
+# ML artifacts
+*.pt
+*.pth
+!**/fixtures/*.pt
+models/*.pt
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Claude local settings
+.claude/settings.local.json

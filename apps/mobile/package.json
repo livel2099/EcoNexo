@@ -1,0 +1,38 @@
+{
+  "name": "econexo-mobile",
+  "version": "1.0.0-rc.2",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "start:clear": "expo start -c",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "doctor": "npx expo-doctor",
+    "prebuild": "expo prebuild",
+    "build:android:preview": "eas build -p android --profile preview",
+    "build:android:production": "eas build -p android --profile production",
+    "build:ios:preview": "eas build -p ios --profile preview",
+    "build:ios:production": "eas build -p ios --profile production"
+  },
+  "dependencies": {
+    "expo": "~56.0.12",
+    "expo-auth-session": "~56.0.14",
+    "expo-crypto": "~56.0.4",
+    "expo-image-picker": "~56.0.18",
+    "expo-location": "~56.0.18",
+    "expo-secure-store": "~56.0.4",
+    "expo-status-bar": "~56.0.4",
+    "expo-web-browser": "~56.0.5",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-maps": "1.27.2",
+    "react-native-safe-area-context": "~5.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.0",
+    "typescript": "~5.9.2"
+  }
+}

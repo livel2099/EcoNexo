@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "EcoNexo",
+    "slug": "econexo-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "econexo",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#031413"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "pro.livel.econexo",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "EcoNexo usa tu ubicacion para georreferenciar reportes ambientales.",
+        "NSPhotoLibraryUsageDescription": "EcoNexo permite adjuntar evidencia fotografica a reportes comunitarios.",
+        "NSCameraUsageDescription": "EcoNexo permite tomar evidencia fotografica para reportes comunitarios."
+      }
+    },
+    "android": {
+      "package": "pro.livel.econexo",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#031413"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ],
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "EcoNexo usa tu ubicacion para georreferenciar reportes ambientales."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "EcoNexo permite adjuntar evidencia fotografica a reportes comunitarios.",
+          "cameraPermission": "EcoNexo permite tomar evidencia fotografica para reportes comunitarios.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Permitir que EcoNexo proteja la sesion con Face ID."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "REEMPLAZAR_CON_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

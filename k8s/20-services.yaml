@@ -1,0 +1,100 @@
+# Microservicios internos. PostgreSQL, MQTT y S3 se consideran servicios gestionados.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: anomaly, namespace: econexo }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: anomaly } }
+  template:
+    metadata: { labels: { app: anomaly } }
+    spec:
+      containers:
+        - name: anomaly
+          image: econexo/anomaly:latest
+          ports: [{ name: http, containerPort: 8100 }]
+          envFrom:
+            - configMapRef: { name: econexo-config }
+            - secretRef: { name: econexo-secrets }
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { cpu: "2", memory: "2Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: anomaly, namespace: econexo }
+spec:
+  selector: { app: anomaly }
+  ports: [{ name: http, port: 8100, targetPort: http }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: ingest, namespace: econexo }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: ingest } }
+  template:
+    metadata: { labels: { app: ingest } }
+    spec:
+      containers:
+        - name: ingest
+          image: econexo/ingest:latest
+          envFrom:
+            - configMapRef: { name: econexo-config }
+            - secretRef: { name: econexo-secrets }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "750m", memory: "512Mi" }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: notify, namespace: econexo }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: notify } }
+  template:
+    metadata: { labels: { app: notify } }
+    spec:
+      containers:
+        - name: notify
+          image: econexo/notify:latest
+          ports: [{ name: http, containerPort: 8200 }]
+          envFrom:
+            - configMapRef: { name: econexo-config }
+            - secretRef: { name: econexo-secrets }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: notify, namespace: econexo }
+spec:
+  type: ClusterIP
+  selector: { app: notify }
+  ports: [{ name: http, port: 8200, targetPort: http }]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: satellite, namespace: econexo }
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata: { labels: { app: satellite } }
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: satellite
+              image: econexo/satellite:latest
+              command: ["python", "-m", "app.main"]
+              envFrom:
+                - configMapRef: { name: econexo-config }
+                - secretRef: { name: econexo-secrets }
+              resources:
+                requests: { cpu: "250m", memory: "256Mi" }
+                limits: { cpu: "1", memory: "1Gi" }

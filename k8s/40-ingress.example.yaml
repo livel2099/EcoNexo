@@ -1,0 +1,29 @@
+# Ejemplo para NGINX Ingress. Ajustar clase, certificados, DNS y límites al proveedor elegido.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: econexo
+  namespace: econexo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["app.econexo.example", "api.econexo.example"]
+      secretName: econexo-tls
+  rules:
+    - host: app.econexo.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: web, port: { name: http } } }
+    - host: api.econexo.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: api, port: { name: http } } }

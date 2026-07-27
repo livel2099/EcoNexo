@@ -1,0 +1,8 @@
+{
+  "_comment": "Fixture demostrativo VIIRS limitado a Misiones. No representa un incendio confirmado ni debe usarse como alerta oficial.",
+  "detections": [
+    {"latitude": -26.83, "longitude": -54.44, "bright_ti4": 342.5, "confidence": "h", "frp": 45.2, "acq_date": "2026-01-15", "acq_time": "0412"},
+    {"latitude": -26.79, "longitude": -54.48, "bright_ti4": 335.1, "confidence": "n", "frp": 22.8, "acq_date": "2026-01-15", "acq_time": "0412"},
+    {"latitude": -27.36, "longitude": -55.58, "bright_ti4": 329.8, "confidence": "n", "frp": 16.4, "acq_date": "2026-01-15", "acq_time": "0430"}
+  ]
+}

@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: econexo
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector: { matchLabels: { app: api } }
+  template:
+    metadata: { labels: { app: api } }
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api
+          image: econexo/api:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8000 }]
+          envFrom:
+            - configMapRef: { name: econexo-config }
+            - secretRef: { name: econexo-secrets }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: "250m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "1Gi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            runAsNonRoot: true
+            seccompProfile: { type: RuntimeDefault }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: econexo
+spec:
+  selector: { app: api }
+  ports: [{ name: http, port: 8000, targetPort: http }]

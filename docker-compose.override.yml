@@ -1,0 +1,12 @@
+# Desarrollo local: usa el stage `dev`, hot reload y dependencias aisladas.
+services:
+  web:
+    build:
+      target: dev
+    command: npm run dev
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      WATCHPACK_POLLING: "true"
