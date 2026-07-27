@@ -64,18 +64,27 @@ class Settings(BaseSettings):
     def platform_admin_list(self) -> list[str]:
         return sorted({value.strip().lower() for value in self.platform_admin_emails.split(",") if value.strip()})
 
-    @property
+        @property
     def cors_list(self) -> list[str]:
-        origins = {o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()}
-        # En desarrollo, localhost y 127.0.0.1 son equivalentes para el usuario,
-        # pero el navegador los trata como origins distintos. Aceptamos ambos.
+        origins = {
+            origin.strip().rstrip("/")
+            for origin in self.cors_origins.split(",")
+            if origin.strip()
+        }
+
         if "http://localhost:3000" in origins:
             origins.add("http://127.0.0.1:3000")
+
         if "http://127.0.0.1:3000" in origins:
             origins.add("http://localhost:3000")
+
         return sorted(origins)
 
-        def insecure_production_values(self) -> list[str]:
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() == "production"
+
+    def insecure_production_values(self) -> list[str]:
         findings: list[str] = []
 
         if not self.is_production:
@@ -120,7 +129,9 @@ class Settings(BaseSettings):
             findings.append("FORWARDED_ALLOW_IPS")
 
         if not self.cors_list or any(
-            origin == "*" or not origin.startswith("https://") or "localhost" in origin
+            origin == "*"
+            or not origin.startswith("https://")
+            or "localhost" in origin
             for origin in self.cors_list
         ):
             findings.append("CORS_ORIGINS")
