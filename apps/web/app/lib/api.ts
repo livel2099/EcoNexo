@@ -22,6 +22,7 @@ type StorageKind = "session" | "local";
 
 function getBrowserStorage(kind: StorageKind): Storage | null {
   if (typeof window === "undefined") return null;
+<<<<<<< HEAD
   try {
     return kind === "session" ? window.sessionStorage : window.localStorage;
   } catch {
@@ -72,10 +73,97 @@ export function getSession(): Session | null {
   } catch {
     removeStorage(sessionStore, KEY);
     removeStorage(localStore, KEY);
+=======
+
+  try {
+    return kind === "session"
+      ? window.sessionStorage
+      : window.localStorage;
+  } catch {
+>>>>>>> origin/main
     return null;
   }
 }
 
+<<<<<<< HEAD
+=======
+function readStorage(storage: Storage | null, key: string): string | null {
+  if (!storage) return null;
+
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(
+  storage: Storage | null,
+  key: string,
+  value: string,
+): boolean {
+  if (!storage) return false;
+
+  try {
+    storage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeStorage(storage: Storage | null, key: string): void {
+  if (!storage) return;
+
+  try {
+    storage.removeItem(key);
+  } catch {
+    // El navegador puede bloquear el almacenamiento.
+  }
+}
+
+export function saveSession(session: Session): void {
+  const serialized = JSON.stringify(session);
+  const sessionStore = getBrowserStorage("session");
+  const localStore = getBrowserStorage("local");
+
+  const saved = writeStorage(sessionStore, KEY, serialized);
+  removeStorage(localStore, KEY);
+
+  if (!saved) {
+    throw new Error(
+      "El navegador bloqueó el almacenamiento de la sesión. Habilitá el almacenamiento para EcoNexo.",
+    );
+  }
+}
+
+export function getSession(): Session | null {
+  const sessionStore = getBrowserStorage("session");
+  const localStore = getBrowserStorage("local");
+
+  const current = readStorage(sessionStore, KEY);
+  const legacy = readStorage(localStore, KEY);
+  const raw = current || legacy;
+
+  if (!raw) return null;
+
+  try {
+    const session = JSON.parse(raw) as Session;
+
+    if (!current) {
+      writeStorage(sessionStore, KEY, raw);
+      removeStorage(localStore, KEY);
+    }
+
+    return session;
+  } catch {
+    removeStorage(sessionStore, KEY);
+    removeStorage(localStore, KEY);
+    return null;
+  }
+}
+
+>>>>>>> origin/main
 export function clearSession(): void {
   removeStorage(getBrowserStorage("session"), KEY);
   removeStorage(getBrowserStorage("local"), KEY);
