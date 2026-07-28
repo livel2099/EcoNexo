@@ -19,6 +19,20 @@ export interface Rule { id: string; name: string; alert_type: string; conditions
 
 export type ReportKind = "desempeno_operativo" | "boletin_amenaza" | "parte_tecnico" | "episodio_ambiental";
 export type RecipientType = "organizacion" | "municipio" | "programa_organismo" | "inversor" | "aseguradora" | "auditoria";
+
+export interface Session {
+  access_token: string;
+  org_id: string;
+  role: string;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+  auth_provider: "password" | "google";
+  is_new_user?: boolean;
+  platform_admin?: boolean;
+  must_change_password?: boolean;
+}
+
 export interface ImpactMetrics {
   devices_total: number;
   devices_online: number;
