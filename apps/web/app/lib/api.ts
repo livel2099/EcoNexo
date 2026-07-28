@@ -104,6 +104,27 @@ export async function login(email: string, password: string): Promise<Session> {
   }), "No se pudo iniciar sesión", false);
 }
 
+export async function changePassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await checked<void>(
+    await request(`${API}/auth/change-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    }),
+    "No se pudo cambiar la contraseña",
+    false,
+  );
+}
 export interface EmailRegisterInput {
   organization_name: string;
   vertical: "municipio" | "forestal" | "energetica";
