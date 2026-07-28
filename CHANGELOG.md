@@ -143,3 +143,14 @@
 - Área prioritaria San Antonio y contexto del radar meteorológico de Bernardo de Irigoyen.
 - Advertencias explícitas: el radar no identifica especies ni confirma una plaga.
 - Migración `10_copernicus_forestry_pests.sql`.
+
+## 1.0.0-rc.5 — Administrador general oculto
+
+- Consola privada `/plataforma` sin enlace en la navegación ni sitemap.
+- Bootstrap seguro del administrador `econexoargentina@gmail.com` mediante variables de Render.
+- Cambio obligatorio de contraseña temporal.
+- ABM global de usuarios y organizaciones con baja lógica.
+- Restablecimiento de contraseña temporal y auditoría global.
+- Endpoints `/platform/*` excluidos de Swagger y protegidos por `PLATFORM_ADMIN_EMAILS`.
+- Migraciones `12_platform_admin_console.sql` y `13_platform_admin_organization_status.sql`.
+- Corrección defensiva de `sessionStorage` y `localStorage` en el frontend.

@@ -25,7 +25,7 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: RELEASE_VERSION
-        value: 1.0.0-rc.4-render
+        value: 1.0.0-rc.5-render
       - key: DATABASE_URL
         fromDatabase:
           name: econexo-db
@@ -43,13 +43,25 @@ services:
       - key: FORWARDED_ALLOW_IPS
         value: "*"
       - key: PUBLIC_APP_URL
-        value: https://econexo-misiones.econexo-misiones.workers.dev
+        value: https://econexo-web.onrender.com
       - key: CORS_ORIGINS
-        value: https://econexo-misiones.econexo-misiones.workers.dev
+        value: https://econexo-web.onrender.com
       - key: PLATFORM_ADMIN_EMAILS
+        value: econexoargentina@gmail.com
+      - key: PLATFORM_ADMIN_BOOTSTRAP_ENABLED
+        value: "true"
+      - key: PLATFORM_ADMIN_INITIAL_PASSWORD
         sync: false
+      - key: PLATFORM_ADMIN_FORCE_PASSWORD_CHANGE
+        value: "true"
+      - key: PLATFORM_ADMIN_RESET_INITIAL_PASSWORD
+        value: "true"
+      - key: PLATFORM_ADMIN_NAME
+        value: Administrador General EcoNexo
+      - key: PLATFORM_ADMIN_ORGANIZATION
+        value: EcoNexo Plataforma
       - key: SALES_EMAIL
-        sync: false
+        value: econexoargentina@gmail.com
       - key: GOOGLE_CLIENT_ID
         value: ""
       - key: GOOGLE_CLIENT_IDS

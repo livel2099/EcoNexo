@@ -7,6 +7,8 @@ export interface Session {
   avatar_url: string | null;
   auth_provider: "password" | "google";
   is_new_user?: boolean;
+  platform_admin?: boolean;
+  must_change_password?: boolean;
 }
 export interface Org { id: string; name: string; slug: string; vertical: string; primary_color: string; baseline_response_s: number; province: string; department: string | null; municipality: string | null; territory_scope: "provincial" | "departamental" | "municipal" | "area_operativa"; }
 export interface Device { id: string; name: string; external_id: string; lat: number; lon: number; status: string; battery: number | null; rssi: number | null; tags: string[]; last_seen: string | null; }
@@ -341,5 +343,64 @@ export interface AdminNotification {
   actor_email: string | null;
   metadata: Record<string, unknown>;
   read: boolean;
+  created_at: string;
+}
+
+
+// --- Consola oculta del administrador general ---
+export interface PlatformSummary {
+  organizations_total: number;
+  organizations_active: number;
+  users_total: number;
+  users_active: number;
+  platform_admins: number;
+  pending_license_requests: number;
+  logins_24h: number;
+}
+
+export interface PlatformUser {
+  id: string;
+  org_id: string;
+  org_name: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  is_active: boolean;
+  organization_active: boolean;
+  auth_provider: "password" | "google";
+  email_verified: boolean;
+  must_change_password: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlatformOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  vertical: string;
+  province: string;
+  municipality: string | null;
+  is_active: boolean;
+  users_total: number;
+  users_active: number;
+  plan_key: string | null;
+  plan_name: string | null;
+  subscription_status: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlatformAudit {
+  id: string;
+  org_id: string | null;
+  org_name: string | null;
+  user_id: string | null;
+  actor_name: string | null;
+  action: string;
+  resource: string;
+  resource_id: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
 }

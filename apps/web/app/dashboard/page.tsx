@@ -102,6 +102,10 @@ export default function Dashboard() {
       router.replace("/login");
       return;
     }
+    if (session.must_change_password) {
+      router.replace("/cambiar-contrasena");
+      return;
+    }
     setSession(session);
     setToken(session.access_token);
     void apiGet<Org>("/orgs/me", session.access_token).then(setOrg).catch(() => undefined);

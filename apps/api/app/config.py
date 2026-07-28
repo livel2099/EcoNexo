@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     environment: str = "development"
-    release_version: str = "1.0.0-rc.4-render"
+    release_version: str = "1.0.0-rc.5-render"
 
     # Render y otros PaaS entregan habitualmente una URL completa. Si esta
     # presente, tiene prioridad sobre las variables POSTGRES_* individuales.
@@ -60,7 +60,13 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     public_app_url: str = "http://localhost:3000"
     forwarded_allow_ips: str = "127.0.0.1"
-    platform_admin_emails: str = ""
+    platform_admin_emails: str = "econexoargentina@gmail.com"
+    platform_admin_bootstrap_enabled: bool = False
+    platform_admin_initial_password: str = ""
+    platform_admin_force_password_change: bool = True
+    platform_admin_reset_initial_password: bool = False
+    platform_admin_name: str = "Administrador General EcoNexo"
+    platform_admin_organization: str = "EcoNexo Plataforma"
     sales_email: str = ""
 
     @property
@@ -174,6 +180,13 @@ class Settings(BaseSettings):
             for email in self.platform_admin_list
         ):
             findings.append("PLATFORM_ADMIN_EMAILS")
+
+        if self.platform_admin_bootstrap_enabled:
+            password = self.platform_admin_initial_password
+            if self._looks_placeholder(password) or len(password) < 12:
+                findings.append("PLATFORM_ADMIN_INITIAL_PASSWORD")
+            if not any(char.isalpha() for char in password) or not any(char.isdigit() for char in password):
+                findings.append("PLATFORM_ADMIN_INITIAL_PASSWORD_COMPLEXITY")
 
         sales_email = self.sales_email.strip().lower()
         if (

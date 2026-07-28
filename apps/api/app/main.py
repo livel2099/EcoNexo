@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
 from .config import get_settings
+from .platform_admin import ensure_platform_admin
 from .routers import (
     admin,
     alerts,
@@ -27,6 +28,7 @@ from .routers import (
     modules,
     notifications,
     orgs,
+    platform,
     reports,
     rules,
     satellite,
@@ -50,6 +52,7 @@ async def lifespan(app: FastAPI):
         )
 
     await db.connect()
+    await ensure_platform_admin()
     stop = asyncio.Event()
     bridge: asyncio.Task[None] | None = None
     if settings.mqtt_enabled:
@@ -84,6 +87,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(orgs.router)
+app.include_router(platform.router)
 app.include_router(devices.router)
 app.include_router(alerts.router)
 app.include_router(rules.router)
@@ -198,7 +202,20 @@ async def ws_endpoint(websocket: WebSocket, token: str = Query(default="")) -> N
     if payload is None:
         await websocket.close(code=4401)
         return
-    org_id = payload["org_id"]
+    row = await db.pool().fetchrow(
+        """
+        SELECT u.org_id, u.is_active, u.must_change_password,
+               o.is_active AS organization_active
+        FROM users u JOIN organizations o ON o.id=u.org_id
+        WHERE u.id=$1::uuid AND u.org_id=$2::uuid
+        """,
+        payload["sub"],
+        payload["org_id"],
+    )
+    if row is None or not row["is_active"] or not row["organization_active"] or row["must_change_password"]:
+        await websocket.close(code=4403)
+        return
+    org_id = str(row["org_id"])
     await manager.connect(org_id, websocket)
     try:
         while True:

@@ -215,3 +215,15 @@ La navegación incluye un módulo licenciable para San Antonio y General Manuel 
 # econexo
 # ECONEXO-BETA
 # EcoNexo
+
+## Consola privada del administrador general (rc.5)
+
+La edición incluye una consola no enlazada en la navegación pública:
+
+```text
+/plataforma
+```
+
+El correo autorizado es `econexoargentina@gmail.com` mediante `PLATFORM_ADMIN_EMAILS`. La contraseña inicial se configura únicamente en Render con `PLATFORM_ADMIN_INITIAL_PASSWORD`; nunca debe incorporarse al repositorio ni usar el prefijo `NEXT_PUBLIC_`. El primer ingreso exige cambiarla en `/cambiar-contrasena`.
+
+Guía completa: [`ADMIN_GENERAL_OCULTO.md`](ADMIN_GENERAL_OCULTO.md).
