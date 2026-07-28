@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { LayerGroup, Map as LeafletMap, TileLayer, WMSOptions } from "leaflet";
+import type { ImageOverlay, LayerGroup, Map as LeafletMap, TileLayer, WMSOptions } from "leaflet";
 import type { EarthIntel } from "../app/lib/earth-intel";
 import type {
   Alert,
@@ -19,6 +19,7 @@ import {
 } from "../app/lib/misiones";
 
 interface Props {
+  token?: string | null;
   devices: Device[];
   alerts: Alert[];
   detections: Detection[];
@@ -40,6 +41,21 @@ type TerritoryFeature = {
   properties?: { province?: string; official?: boolean; source?: string };
   geometry?: Record<string, unknown>;
 };
+
+function validGeoJsonFeature(value: unknown): value is TerritoryFeature {
+  if (!value || typeof value !== "object") return false;
+  const feature = value as Record<string, unknown>;
+  if (feature.type !== "Feature") return false;
+  const geometry = feature.geometry;
+  if (!geometry || typeof geometry !== "object") return false;
+  const record = geometry as Record<string, unknown>;
+  if (record.type === "GeometryCollection") {
+    return Array.isArray(record.geometries) && record.geometries.length > 0;
+  }
+  return typeof record.type === "string"
+    && Array.isArray(record.coordinates)
+    && record.coordinates.length > 0;
+}
 
 const COPERNICUS_WMS_ENV = (process.env.NEXT_PUBLIC_COPERNICUS_WMS_URL || "").trim();
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "https://econexo.onrender.com").replace(/\/$/, "");
@@ -82,6 +98,7 @@ function devicePopup(device: Device): string {
 }
 
 export default function MapView({
+  token,
   devices,
   alerts,
   detections,
@@ -97,7 +114,7 @@ export default function MapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const baseLayerRef = useRef<TileLayer | null>(null);
-  const satelliteLayerRef = useRef<TileLayer.WMS | null>(null);
+  const satelliteLayerRef = useRef<TileLayer.WMS | ImageOverlay | null>(null);
   const dataLayerRef = useRef<LayerGroup | null>(null);
   const [centerLat, centerLon] = center;
   const [ready, setReady] = useState(false);
@@ -107,10 +124,23 @@ export default function MapView({
   const [territoryFeature, setTerritoryFeature] = useState<TerritoryFeature | null>(null);
   const [territoryOfficial, setTerritoryOfficial] = useState(false);
   const runtimeCopernicusWms = sourceSettings?.copernicus_enabled
-    ? sourceSettings.copernicus_wms_url
+    ? (sourceSettings.copernicus_effective_wms_url || sourceSettings.copernicus_wms_url)
     : null;
   const copernicusWms = (runtimeCopernicusWms || COPERNICUS_WMS_ENV).trim().replace(/\/$/, "");
-  const copernicusEnabled = Boolean(copernicusWms);
+  const copernicusProvider = sourceSettings?.copernicus_provider
+    || (copernicusWms ? "wms" : "none");
+  const processApiEnabled = Boolean(
+    sourceSettings?.copernicus_enabled
+    && sourceSettings?.copernicus_configured
+    && copernicusProvider === "process_api"
+    && token,
+  );
+  const wmsEnabled = Boolean(
+    sourceSettings?.copernicus_enabled
+    && copernicusProvider === "wms"
+    && copernicusWms,
+  );
+  const copernicusEnabled = processApiEnabled || wmsEnabled;
   const satelliteLayers: Record<Exclude<SatelliteMode, "NONE">, string> = {
     TRUE_COLOR: sourceSettings?.copernicus_true_color_layer || "TRUE_COLOR",
     NDVI: sourceSettings?.copernicus_ndvi_layer || "NDVI",
@@ -123,10 +153,11 @@ export default function MapView({
     let active = true;
     fetch(`${API_URL}/territory/geojson`, { cache: "no-store" })
       .then((response) => response.ok ? response.json() : Promise.reject(response.status))
-      .then((feature) => {
-        if (!active || feature?.properties?.province !== "Misiones") return;
+      .then((feature: unknown) => {
+        if (!active || !validGeoJsonFeature(feature)) return;
+        if (feature.properties?.province !== "Misiones") return;
         setTerritoryFeature(feature);
-        setTerritoryOfficial(Boolean(feature?.properties?.official));
+        setTerritoryOfficial(Boolean(feature.properties?.official));
       })
       .catch(() => undefined);
     return () => { active = false; };
@@ -200,10 +231,17 @@ export default function MapView({
     const map = mapRef.current;
     if (!ready || !map) return;
     let cancelled = false;
-    let activeLayer: TileLayer.WMS | null = null;
+    let activeLayer: TileLayer.WMS | ImageOverlay | null = null;
+    let objectUrl: string | null = null;
+    let timer: ReturnType<typeof globalThis.setTimeout> | null = null;
+    let controller: AbortController | null = null;
+
     const removeActive = () => {
       if (activeLayer && map.hasLayer(activeLayer)) map.removeLayer(activeLayer);
       if (satelliteLayerRef.current === activeLayer) satelliteLayerRef.current = null;
+      activeLayer = null;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = null;
     };
 
     if (satelliteLayerRef.current) map.removeLayer(satelliteLayerRef.current);
@@ -212,12 +250,101 @@ export default function MapView({
       setSatelliteStatus("off");
       return;
     }
-    if (!copernicusEnabled || !copernicusWms) {
+    if (!copernicusEnabled) {
       setSatelliteStatus(
         satelliteMode === "MOISTURE_INDEX" || satelliteMode === "NBR_RAW"
           ? "fallback"
           : "degraded",
       );
+      return;
+    }
+
+    const opacity = satelliteMode === "TRUE_COLOR" ? 0.78 : 0.70;
+
+    if (processApiEnabled && token) {
+      const loadProcessOverlay = async () => {
+        if (cancelled) return;
+        controller?.abort();
+        controller = new AbortController();
+        setSatelliteStatus("loading");
+        const bounds = map.getBounds();
+        const [[territorySouth, territoryWest], [territoryNorth, territoryEast]] = MISIONES_BOUNDS;
+        const clippedWest = Math.max(bounds.getWest(), territoryWest);
+        const clippedSouth = Math.max(bounds.getSouth(), territorySouth);
+        const clippedEast = Math.min(bounds.getEast(), territoryEast);
+        const clippedNorth = Math.min(bounds.getNorth(), territoryNorth);
+        if (clippedWest >= clippedEast || clippedSouth >= clippedNorth) {
+          setSatelliteStatus("degraded");
+          return;
+        }
+        const size = map.getSize();
+        const params = new URLSearchParams({
+          layer: satelliteMode,
+          west: String(clippedWest),
+          south: String(clippedSouth),
+          east: String(clippedEast),
+          north: String(clippedNorth),
+          width: String(Math.max(256, Math.min(1024, Math.round(size.x)))),
+          height: String(Math.max(256, Math.min(1024, Math.round(size.y)))),
+        });
+        try {
+          const response = await fetch(`${API_URL}/copernicus/image?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            let detail = `HTTP ${response.status}`;
+            try {
+              const body = await response.json() as { detail?: string };
+              detail = body.detail || detail;
+            } catch { /* respuesta no JSON */ }
+            throw new Error(detail);
+          }
+          const blob = await response.blob();
+          if (!blob.type.includes("image/png")) throw new Error("Copernicus no devolvió PNG");
+          if (cancelled) return;
+          removeActive();
+          objectUrl = URL.createObjectURL(blob);
+          const L = (await import("leaflet")).default;
+          const overlayBounds = L.latLngBounds(
+            [clippedSouth, clippedWest],
+            [clippedNorth, clippedEast],
+          );
+          const nextLayer = L.imageOverlay(
+            objectUrl,
+            overlayBounds,
+            { opacity, interactive: false, attribution: "Copernicus Data Space Ecosystem · Sentinel-2 L2A" },
+          );
+          activeLayer = nextLayer;
+          nextLayer.on("load", () => setSatelliteStatus("live"));
+          nextLayer.on("error", () => setSatelliteStatus("degraded"));
+          satelliteLayerRef.current = nextLayer.addTo(map);
+          setSatelliteStatus("live");
+        } catch (cause) {
+          if (cause instanceof DOMException && cause.name === "AbortError") return;
+          if (!cancelled) setSatelliteStatus("degraded");
+        }
+      };
+      const schedule = () => {
+        if (timer) globalThis.clearTimeout(timer);
+        timer = globalThis.setTimeout(() => void loadProcessOverlay(), 550);
+      };
+      map.on("moveend", schedule);
+      map.on("zoomend", schedule);
+      void loadProcessOverlay();
+      return () => {
+        cancelled = true;
+        controller?.abort();
+        if (timer) globalThis.clearTimeout(timer);
+        map.off("moveend", schedule);
+        map.off("zoomend", schedule);
+        removeActive();
+      };
+    }
+
+    if (!wmsEnabled || !copernicusWms) {
+      setSatelliteStatus("degraded");
       return;
     }
 
@@ -239,7 +366,7 @@ export default function MapView({
         version: "1.1.1",
         minZoom: 9,
         maxZoom: 18,
-        opacity: satelliteMode === "TRUE_COLOR" ? 0.76 : 0.68,
+        opacity,
         attribution: "Copernicus Data Space Ecosystem · Sentinel Hub · ESA",
         time: `${dayStamp(start)}/${dayStamp(new Date())}`,
         maxcc: 80,
@@ -267,14 +394,19 @@ export default function MapView({
     };
   }, [
     copernicusEnabled,
+    copernicusProvider,
     copernicusWms,
+    processApiEnabled,
     ready,
     satelliteLayers.NBR_RAW,
     satelliteLayers.MOISTURE_INDEX,
     satelliteLayers.NDVI,
     satelliteLayers.TRUE_COLOR,
     satelliteMode,
+    token,
+    wmsEnabled,
   ]);
+
 
   useEffect(() => {
     const layer = dataLayerRef.current;
@@ -292,12 +424,20 @@ export default function MapView({
         dashArray: territoryOfficial ? undefined : "8 7",
         interactive: false,
       };
-      if (territoryFeature) {
-        L.geoJSON(
-          territoryFeature as unknown as Parameters<typeof L.geoJSON>[0],
-          { style: territoryStyle },
-        ).addTo(layer);
-      } else {
+      let territoryDrawn = false;
+      if (territoryFeature && validGeoJsonFeature(territoryFeature)) {
+        try {
+          L.geoJSON(
+            territoryFeature as unknown as Parameters<typeof L.geoJSON>[0],
+            { style: territoryStyle },
+          ).addTo(layer);
+          territoryDrawn = true;
+        } catch {
+          setTerritoryFeature(null);
+          setTerritoryOfficial(false);
+        }
+      }
+      if (!territoryDrawn) {
         L.polygon(MISIONES_POLYGON, territoryStyle).addTo(layer);
       }
 
@@ -467,13 +607,17 @@ export default function MapView({
     off: "capa desactivada",
     zoom: "acercá el mapa para cargar",
     loading: "sincronizando mosaico",
-    live: "mosaico Copernicus disponible",
+    live: copernicusProvider === "process_api"
+      ? "Sentinel-2 L2A procesado por Copernicus"
+      : "mosaico WMS Copernicus disponible",
     fallback: satelliteMode === "MOISTURE_INDEX"
-      ? "proxy de telemetría; configure Copernicus para índice satelital"
+      ? "proxy de telemetría; faltan credenciales Copernicus"
       : "proxy FIRMS; no es un perímetro quemado confirmado",
-    degraded: copernicusWms
-      ? "instancia o capa no disponible"
-      : "requiere instancia Copernicus; la capa permanece seleccionable",
+    degraded: copernicusProvider === "process_api"
+      ? "Process API no disponible o sin imagen para el período"
+      : copernicusWms
+        ? "instancia o capa WMS no disponible"
+        : "configuración Copernicus pendiente",
   };
 
   return (
@@ -486,7 +630,7 @@ export default function MapView({
             <button
               key={mode}
               title={mode !== "NONE" && !copernicusEnabled
-                ? "Se muestra un fallback operativo cuando existe; configure Copernicus en Admin Core para el mosaico satelital."
+                ? "Se muestra un fallback operativo; configurá OAuth de Copernicus en Render o una instancia WMS en Admin Core."
                 : undefined}
               className={satelliteMode === mode ? "active" : ""}
               onClick={() => setSatelliteMode(mode)}

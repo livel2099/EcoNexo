@@ -1,3 +1,16 @@
+# 1.0.0-rc.6.2 — Copernicus Process API predeterminado y auditoría integral
+
+- Copernicus Data Space queda habilitado por defecto mediante Sentinel Hub Process API con OAuth2 client credentials en el backend.
+- Capas server-side: color natural, NDVI, NDMI de humedad y NBR de quema sobre Sentinel-2 L2A.
+- WMS oficial por organización continúa disponible como fallback; se restringe el host para evitar SSRF.
+- Nuevo estado y prueba operativa en `/copernicus/status`, `/copernicus/test` y proxy de imagen autenticado `/copernicus/image`.
+- Los secretos de Copernicus nunca usan variables `NEXT_PUBLIC_*` ni llegan al navegador.
+- Caché de mosaicos, límites territoriales de Misiones, dimensiones acotadas, timeouts, rate limiting y validación de PNG.
+- Migración 15 habilita el proveedor de sistema, conserva overrides WMS, registra las pruebas y evita corridas concurrentes duplicadas del pipeline.
+- Se eliminó un manejador duplicado de excepciones globales y se reforzaron CORS y encabezados expuestos.
+- Auditoría automatizada reproducible en `scripts/audit-system.py`.
+- 70 pruebas API aprobadas, TypeScript aprobado y 98 objetos de ruta FastAPI construidos.
+
 # 1.0.0-rc.6 — Telemetría y Command Pipeline para Render
 
 - Nueva migración `14_telemetry_pipeline_and_map.sql`.

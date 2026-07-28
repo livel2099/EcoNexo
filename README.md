@@ -1,8 +1,10 @@
+> EcoNexo 1.0.0-rc.6.2 — Copernicus Process API predeterminado y auditoría integral
+
 # EcoNexo
 
 **Plataforma de inteligencia ambiental para detectar, correlacionar y documentar incidentes antes de que escalen.**
 
-EcoNexo combina sensores IoT, observación satelital, meteorología, reportes ciudadanos y reglas operativas para producir alertas priorizadas, trazabilidad e informes institucionales. Esta edición fue preparada como **candidato de lanzamiento técnico 1.0.0-rc.6 para la provincia de Misiones**. La arquitectura y los flujos principales están implementados y territorialmente restringidos; la publicación oficial todavía exige completar identidad societaria, revisión jurídica, infraestructura pública, credenciales productivas y la puerta de aceptación indicada en la documentación.
+EcoNexo combina sensores IoT, observación satelital, meteorología, reportes ciudadanos y reglas operativas para producir alertas priorizadas, trazabilidad e informes institucionales. Esta edición fue preparada como **candidato de lanzamiento técnico 1.0.0-rc.6.2 para la provincia de Misiones**. La arquitectura y los flujos principales están implementados y territorialmente restringidos; la publicación oficial todavía exige completar identidad societaria, revisión jurídica, infraestructura pública, credenciales productivas y la puerta de aceptación indicada en la documentación.
 
 ## Deploy en Render
 
@@ -21,6 +23,7 @@ La API incluye Blueprint, migraciones versionadas y plantilla de variables:
 - Google Identity Services permanece como proveedor opcional cuando se configura `GOOGLE_CLIENT_ID`.
 - Centro de comando multiorganización, dispositivos, alertas, reglas, KPI, mapa y feed en tiempo real, limitado a los 17 departamentos y 79 municipios de Misiones.
 - **Alerta IA / Observatorio SpaceAI** con telemetría por dispositivo, contexto Open-Meteo/CAMS/GloFAS, focos NASA FIRMS, gemelo digital, mensajes revisables y Health Threat Index R0-R5.
+- **Copernicus Sentinel-2 predeterminado mediante Process API server-side**: color natural, NDVI, NDMI de humedad y NBR de quema; OAuth privado en la API y WMS por organización como fallback compatible.
 - Módulo licenciable **Focos de incendio forestal y humo**, con lenguaje claro, mapa base nítido, evidencia satelital diferenciada de confirmación oficial y registro de comunicaciones.
 - **Admin Core / ABM** para usuarios, roles, organización, geocercas PostGIS, fuentes ambientales, dispositivos, reglas y auditoría.
 - **Pipeline operativo rc.6** configurable desde Admin Core: nodos MQTT, manuales u Open-Meteo; marcadores círculo/cuadro/triángulo; ejecución desde Command Core; persistencia de lecturas; reglas; FIRMS; alertas; WebSocket e historial de corridas.
@@ -127,7 +130,7 @@ for migration in infra/db/migrations/*.sql; do
 done
 ```
 
-Las migraciones 02-04 agregan identidad por contraseña/Google, aceptación legal, informes institucionales, snapshots SpaceAI, fuentes ambientales, geocercas y auditoría. La migración 05 agrega licencias modulares y trazabilidad de comunicaciones de Alerta IA. Las migraciones 06-09 incorporan alcance Misiones, exclusión de registros externos, auditoría territorial y límite provincial versionado con sincronización oficial desde GeoRef Argentina. La migración 10 incorpora Copernicus y sanidad forestal; la 11 agrega integridad, planes, suscripciones, límites y mensajes; las migraciones 12-13 crean la consola privada de plataforma; la 14 incorpora telemetría configurable, historial del pipeline y deduplicación FIRMS. En Render, `python -m app.migrate` registra checksums y usa un advisory lock. El plan gratuito ejecuta migraciones al arrancar; el plan pago debe usar Pre-Deploy Command antes de escalar réplicas.
+Las migraciones 02-04 agregan identidad por contraseña/Google, aceptación legal, informes institucionales, snapshots SpaceAI, fuentes ambientales, geocercas y auditoría. La migración 05 agrega licencias modulares y trazabilidad de comunicaciones de Alerta IA. Las migraciones 06-09 incorporan alcance Misiones, exclusión de registros externos, auditoría territorial y límite provincial versionado con sincronización oficial desde GeoRef Argentina. La migración 10 incorpora Copernicus y sanidad forestal; la 11 agrega integridad, planes, suscripciones, límites y mensajes; las migraciones 12-13 crean la consola privada de plataforma; la 14 incorpora telemetría configurable, historial del pipeline y deduplicación FIRMS; la 15 habilita Copernicus de sistema por defecto, registra sus pruebas y evita ejecuciones concurrentes duplicadas del pipeline. En Render, `python -m app.migrate` registra checksums y usa un advisory lock. El plan gratuito ejecuta migraciones al arrancar; el plan pago debe usar Pre-Deploy Command antes de escalar réplicas.
 
 ## Validación
 
@@ -140,9 +143,9 @@ cd apps/web && npm ci && npm run typecheck && npm run build
 
 Estado de esta entrega:
 
-- API: **50 pruebas aprobadas** (`pytest -q`).
+- API: **70 pruebas aprobadas** (`pytest -q`), incluidos OAuth/Process API de Copernicus, WMS, CORS, GeoJSON, migraciones y concurrencia del pipeline.
 - Python: compilación completa aprobada (`python -m compileall`).
-- OpenAPI: 79 rutas registradas; `/platform/*` permanece fuera de Swagger y protegido.
+- FastAPI: 98 objetos de ruta, 82 rutas únicas y 83 operaciones documentadas; `/platform/*` permanece fuera de Swagger y protegido.
 - Web: `npm run typecheck` aprobado con TypeScript 5.7.2.
 - CSS, JSON y YAML: parseo aprobado.
 - El build integral de Next.js debe repetirse en Render: este entorno no pudo descargar el binario Linux de SWC desde su gateway de paquetes, aunque el chequeo de tipos y la sintaxis están aprobados.

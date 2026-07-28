@@ -31,12 +31,13 @@ const DEFAULT_SOURCE_SETTINGS: EnvironmentalSourceSettings = {
   air_quality_enabled: true,
   flood_enabled: true,
   firms_enabled: true,
-  copernicus_enabled: false,
+  copernicus_enabled: true,
+  copernicus_use_system_default: true,
   copernicus_wms_url: null,
   copernicus_true_color_layer: "TRUE_COLOR",
   copernicus_ndvi_layer: "NDVI",
-  copernicus_moisture_layer: "MOISTURE_INDEX",
-  copernicus_burn_layer: "NBR_RAW",
+  copernicus_moisture_layer: "NDMI",
+  copernicus_burn_layer: "NBR",
   forestry_pest_enabled: true,
   sinarame_radar_enabled: true,
   refresh_minutes: 10,
@@ -45,6 +46,15 @@ const DEFAULT_SOURCE_SETTINGS: EnvironmentalSourceSettings = {
   auto_activate_alerts: false,
   firms_map_key_configured: false,
   copernicus_configured: false,
+  copernicus_provider: "none",
+  copernicus_process_configured: false,
+  copernicus_wms_configured: false,
+  copernicus_system_default: true,
+  copernicus_effective_wms_url: null,
+  copernicus_last_test_at: null,
+  copernicus_last_test_ok: null,
+  copernicus_last_error: null,
+  copernicus_available_layers: [],
   updated_at: new Date(0).toISOString(),
 };
 
@@ -260,7 +270,7 @@ export default function Dashboard() {
       {view === "comando" ? (
         <>
           <section className="mapwrap" aria-label="Mapa operacional">
-            <MapView devices={localDevices} alerts={localAlerts} detections={localDetections} reports={localReports} zones={localZones} center={commandCenter} earth={earthIntel} sourceSettings={sourceSettings} initialSatelliteMode="NONE" />
+            <MapView token={token} devices={localDevices} alerts={localAlerts} detections={localDetections} reports={localReports} zones={localZones} center={commandCenter} earth={earthIntel} sourceSettings={sourceSettings} initialSatelliteMode="TRUE_COLOR" />
             <div className="legend">
               <div className="li"><span className="sw" style={{ background: "#8ff06a" }} /> Nodo online</div>
               <div className="li"><span className="sw" style={{ background: "#ff9f45" }} /> Foco satelital</div>

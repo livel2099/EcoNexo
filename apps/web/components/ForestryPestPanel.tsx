@@ -109,7 +109,7 @@ export default function ForestryPestPanel({
       </section>
 
       <section className="pest-map-shell">
-        <MapView devices={devices} alerts={alerts} detections={detections} reports={[]} zones={zones} center={SAN_ANTONIO} earth={intel} sourceSettings={sourceSettings} showForestryAssets initialSatelliteMode={sourceSettings.copernicus_enabled ? "NDVI" : "NONE"} />
+        <MapView token={token} devices={devices} alerts={alerts} detections={detections} reports={[]} zones={zones} center={SAN_ANTONIO} earth={intel} sourceSettings={sourceSettings} showForestryAssets initialSatelliteMode={sourceSettings.copernicus_enabled ? "NDVI" : "NONE"} />
       </section>
 
       <section className="pest-data-strip">

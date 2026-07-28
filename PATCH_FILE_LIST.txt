@@ -1,0 +1,45 @@
+EcoNexo rc.6.2 patch over rc.6.1
+
+Changed/new files:
+.env.example
+.env.production.example
+.env.render.example
+.env.web.render.example
+.github/workflows/ci.yml
+APLICAR_RC62_RENDER.md
+AUDIT_RC62_COPERNICUS.md
+AUDIT_RESULT_RC62.json
+CHANGELOG.md
+README.md
+apps/api/.env.example
+apps/api/.env.render.example
+apps/api/app/config.py
+apps/api/app/copernicus.py
+apps/api/app/main.py
+apps/api/app/routers/admin.py
+apps/api/app/routers/copernicus.py
+apps/api/app/routers/environment.py
+apps/api/app/schemas.py
+apps/api/app/telemetry_pipeline.py
+apps/api/migrations/15_copernicus_process_defaults_and_pipeline_guards.sql
+apps/api/requirements-dev.txt
+apps/api/tests/test_copernicus_process_api.py
+apps/api/tests/test_cors_geojson_copernicus.py
+apps/api/tests/test_security_helpers.py
+apps/web/app/dashboard/page.tsx
+apps/web/app/lib/demo.ts
+apps/web/app/lib/types.ts
+apps/web/components/AdminPanel.tsx
+apps/web/components/FireSmokePanel.tsx
+apps/web/components/ForestryPestPanel.tsx
+apps/web/components/MapView.tsx
+apps/web/package.json
+docs/COPERNICUS_DEFAULT_PROCESS_API.md
+infra/db/migrations/15_copernicus_process_defaults_and_pipeline_guards.sql
+render.production.yaml
+render.yaml
+scripts/audit-system.py
+scripts/preflight-render.ps1
+scripts/preflight-render.sh
+
+Removed files: none

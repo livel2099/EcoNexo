@@ -1,4 +1,4 @@
-# EcoNexo rc.6 - Blueprint de producción para Render.
+# EcoNexo rc.6.2 - Blueprint de producción para Render.
 databases:
   - name: econexo-db
     plan: basic-256mb
@@ -12,7 +12,7 @@ databases:
 
 services:
   - type: web
-    name: econexo-api
+    name: econexo
     runtime: docker
     plan: starter
     region: oregon
@@ -27,7 +27,7 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: RELEASE_VERSION
-        value: 1.0.0-rc.6-render
+        value: 1.0.0-rc.6.2-render
       - key: DATABASE_URL
         fromDatabase:
           name: econexo-db
@@ -50,16 +50,16 @@ services:
         value: https://econexo-web.onrender.com
       - key: CORS_ORIGINS
         value: https://econexo-web.onrender.com
+      - key: ECONEXO_WEB_ORIGIN
+        value: https://econexo-web.onrender.com
       - key: PLATFORM_ADMIN_EMAILS
         value: econexoargentina@gmail.com
       - key: PLATFORM_ADMIN_BOOTSTRAP_ENABLED
-        value: "true"
-      - key: PLATFORM_ADMIN_INITIAL_PASSWORD
-        sync: false
+        value: "false"
       - key: PLATFORM_ADMIN_FORCE_PASSWORD_CHANGE
         value: "true"
       - key: PLATFORM_ADMIN_RESET_INITIAL_PASSWORD
-        value: "true"
+        value: "false"
       - key: PLATFORM_ADMIN_NAME
         value: Administrador General EcoNexo
       - key: PLATFORM_ADMIN_ORGANIZATION
@@ -78,6 +78,32 @@ services:
         value: "false"
       - key: OPEN_METEO_FORECAST_URL
         value: https://api.open-meteo.com/v1/forecast
+      - key: COPERNICUS_ENABLED_BY_DEFAULT
+        value: "true"
+      - key: COPERNICUS_MODE
+        value: process_api
+      - key: COPERNICUS_CLIENT_ID
+        sync: false
+      - key: COPERNICUS_CLIENT_SECRET
+        sync: false
+      - key: COPERNICUS_TOKEN_URL
+        value: https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token
+      - key: COPERNICUS_PROCESS_URL
+        value: https://sh.dataspace.copernicus.eu/process/v1
+      - key: COPERNICUS_INSTANCE_ID
+        sync: false
+      - key: COPERNICUS_WMS_URL
+        sync: false
+      - key: COPERNICUS_HTTP_TIMEOUT_SECONDS
+        value: "45"
+      - key: COPERNICUS_TIME_RANGE_DAYS
+        value: "90"
+      - key: COPERNICUS_MAX_CLOUD_COVERAGE
+        value: "80"
+      - key: COPERNICUS_MAX_DIMENSION
+        value: "1024"
+      - key: COPERNICUS_CACHE_SECONDS
+        value: "600"
       - key: NASA_FIRMS_KEY
         sync: false
       - key: FIRMS_INLINE_ENABLED
@@ -98,9 +124,9 @@ services:
     autoDeployTrigger: checksPass
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        value: https://econexo-api.onrender.com
+        value: https://econexo.onrender.com
       - key: NEXT_PUBLIC_WS_URL
-        value: wss://econexo-api.onrender.com
+        value: wss://econexo.onrender.com
       - key: NEXT_PUBLIC_DEMO_MODE
         value: "false"
       - key: NEXT_PUBLIC_STATIC_EXPORT

@@ -198,6 +198,7 @@ export interface EnvironmentalSourceSettings {
   flood_enabled: boolean;
   firms_enabled: boolean;
   copernicus_enabled: boolean;
+  copernicus_use_system_default: boolean;
   copernicus_wms_url: string | null;
   copernicus_true_color_layer: string;
   copernicus_ndvi_layer: string;
@@ -211,7 +212,32 @@ export interface EnvironmentalSourceSettings {
   auto_activate_alerts: boolean;
   firms_map_key_configured: boolean;
   copernicus_configured: boolean;
+  copernicus_provider: "process_api" | "wms" | "none";
+  copernicus_process_configured: boolean;
+  copernicus_wms_configured: boolean;
+  copernicus_system_default: boolean;
+  copernicus_effective_wms_url: string | null;
+  copernicus_last_test_at: string | null;
+  copernicus_last_test_ok: boolean | null;
+  copernicus_last_error: string | null;
+  copernicus_available_layers: string[];
   updated_at: string;
+}
+
+export interface CopernicusStatus {
+  enabled: boolean;
+  provider: "process_api" | "wms" | "none";
+  configured: boolean;
+  process_configured: boolean;
+  wms_configured: boolean;
+  system_default: boolean;
+  effective_wms_url: string | null;
+  supported_layers: string[];
+  collection: string;
+  last_test_at: string | null;
+  last_test_ok: boolean | null;
+  last_error: string | null;
+  available_layers: string[];
 }
 
 export interface RiskZone {

@@ -5,6 +5,7 @@ from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
+from .copernicus import canonical_wms_url
 from .territory import DEPARTMENTS, ensure_in_misiones, municipality_department
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, model_validator
 
@@ -681,6 +682,10 @@ class KpiOut(BaseModel):
     global_status: Literal["normal", "atencion", "critico"]
     active_alerts: int
 
+def _canonical_copernicus_wms_url(raw: str | None) -> str | None:
+    return canonical_wms_url(raw)
+
+
 # --- Administracion, geocercas e inteligencia ambiental SpaceAI ---
 SpaceAILevel = Literal["R0", "R1", "R2", "R3", "R4", "R5"]
 ThreatDomainId = Literal["air", "heat", "moisture", "fire", "hydric", "uv", "vector"]
@@ -790,12 +795,13 @@ class EnvironmentalSourceSettingsIn(BaseModel):
     air_quality_enabled: bool = True
     flood_enabled: bool = True
     firms_enabled: bool = True
-    copernicus_enabled: bool = False
+    copernicus_enabled: bool = True
+    copernicus_use_system_default: bool = True
     copernicus_wms_url: str | None = Field(default=None, max_length=500)
     copernicus_true_color_layer: str = Field(default="TRUE_COLOR", min_length=1, max_length=100)
     copernicus_ndvi_layer: str = Field(default="NDVI", min_length=1, max_length=100)
-    copernicus_moisture_layer: str = Field(default="MOISTURE_INDEX", min_length=1, max_length=100)
-    copernicus_burn_layer: str = Field(default="NBR_RAW", min_length=1, max_length=100)
+    copernicus_moisture_layer: str = Field(default="NDMI", min_length=1, max_length=100)
+    copernicus_burn_layer: str = Field(default="NBR", min_length=1, max_length=100)
     forestry_pest_enabled: bool = True
     sinarame_radar_enabled: bool = True
     refresh_minutes: int = Field(default=10, ge=2, le=180)
@@ -806,17 +812,11 @@ class EnvironmentalSourceSettingsIn(BaseModel):
     @model_validator(mode="after")
     def validate_misiones_location_and_copernicus(self):
         ensure_in_misiones(self.default_latitude, self.default_longitude)
-        value = (self.copernicus_wms_url or "").strip().rstrip("/")
-        if value:
-            from urllib.parse import urlparse
-            parsed = urlparse(value)
-            if parsed.scheme != "https" or parsed.hostname != "sh.dataspace.copernicus.eu":
-                raise ValueError("La URL WMS debe usar HTTPS y el dominio oficial sh.dataspace.copernicus.eu")
-            if not parsed.path.startswith("/ogc/wms/") or not parsed.path.removeprefix("/ogc/wms/").strip("/"):
-                raise ValueError("Usá la URL https://sh.dataspace.copernicus.eu/ogc/wms/INSTANCE_ID")
-            self.copernicus_wms_url = value
-        elif self.copernicus_enabled:
-            raise ValueError("Para habilitar Copernicus primero cargá la URL WMS de una instancia propia")
+        self.copernicus_wms_url = canonical_wms_url(self.copernicus_wms_url)
+        self.copernicus_true_color_layer = self.copernicus_true_color_layer.strip()
+        self.copernicus_ndvi_layer = self.copernicus_ndvi_layer.strip()
+        self.copernicus_moisture_layer = self.copernicus_moisture_layer.strip()
+        self.copernicus_burn_layer = self.copernicus_burn_layer.strip()
         return self
 
 
@@ -824,6 +824,15 @@ class EnvironmentalSourceSettingsOut(EnvironmentalSourceSettingsIn):
     org_id: UUID
     firms_map_key_configured: bool = False
     copernicus_configured: bool = False
+    copernicus_provider: Literal["process_api", "wms", "none"] = "none"
+    copernicus_process_configured: bool = False
+    copernicus_wms_configured: bool = False
+    copernicus_system_default: bool = True
+    copernicus_effective_wms_url: str | None = None
+    copernicus_last_test_at: datetime | None = None
+    copernicus_last_test_ok: bool | None = None
+    copernicus_last_error: str | None = None
+    copernicus_available_layers: list[str] = Field(default_factory=list)
     updated_at: datetime
 
 
@@ -832,20 +841,48 @@ class CopernicusWmsTestIn(BaseModel):
 
     @model_validator(mode="after")
     def validate_url(self):
-        from urllib.parse import urlparse
-        value = self.url.strip().rstrip("/")
-        parsed = urlparse(value)
-        if parsed.scheme != "https" or parsed.hostname != "sh.dataspace.copernicus.eu" or not parsed.path.startswith("/ogc/wms/"):
-            raise ValueError("Solo se permite una instancia WMS oficial de Copernicus Data Space")
+        value = canonical_wms_url(self.url)
+        if value is None:
+            raise ValueError("Ingresá una instancia WMS de Copernicus Data Space")
         self.url = value
+        return self
+
+
+class CopernicusTestIn(BaseModel):
+    provider: Literal["auto", "process_api", "wms"] = "auto"
+    url: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_test(self):
+        self.url = canonical_wms_url(self.url)
+        if self.provider == "wms" and not self.url:
+            raise ValueError("Para probar WMS indicá la URL de la instancia")
         return self
 
 
 class CopernicusWmsTestOut(BaseModel):
     ok: bool
+    provider: Literal["process_api", "wms", "none"] = "none"
+    configured: bool = False
     service_title: str | None = None
     layers: list[str] = Field(default_factory=list)
     detail: str
+
+
+class CopernicusStatusOut(BaseModel):
+    enabled: bool
+    provider: Literal["process_api", "wms", "none"]
+    configured: bool
+    process_configured: bool
+    wms_configured: bool
+    system_default: bool
+    effective_wms_url: str | None = None
+    supported_layers: list[str] = Field(default_factory=list)
+    collection: str = "sentinel-2-l2a"
+    last_test_at: datetime | None = None
+    last_test_ok: bool | None = None
+    last_error: str | None = None
+    available_layers: list[str] = Field(default_factory=list)
 
 
 class EnvironmentalIndexSnapshot(BaseModel):

@@ -1,6 +1,6 @@
 {
   "name": "econexo-web",
-  "version": "1.0.0-rc.6",
+  "version": "1.0.0-rc.6.2",
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0",

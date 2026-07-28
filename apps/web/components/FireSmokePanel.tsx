@@ -156,7 +156,7 @@ export default function FireSmokePanel({
       </section>
 
       <section className="fire-map-shell">
-        <MapView devices={devices} alerts={fireAlerts} detections={recent.map((entry) => entry.item)} reports={[]} zones={zones.filter((zone) => zone.kind === "incendio" || zone.kind === "general")} center={center} earth={earth} sourceSettings={sourceSettings} initialSatelliteMode="NONE" />
+        <MapView token={token} devices={devices} alerts={fireAlerts} detections={recent.map((entry) => entry.item)} reports={[]} zones={zones.filter((zone) => zone.kind === "incendio" || zone.kind === "general")} center={center} earth={earth} sourceSettings={sourceSettings} initialSatelliteMode="NONE" />
       </section>
 
       <section className="fire-data-strip">

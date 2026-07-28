@@ -1,0 +1,21 @@
+{
+  "project": "EcoNexo",
+  "release": "1.0.0-rc.6.2",
+  "copernicus_default": "Sentinel Hub Process API / Sentinel-2 L2A",
+  "tests": {
+    "api_pytest": 70,
+    "typescript": "passed",
+    "python_compile": "passed",
+    "fastapi_route_objects": 98,
+    "fastapi_unique_paths": 82,
+    "documented_operations": 83
+  },
+  "notes": [
+    "No production secrets are included.",
+    "COPERNICUS_CLIENT_ID and COPERNICUS_CLIENT_SECRET must be configured in the Render API service.",
+    "WMS remains an optional official-host fallback."
+  ],
+  "base": "1.0.0-rc.6.1",
+  "changed_files": 40,
+  "removed_files": 0
+}

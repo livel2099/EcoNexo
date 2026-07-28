@@ -25,6 +25,8 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m compileall -q app
       - run: pytest -q
+      - run: python scripts/audit-system.py --skip-tests --skip-typecheck
+        working-directory: .
 
   web:
     runs-on: ubuntu-latest

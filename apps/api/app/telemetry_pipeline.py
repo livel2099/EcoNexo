@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
+import asyncpg
 import httpx
 
 from . import db
@@ -189,9 +190,13 @@ async def refresh_firms(org_id: UUID) -> tuple[int, int]:
             continue
         date = raw.get("acq_date") or datetime.now(timezone.utc).date().isoformat()
         time_value = str(raw.get("acq_time") or "0000").zfill(4)
-        acquired_at = datetime.fromisoformat(
-            f"{date}T{time_value[:2]}:{time_value[2:]}:00+00:00"
-        )
+        try:
+            acquired_at = datetime.fromisoformat(
+                f"{date}T{time_value[:2]}:{time_value[2:]}:00+00:00"
+            )
+        except (TypeError, ValueError):
+            log.warning("FIRMS omitió una fila con fecha/hora inválida: %s %s", date, time_value)
+            continue
         confidence = _confidence(str(raw.get("confidence") or "n"))
         dedup_source = (
             f"{settings.firms_source}|{lat:.5f}|{lon:.5f}|{acquired_at.isoformat()}"
@@ -394,27 +399,33 @@ async def run_org_pipeline(
     settings = await pipeline_settings(org_id, actor_user_id)
     if not settings["enabled"]:
         raise RuntimeError("El pipeline esta deshabilitado en Admin Core")
-    running = await db.pool().fetchval(
+    # Cierra una corrida huérfana y deja que la restricción única de la base
+    # sea la autoridad final ante ejecuciones concurrentes o varias réplicas.
+    await db.pool().execute(
         """
-        SELECT EXISTS(
-          SELECT 1 FROM pipeline_runs
-          WHERE org_id=$1 AND status='running'
-            AND started_at > now() - interval '20 minutes'
+        UPDATE pipeline_runs SET status='failed', finished_at=now(),
+          errors=COALESCE(errors,'[]'::jsonb) ||
+            jsonb_build_array(jsonb_build_object(
+              'stage','pipeline_guard',
+              'detail','Ejecución huérfana cerrada antes de una nueva corrida'
+            ))
+        WHERE org_id=$1 AND status='running'
+          AND started_at < now() - interval '30 minutes'
+        """,
+        org_id,
+    )
+    try:
+        run_id = await db.pool().fetchval(
+            """
+            INSERT INTO pipeline_runs(org_id,started_by,source)
+            VALUES ($1,$2,$3) RETURNING id
+            """,
+            org_id,
+            actor_user_id,
+            source,
         )
-        """,
-        org_id,
-    )
-    if running:
-        raise RuntimeError("Ya existe una ejecucion del pipeline en curso")
-    run_id = await db.pool().fetchval(
-        """
-        INSERT INTO pipeline_runs(org_id,started_by,source)
-        VALUES ($1,$2,$3) RETURNING id
-        """,
-        org_id,
-        actor_user_id,
-        source,
-    )
+    except asyncpg.UniqueViolationError as exc:
+        raise RuntimeError("Ya existe una ejecución del pipeline en curso") from exc
     errors: list[dict[str, str]] = []
     devices_updated = 0
     readings_inserted = 0

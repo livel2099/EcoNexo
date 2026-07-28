@@ -1,0 +1,127 @@
+{
+  "project": "EcoNexo",
+  "release": "1.0.0-rc.6.2",
+  "ok": true,
+  "checks": {
+    "conflictos_git": {
+      "ok": true,
+      "duration_seconds": 0.691,
+      "detail": {
+        "files_scanned": 254
+      }
+    },
+    "higiene_secretos": {
+      "ok": true,
+      "duration_seconds": 0.374,
+      "detail": {
+        "actual_env_files": 0,
+        "private_keys": 0
+      }
+    },
+    "migraciones": {
+      "ok": true,
+      "duration_seconds": 0.001,
+      "detail": {
+        "count": 16,
+        "latest": "15_copernicus_process_defaults_and_pipeline_guards.sql"
+      }
+    },
+    "json_yaml": {
+      "ok": true,
+      "duration_seconds": 0.021,
+      "detail": {
+        "json": [
+          "apps/web/package.json",
+          "apps/web/package-lock.json",
+          "apps/mobile/app.json",
+          "apps/mobile/package.json"
+        ],
+        "yaml": [
+          "render.yaml",
+          "render.production.yaml"
+        ]
+      }
+    },
+    "shell_syntax": {
+      "ok": true,
+      "duration_seconds": 0.022,
+      "detail": {
+        "count": 2
+      }
+    },
+    "node_services_syntax": {
+      "ok": true,
+      "duration_seconds": 0.073,
+      "detail": {
+        "count": 4
+      }
+    },
+    "python_compile": {
+      "ok": true,
+      "duration_seconds": 0.05,
+      "detail": {
+        "targets": [
+          "apps/api/app",
+          "services/satellite/app"
+        ]
+      }
+    },
+    "fastapi_routes": {
+      "ok": true,
+      "duration_seconds": 1.343,
+      "detail": {
+        "command": [
+          "/opt/pyvenv/bin/python3",
+          "-c",
+          "import json; from app.main import app; paths={getattr(r,'path','') for r in app.routes}; required={'/copernicus/status','/copernicus/test','/copernicus/image','/pipeline/settings','/pipeline/run','/platform/summary'}; missing=required-paths; assert not missing, missing; print(json.dumps({'objects':len(app.routes),'unique':len(paths),'documented':sum(bool(getattr(r,'include_in_schema',False)) for r in app.routes),'required':sorted(required)}))"
+        ],
+        "returncode": 0,
+        "duration_seconds": 1.343,
+        "output": "{\"objects\": 98, \"unique\": 82, \"documented\": 83, \"required\": [\"/copernicus/image\", \"/copernicus/status\", \"/copernicus/test\", \"/pipeline/run\", \"/pipeline/settings\", \"/platform/summary\"]}",
+        "routes": {
+          "objects": 98,
+          "unique": 82,
+          "documented": 83,
+          "required": [
+            "/copernicus/image",
+            "/copernicus/status",
+            "/copernicus/test",
+            "/pipeline/run",
+            "/pipeline/settings",
+            "/platform/summary"
+          ]
+        }
+      }
+    },
+    "api_tests": {
+      "ok": true,
+      "duration_seconds": 2.843,
+      "detail": {
+        "command": [
+          "/opt/pyvenv/bin/python3",
+          "-m",
+          "pytest",
+          "-q",
+          "apps/api/tests"
+        ],
+        "returncode": 0,
+        "duration_seconds": 2.843,
+        "output": "......................................................................   [100%]"
+      }
+    },
+    "web_typecheck": {
+      "ok": true,
+      "duration_seconds": 1.011,
+      "detail": {
+        "command": [
+          "/opt/nvm/versions/node/v22.16.0/bin/npm",
+          "run",
+          "typecheck"
+        ],
+        "returncode": 0,
+        "duration_seconds": 1.01,
+        "output": "\n> econexo-web@1.0.0-rc.6.2 typecheck\n> tsc --noEmit"
+      }
+    }
+  }
+}

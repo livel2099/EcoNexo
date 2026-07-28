@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     environment: str = "development"
-    release_version: str = "1.0.0-rc.6-render"
+    release_version: str = "1.0.0-rc.6.2-render"
 
     database_url: str = ""
     postgres_host: str = "localhost"
@@ -50,6 +50,25 @@ class Settings(BaseSettings):
     anomaly_service_url: str = "http://localhost:8100"
 
     open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
+
+    # Copernicus Data Space Ecosystem. Process API es el modo predeterminado;
+    # las credenciales quedan exclusivamente en el backend. WMS es fallback.
+    copernicus_enabled_by_default: bool = True
+    copernicus_mode: str = "process_api"
+    copernicus_client_id: str = ""
+    copernicus_client_secret: str = ""
+    copernicus_token_url: str = (
+        "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+    )
+    copernicus_process_url: str = "https://sh.dataspace.copernicus.eu/process/v1"
+    copernicus_instance_id: str = ""
+    copernicus_wms_url: str = ""
+    copernicus_http_timeout_seconds: float = 45.0
+    copernicus_time_range_days: int = 90
+    copernicus_max_cloud_coverage: int = 80
+    copernicus_max_dimension: int = 1024
+    copernicus_cache_seconds: int = 600
+
     nasa_firms_key: str = ""
     firms_inline_enabled: bool = True
     firms_source: str = "VIIRS_SNPP_NRT"
@@ -82,6 +101,18 @@ class Settings(BaseSettings):
         )
 
     @property
+    def copernicus_mode_normalized(self) -> str:
+        value = self.copernicus_mode.strip().lower().replace("-", "_")
+        return value if value in {"process_api", "wms"} else "process_api"
+
+    @property
+    def copernicus_process_configured(self) -> bool:
+        return bool(
+            self.copernicus_client_id.strip()
+            and self.copernicus_client_secret.strip()
+        )
+
+    @property
     def google_audiences(self) -> list[str]:
         values = [self.google_client_id, *self.google_client_ids.split(",")]
         return sorted({value.strip() for value in values if value.strip()})
@@ -98,11 +129,30 @@ class Settings(BaseSettings):
 
     @property
     def cors_list(self) -> list[str]:
+        """Orígenes permitidos para navegador.
+
+        PUBLIC_APP_URL se incorpora siempre para evitar que una variable
+        CORS_ORIGINS desactualizada deje al frontend sin acceso. En producción
+        también se conserva el dominio oficial de la beta en Render.
+        """
+        raw_values = self.cors_origins.replace(";", ",").replace("\n", ",")
         origins = {
             origin.strip().rstrip("/")
-            for origin in self.cors_origins.split(",")
+            for origin in raw_values.split(",")
             if origin.strip()
         }
+
+        public_origin = self.public_app_url.strip().rstrip("/")
+        if public_origin.startswith(("http://", "https://")):
+            origins.add(public_origin)
+
+        configured_web_origin = os.getenv("ECONEXO_WEB_ORIGIN", "").strip().rstrip("/")
+        if configured_web_origin.startswith(("http://", "https://")):
+            origins.add(configured_web_origin)
+
+        if self.is_production:
+            origins.add("https://econexo-web.onrender.com")
+
         if "http://localhost:3000" in origins:
             origins.add("http://127.0.0.1:3000")
         if "http://127.0.0.1:3000" in origins:
@@ -231,6 +281,24 @@ class Settings(BaseSettings):
             findings.append("DB_POOL_MAX_SIZE")
         if self.pipeline_max_devices_per_run < 1:
             findings.append("PIPELINE_MAX_DEVICES_PER_RUN")
+
+        raw_copernicus_mode = self.copernicus_mode.strip().lower().replace("-", "_")
+        if raw_copernicus_mode not in {"process_api", "wms"}:
+            findings.append("COPERNICUS_MODE")
+        has_copernicus_client_id = bool(self.copernicus_client_id.strip())
+        has_copernicus_client_secret = bool(self.copernicus_client_secret.strip())
+        if has_copernicus_client_id != has_copernicus_client_secret:
+            findings.append("COPERNICUS_CLIENT_ID/COPERNICUS_CLIENT_SECRET")
+        if not self.copernicus_token_url.startswith("https://identity.dataspace.copernicus.eu/"):
+            findings.append("COPERNICUS_TOKEN_URL")
+        if not self.copernicus_process_url.startswith("https://sh.dataspace.copernicus.eu/"):
+            findings.append("COPERNICUS_PROCESS_URL")
+        if not 1 <= self.copernicus_time_range_days <= 366:
+            findings.append("COPERNICUS_TIME_RANGE_DAYS")
+        if not 0 <= self.copernicus_max_cloud_coverage <= 100:
+            findings.append("COPERNICUS_MAX_CLOUD_COVERAGE")
+        if not 64 <= self.copernicus_max_dimension <= 2500:
+            findings.append("COPERNICUS_MAX_DIMENSION")
 
         return findings
 

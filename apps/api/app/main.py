@@ -13,6 +13,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse
 
 from . import db
 from .config import get_settings
@@ -21,6 +23,7 @@ from .routers import (
     admin,
     alerts,
     auth,
+    copernicus,
     devices,
     environment,
     impact_reports,
@@ -88,10 +91,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-Copernicus-Layer", "X-Copernicus-Provider"],
+    max_age=86400,
 )
 
 app.include_router(auth.router)
 app.include_router(orgs.router)
+app.include_router(copernicus.router)
 app.include_router(platform.router)
 app.include_router(pipeline.router)
 app.include_router(devices.router)
@@ -108,6 +114,22 @@ app.include_router(territory.router)
 app.include_router(environment.router)
 app.include_router(zones.router)
 app.include_router(admin.router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+    """Evita respuestas 500 opacas y conserva CORS para el frontend oficial."""
+    logging.exception("Error no controlado en %s %s", request.method, request.url.path)
+    response = JSONResponse(
+        status_code=500,
+        content={"detail": "Error interno de EcoNexo. El evento fue registrado."},
+    )
+    origin = request.headers.get("origin", "").rstrip("/")
+    if origin and origin in s.cors_list:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response
 
 
 @app.middleware("http")
@@ -154,10 +176,14 @@ async def health() -> dict:
             "object_storage": s.s3_enabled,
             "anomaly_service": s.anomaly_enabled,
             "google_oauth": bool(s.google_audiences),
+            "copernicus_default_mode": s.copernicus_mode_normalized,
+            "copernicus_process_configured": s.copernicus_process_configured,
+            "copernicus_wms_configured": bool(s.copernicus_instance_id.strip() or s.copernicus_wms_url.strip()),
             "telemetry_pipeline": True,
             "firms_inline": s.firms_inline_enabled,
             "firms_configured": bool(s.nasa_firms_key.strip()),
         },
+        "frontend_origins": s.cors_list,
     }
 
 
