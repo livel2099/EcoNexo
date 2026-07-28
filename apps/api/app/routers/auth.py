@@ -5,10 +5,22 @@ import asyncpg
 from fastapi import APIRouter, HTTPException, Request, status
 
 from .. import db
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from ..admin_notifications import create_notification, request_context
 from ..rate_limit import enforce_rate_limit
 from ..schemas import EmailRegisterIn, GoogleAuthIn, LoginIn, TokenOut
 from ..subscriptions import ensure_subscription, sync_modules
+from ..config import get_settings
+from ..deps import CurrentUser, current_user
+
+from ..schemas import (
+    ChangePasswordIn,
+    EmailRegisterIn,
+    GoogleAuthIn,
+    LoginIn,
+    TokenOut,
+)
+
 from ..security import (
     create_access_token,
     hash_secret,
@@ -22,42 +34,87 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _token(row, *, provider: str, is_new_user: bool = False) -> TokenOut:
-    token = create_access_token(str(row["id"]), str(row["org_id"]), row["role"])
+    email = str(row["email"]).strip().lower()
+
+    token = create_access_token(
+        str(row["id"]),
+        str(row["org_id"]),
+        row["role"],
+    )
+
     return TokenOut(
         access_token=token,
         org_id=row["org_id"],
         role=row["role"],
         name=row["name"],
-        email=row["email"],
-        avatar_url=row.get("avatar_url") if hasattr(row, "get") else row["avatar_url"],
+        email=email,
+        avatar_url=row.get("avatar_url"),
         auth_provider=provider,
         is_new_user=is_new_user,
+        platform_admin=email in get_settings().platform_admin_list,
+        must_change_password=bool(
+            row.get("must_change_password", False)
+        ),
     )
 
 
-@router.post("/login", response_model=TokenOut)
-async def login(body: LoginIn, request: Request) -> TokenOut:
-    await enforce_rate_limit(
-        request, bucket="auth-password", limit=10, window_seconds=15 * 60
-    )
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def change_password(
+    body: ChangePasswordIn,
+    user: CurrentUser = Depends(current_user),
+) -> Response:
     row = await db.pool().fetchrow(
         """
-        SELECT id, org_id, role, name, email, password_hash, avatar_url
-        FROM users WHERE lower(email)=lower($1) AND is_active
+        SELECT password_hash
+        FROM users
+        WHERE id=$1 AND org_id=$2 AND is_active
         """,
-        str(body.email),
+        user.id,
+        user.org_id,
     )
-    if row is None or not verify_secret(body.password, row["password_hash"]):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales inválidas")
-    await db.pool().execute("UPDATE users SET last_login_at=now() WHERE id=$1", row["id"])
-    await ensure_subscription(row["org_id"], row["id"])
-    context = request_context(request)
-    await create_notification(
-        org_id=row["org_id"], kind="login_success", visibility="both", severity="info",
-        title="Nuevo ingreso a EcoNexo",
-        message=f"{row['name']} ingresó al centro de comando con email y contraseña.",
-        actor_user_id=row["id"], actor_email=row["email"],
-        metadata={**context, "provider": "password"},
+
+    if row is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Usuario no encontrado",
+        )
+
+    if not verify_secret(
+        body.current_password,
+        row["password_hash"],
+    ):
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "La contraseña actual es incorrecta",
+        )
+
+    if verify_secret(
+        body.new_password,
+        row["password_hash"],
+    ):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "La contraseña nueva debe ser diferente",
+        )
+
+    await db.pool().execute(
+        """
+        UPDATE users
+        SET password_hash=$3,
+            must_change_password=false,
+            password_changed_at=now()
+        WHERE id=$1 AND org_id=$2
+        """,
+        user.id,
+        user.org_id,
+        hash_secret(body.new_password),
+    )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
     )
     return _token(row, provider="password")
 
