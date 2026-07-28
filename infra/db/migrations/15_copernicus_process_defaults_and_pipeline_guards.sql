@@ -11,6 +11,18 @@ ALTER TABLE environmental_source_settings
   ADD COLUMN IF NOT EXISTS copernicus_last_error TEXT,
   ADD COLUMN IF NOT EXISTS copernicus_available_layers JSONB NOT NULL DEFAULT '[]'::jsonb;
 
+-- Sustituye la restricción histórica basada exclusivamente en WMS.
+ALTER TABLE environmental_source_settings
+  DROP CONSTRAINT IF EXISTS environment_sources_copernicus_config_check;
+
+ALTER TABLE environmental_source_settings
+  ADD CONSTRAINT environment_sources_copernicus_config_check
+  CHECK (
+    NOT copernicus_enabled
+    OR copernicus_use_system_default
+    OR NULLIF(btrim(copernicus_wms_url), '') IS NOT NULL
+  ) NOT VALID;
+
 ALTER TABLE environmental_source_settings
   ALTER COLUMN copernicus_enabled SET DEFAULT true;
 
