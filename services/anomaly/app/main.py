@@ -19,6 +19,9 @@ MODEL = AnomalyModel()
 
 
 def _dsn() -> str:
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if database_url:
+        return database_url
     return (
         f"postgresql://{os.getenv('POSTGRES_USER','econexo')}:"
         f"{os.getenv('POSTGRES_PASSWORD','econexo_dev_pw')}@"

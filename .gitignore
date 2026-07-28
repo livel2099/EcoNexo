@@ -1,9 +1,14 @@
 # Secrets
 .env
-*.env
-!.env.example
+.env.*
 **/.env
+**/.env.*
+!.env.example
+!.env.production.example
+!.env.render.example
 !**/.env.example
+!**/.env.production.example
+!**/.env.render.example
 
 # Python
 __pycache__/
@@ -44,5 +49,5 @@ models/*.pt
 .vscode/
 *.swp
 
-# Claude local settings
+# Local assistants
 .claude/settings.local.json

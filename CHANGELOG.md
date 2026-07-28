@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-rc.4 - 2026-07-27
+
+- Corregidas respuestas HTTP 204 del panel de mensajes administrativos.
+- Configuración de producción compatible con Render mediante `DATABASE_URL`.
+- Blueprints beta y producción, migraciones con checksum y advisory lock.
+- Adaptadores MQTT, S3 y anomalías opcionales para el despliegue core.
+- Dockerfile con validación previa, puerto `PORT` y compilación de sintaxis.
+- Plantillas `.env.render.example` y documentación de despliegue.
+- Pool PostgreSQL configurable y soporte de URL interna administrada.
+- CI corregido para dependencias de desarrollo separadas.
+- Script de arranque Docker separado y validado; migraciones al inicio para plan gratuito y Pre-Deploy para plan pago.
+- Guardas de producción rechazan placeholders de `.env` antes de abrir el servidor.
+
 ## 1.0.0-rc.3 - 2026-07-27
 
 - Notificación interna por cada login correcto mediante email o Google, con IP anonimizada, proveedor y contexto de acceso.

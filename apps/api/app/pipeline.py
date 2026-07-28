@@ -23,7 +23,10 @@ log = logging.getLogger("econexo.pipeline")
 
 async def anomaly_score(device_id: str, variable: str, value: float) -> float:
     """Consulta el anomaly-service (PyTorch). Si no responde, degrada a 0.5."""
-    url = get_settings().anomaly_service_url
+    settings = get_settings()
+    if not settings.anomaly_enabled:
+        return 0.5
+    url = settings.anomaly_service_url
     try:
         async with httpx.AsyncClient(timeout=3.0) as c:
             r = await c.post(f"{url}/score", json={

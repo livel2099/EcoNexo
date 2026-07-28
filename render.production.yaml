@@ -1,0 +1,66 @@
+# Render Blueprint de produccion. Genera secretos y conecta Postgres internamente.
+databases:
+  - name: econexo-db
+    plan: basic-256mb
+    diskSizeGB: 15
+    storageAutoscalingEnabled: true
+    region: oregon
+    postgresMajorVersion: "16"
+    databaseName: econexo
+    user: econexo_app
+    ipAllowList: []
+
+services:
+  - type: web
+    name: econexo-api
+    runtime: docker
+    plan: starter
+    region: oregon
+    rootDir: apps/api
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    healthCheckPath: /health
+    preDeployCommand: python -m app.migrate
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: RELEASE_VERSION
+        value: 1.0.0-rc.4-render
+      - key: DATABASE_URL
+        fromDatabase:
+          name: econexo-db
+          property: connectionString
+      - key: DB_POOL_MIN_SIZE
+        value: "1"
+      - key: RUN_MIGRATIONS_ON_START
+        value: "false"
+      - key: DB_POOL_MAX_SIZE
+        value: "10"
+      - key: DB_COMMAND_TIMEOUT_SECONDS
+        value: "30"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: INTERNAL_SERVICE_TOKEN
+        generateValue: true
+      - key: FORWARDED_ALLOW_IPS
+        value: "*"
+      - key: PUBLIC_APP_URL
+        value: https://econexo-misiones.econexo-misiones.workers.dev
+      - key: CORS_ORIGINS
+        value: https://econexo-misiones.econexo-misiones.workers.dev
+      - key: PLATFORM_ADMIN_EMAILS
+        sync: false
+      - key: SALES_EMAIL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        value: ""
+      - key: GOOGLE_CLIENT_IDS
+        value: ""
+      - key: MQTT_ENABLED
+        value: "false"
+      - key: ANOMALY_ENABLED
+        value: "false"
+      - key: S3_ENABLED
+        value: "false"

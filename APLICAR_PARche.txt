@@ -1,0 +1,12 @@
+EcoNexo Render Deploy Patch 1.0.0-rc.4
+
+Copiar el contenido de esta carpeta sobre la raiz del repositorio EcoNexo,
+conservando la estructura de directorios. Despues:
+
+1. Revisar .env.render.example y cargar sus variables en Render.
+2. Plan gratuito: RUN_MIGRATIONS_ON_START=true y sin Pre-Deploy Command.
+3. Plan pago: Pre-Deploy Command = python -m app.migrate y RUN_MIGRATIONS_ON_START=false.
+4. Commit y push:
+   git add -A
+   git commit -m "Prepare EcoNexo for Render"
+   git push origin main

@@ -38,30 +38,38 @@ from .security import decode_token
 from .ws import manager, mqtt_bridge
 
 logging.basicConfig(level=logging.INFO)
-_stop = asyncio.Event()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    insecure = get_settings().insecure_production_values()
+    settings = get_settings()
+    insecure = settings.insecure_production_values()
     if insecure:
         raise RuntimeError(
             "Configuracion insegura para produccion: " + ", ".join(insecure)
         )
+
     await db.connect()
-    bridge = asyncio.create_task(mqtt_bridge(_stop))
-    yield
-    _stop.set()
-    bridge.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await bridge
-    await db.disconnect()
+    stop = asyncio.Event()
+    bridge: asyncio.Task[None] | None = None
+    if settings.mqtt_enabled:
+        bridge = asyncio.create_task(mqtt_bridge(stop), name="mqtt-bridge")
+
+    try:
+        yield
+    finally:
+        stop.set()
+        if bridge is not None:
+            bridge.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await bridge
+        await db.disconnect()
 
 
 app = FastAPI(
     title="EcoNexo API",
     description="Inteligencia bioclimatica activa — sistema de decision en tiempo real.",
-    version="1.0.0-rc.3-misiones",
+    version=get_settings().release_version,
     lifespan=lifespan,
 )
 
@@ -106,7 +114,19 @@ async def security_headers(request: Request, call_next):
 
 @app.get("/health", tags=["meta"])
 async def health() -> dict:
-    return {"status": "ok", "service": "econexo-api", "territory": "Misiones"}
+    return {
+        "status": "ok",
+        "service": "econexo-api",
+        "release": s.release_version,
+        "environment": s.environment,
+        "territory": "Misiones",
+        "features": {
+            "mqtt": s.mqtt_enabled,
+            "object_storage": s.s3_enabled,
+            "anomaly_service": s.anomaly_enabled,
+            "google_oauth": bool(s.google_audiences),
+        },
+    }
 
 
 @app.get("/ready", tags=["meta"])

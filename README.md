@@ -2,7 +2,17 @@
 
 **Plataforma de inteligencia ambiental para detectar, correlacionar y documentar incidentes antes de que escalen.**
 
-EcoNexo combina sensores IoT, observación satelital, meteorología, reportes ciudadanos y reglas operativas para producir alertas priorizadas, trazabilidad e informes institucionales. Esta edición fue preparada como **candidato de lanzamiento técnico 1.0.0-rc.3 para la provincia de Misiones**. La arquitectura y los flujos principales están implementados y territorialmente restringidos; la publicación oficial todavía exige completar identidad societaria, revisión jurídica, infraestructura pública, credenciales productivas y la puerta de aceptación indicada en la documentación.
+EcoNexo combina sensores IoT, observación satelital, meteorología, reportes ciudadanos y reglas operativas para producir alertas priorizadas, trazabilidad e informes institucionales. Esta edición fue preparada como **candidato de lanzamiento técnico 1.0.0-rc.4 para la provincia de Misiones**. La arquitectura y los flujos principales están implementados y territorialmente restringidos; la publicación oficial todavía exige completar identidad societaria, revisión jurídica, infraestructura pública, credenciales productivas y la puerta de aceptación indicada en la documentación.
+
+## Deploy en Render
+
+La API incluye Blueprint, migraciones versionadas y plantilla de variables:
+
+- `render.yaml` — beta gratuita, con migraciones al iniciar.
+- `render.production.yaml` — producción paga, con migraciones Pre-Deploy.
+- `.env.render.example` — configuración para pegar en Render.
+- `RENDER_DEPLOY.md` — guía paso a paso.
+
 
 ## Qué incorpora esta edición
 
@@ -115,7 +125,7 @@ for migration in infra/db/migrations/*.sql; do
 done
 ```
 
-Las migraciones 02-04 agregan identidad por contraseña/Google, aceptación legal, informes institucionales, snapshots SpaceAI, fuentes ambientales, geocercas y auditoría. La migración 05 agrega licencias modulares y trazabilidad de comunicaciones de Alerta IA. Las migraciones 06-09 incorporan alcance Misiones, exclusión de registros externos, auditoría territorial y límite provincial versionado con sincronización oficial desde GeoRef Argentina. La migración 10 incorpora Copernicus y sanidad forestal; la 11 agrega planes, suscripciones, límites de consumo, solicitudes comerciales y mensajes administrativos de login. En producción se recomienda incorporar Alembic o un job de migración versionado antes de escalar réplicas.
+Las migraciones 02-04 agregan identidad por contraseña/Google, aceptación legal, informes institucionales, snapshots SpaceAI, fuentes ambientales, geocercas y auditoría. La migración 05 agrega licencias modulares y trazabilidad de comunicaciones de Alerta IA. Las migraciones 06-09 incorporan alcance Misiones, exclusión de registros externos, auditoría territorial y límite provincial versionado con sincronización oficial desde GeoRef Argentina. La migración 10 incorpora Copernicus y sanidad forestal; la 11 agrega planes, suscripciones, límites de consumo, solicitudes comerciales y mensajes administrativos de login. En Render, `python -m app.migrate` registra checksums y usa un advisory lock. El plan gratuito ejecuta migraciones al arrancar; el plan pago debe usar Pre-Deploy Command antes de escalar réplicas.
 
 ## Validación
 
@@ -128,10 +138,10 @@ cd apps/web && npm ci && npm run typecheck && npm run build
 
 Estado de esta entrega:
 
-- API: 37 pruebas aprobadas (`pytest -q`).
+- API: 39 pruebas aprobadas (`pytest -q`).
 - Python: compilación de módulos aprobada (`python -m compileall`).
 - Web y móvil: archivos TypeScript/TSX parseados con TypeScript 5.8.3 sin errores de sintaxis.
-- JSON, YAML y CSS: parseo aprobado; la hoja CSS contiene 860 reglas de nivel superior sin errores.
+- JSON, YAML y CSS: parseo aprobado; la hoja CSS contiene 985 reglas de nivel superior sin errores.
 - La instalación completa de dependencias web, el `npm run typecheck` y el build de Next.js deben repetirse en la estación de destino: el entorno de ensamblado no pudo completar `npm ci` por indisponibilidad de su gateway de paquetes.
 - La app móvil incluye código fuente y perfiles EAS; no incluye APK/IPA porque faltan el `projectId`, las credenciales de firma y la ejecución del build externo.
 
