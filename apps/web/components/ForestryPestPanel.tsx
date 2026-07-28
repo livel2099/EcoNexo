@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { apiGet } from "../app/lib/api";
 import { fetchEarthIntel, type EarthIntel } from "../app/lib/earth-intel";
-import type { Alert, Detection, Device, EnvironmentalSourceSettings, ModuleEntitlement } from "../app/lib/types";
+import type { Alert, Detection, Device, EnvironmentalSourceSettings, ModuleEntitlement, RiskZone } from "../app/lib/types";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 const SAN_ANTONIO: [number, number] = [-26.01709, -53.78987];
@@ -32,12 +32,14 @@ export default function ForestryPestPanel({
   devices,
   alerts,
   detections,
+  zones,
   sourceSettings,
 }: {
   token: string;
   devices: Device[];
   alerts: Alert[];
   detections: Detection[];
+  zones: RiskZone[];
   sourceSettings: EnvironmentalSourceSettings;
 }) {
   const [modules, setModules] = useState<ModuleEntitlement[]>([]);
@@ -107,7 +109,7 @@ export default function ForestryPestPanel({
       </section>
 
       <section className="pest-map-shell">
-        <MapView devices={devices} alerts={alerts} detections={detections} reports={[]} center={SAN_ANTONIO} earth={intel} sourceSettings={sourceSettings} showForestryAssets initialSatelliteMode={sourceSettings.copernicus_enabled ? "NDVI" : "NONE"} />
+        <MapView devices={devices} alerts={alerts} detections={detections} reports={[]} zones={zones} center={SAN_ANTONIO} earth={intel} sourceSettings={sourceSettings} showForestryAssets initialSatelliteMode={sourceSettings.copernicus_enabled ? "NDVI" : "NONE"} />
       </section>
 
       <section className="pest-data-strip">

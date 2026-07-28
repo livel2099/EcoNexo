@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IS_DEMO, WS, apiGet, apiPost, clearSession, getSession } from "../lib/api";
 import type { EarthIntel } from "../lib/earth-intel";
-import type { Alert, Detection, Device, EnvironmentalSourceSettings, Kpi, Org, Report, Session } from "../lib/types";
+import type { Alert, Detection, Device, EnvironmentalSourceSettings, Kpi, Org, PipelineRun, Report, RiskZone, Session } from "../lib/types";
 import { buildSpaceAIThreatAssessment } from "../lib/spaceai";
 import { MISIONES_CENTER, isInMisiones, misionesLocationLabel } from "../lib/misiones";
 import DevicesPanel from "../../components/DevicesPanel";
@@ -77,29 +77,41 @@ export default function Dashboard() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [zones, setZones] = useState<RiskZone[]>([]);
+  const [lastPipeline, setLastPipeline] = useState<PipelineRun | null>(null);
+  const [pipelineBusy, setPipelineBusy] = useState(false);
+  const [pipelineNotice, setPipelineNotice] = useState("");
   const [feed, setFeed] = useState<string[]>([]);
   const [earthIntel, setEarthIntel] = useState<EarthIntel | null>(null);
   const [sourceSettings, setSourceSettings] = useState<EnvironmentalSourceSettings>(DEFAULT_SOURCE_SETTINGS);
 
   const refresh = useCallback(async (accessToken: string) => {
-    const [nextKpi, nextAlerts, nextDevices, nextDetections, nextReports] = await Promise.all([
+    const [nextKpi, nextAlerts, nextDevices, nextDetections, nextReports, nextZones, pipelineRuns] = await Promise.all([
       apiGet<Kpi>("/kpis", accessToken),
       apiGet<Alert[]>("/alerts", accessToken),
       apiGet<Device[]>("/devices", accessToken),
       apiGet<Detection[]>("/satellite/detections?hours=48", accessToken),
       apiGet<Report[]>("/reports", accessToken),
+      apiGet<RiskZone[]>("/zones", accessToken),
+      apiGet<PipelineRun[]>("/pipeline/runs?limit=1", accessToken).catch(() => []),
     ]);
     setKpi(nextKpi);
     setAlerts(nextAlerts);
     setDevices(nextDevices);
     setDetections(nextDetections);
     setReports(nextReports);
+    setZones(nextZones);
+    setLastPipeline(pipelineRuns[0] || null);
   }, []);
 
   useEffect(() => {
     const session = getSession();
     if (!session) {
       router.replace("/login");
+      return;
+    }
+    if (session.must_change_password) {
+      router.replace("/cambiar-contrasena");
       return;
     }
     setSession(session);
@@ -131,9 +143,13 @@ export default function Dashboard() {
           ? `Alerta · ${message.data.title} · ${Math.round((message.data.confidence || 0) * 100)}%`
           : message.kind === "reports"
             ? `Nuevo reporte · ${message.data.type}`
-            : `Telemetría · ${message.data.external_id || "nodo sin identificar"}`;
+            : message.kind === "pipeline"
+              ? `Pipeline · ${message.data.devices_updated || 0} nodos · ${message.data.readings_inserted || 0} lecturas`
+              : `Telemetría · ${message.data.external_id || "nodo sin identificar"}`;
         setFeed((current) => [line, ...current].slice(0, 6));
-        if (message.kind !== "readings") void refresh(session.access_token).catch(() => undefined);
+        if (message.kind === "pipeline" || message.kind === "alerts" || message.kind === "reports") {
+          void refresh(session.access_token).catch(() => undefined);
+        }
       };
       stopLiveFeed = () => websocket.close();
     }
@@ -151,6 +167,26 @@ export default function Dashboard() {
     await refresh(token);
   }
 
+  async function runCommandPipeline() {
+    if (!token || pipelineBusy) return;
+    setPipelineBusy(true);
+    setPipelineNotice("");
+    try {
+      if (!devices.length && session?.role === "admin") {
+        await apiPost("/pipeline/bootstrap", token, { count: 2, zone_id: zones[0]?.id || null });
+      }
+      const run = await apiPost<PipelineRun>("/pipeline/run", token, {});
+      setLastPipeline(run);
+      setPipelineNotice(`${run.devices_updated}/${run.devices_total} nodos · ${run.readings_inserted} lecturas · ${run.detections_ingested} focos · ${run.alerts_created} alertas`);
+      setFeed((current) => [`Pipeline ${run.status} · ${run.readings_inserted} lecturas actualizadas`, ...current].slice(0, 6));
+      await refresh(token);
+    } catch (cause) {
+      setPipelineNotice(cause instanceof Error ? cause.message : "No se pudo ejecutar el pipeline");
+    } finally {
+      setPipelineBusy(false);
+    }
+  }
+
   const globalStatus = kpi?.global_status || "normal";
   const commandCenter: [number, number] = isInMisiones(sourceSettings.default_latitude, sourceSettings.default_longitude)
     ? [sourceSettings.default_latitude, sourceSettings.default_longitude]
@@ -159,6 +195,7 @@ export default function Dashboard() {
   const localAlerts = useMemo(() => alerts.filter((item) => isInMisiones(item.lat, item.lon)), [alerts]);
   const localDetections = useMemo(() => detections.filter((item) => isInMisiones(item.lat, item.lon)), [detections]);
   const localReports = useMemo(() => reports.filter((item) => isInMisiones(item.lat, item.lon)), [reports]);
+  const localZones = useMemo(() => zones.filter((item) => isInMisiones(item.lat, item.lon)), [zones]);
   const ignoredExternalSignals = (devices.length - localDevices.length) + (alerts.length - localAlerts.length)
     + (detections.length - localDetections.length) + (reports.length - localReports.length);
   const commandAssessment = useMemo(() => buildSpaceAIThreatAssessment(earthIntel, localDetections, { fireRadiusKm: sourceSettings.fire_radius_km, firmsEnabled: sourceSettings.firms_enabled }), [earthIntel, localDetections, sourceSettings.fire_radius_km, sourceSettings.firms_enabled]);
@@ -213,15 +250,17 @@ export default function Dashboard() {
 
       <EarthIntelBar lat={commandCenter[0]} lon={commandCenter[1]} onUpdate={setEarthIntel} />
 
-      <div className="feedbar kpirow">
+      <div className="feedbar kpirow command-pipeline-bar">
         <span className="live"><span className="dot" /> EN VIVO</span>
-        <span className="mono muted">{feed[0] || "esperando telemetría del bus MQTT…"}</span>
+        <span className="mono muted">{feed[0] || "Pipeline listo para sincronizar telemetría, reglas y focos"}</span>
+        <span className="pipeline-last-run">{pipelineNotice || (lastPipeline ? `Última corrida: ${lastPipeline.status} · ${lastPipeline.readings_inserted} lecturas` : "Sin corridas")}</span>
+        <button type="button" className="pipeline-run-button" disabled={pipelineBusy || !token} onClick={() => void runCommandPipeline()}>{pipelineBusy ? "Actualizando…" : devices.length ? "Ejecutar pipeline" : session?.role === "admin" ? "Crear red y ejecutar" : "Ejecutar pipeline"}</button>
       </div>
 
       {view === "comando" ? (
         <>
           <section className="mapwrap" aria-label="Mapa operacional">
-            <MapView devices={localDevices} alerts={localAlerts} detections={localDetections} reports={localReports} center={commandCenter} earth={earthIntel} sourceSettings={sourceSettings} initialSatelliteMode="NONE" />
+            <MapView devices={localDevices} alerts={localAlerts} detections={localDetections} reports={localReports} zones={localZones} center={commandCenter} earth={earthIntel} sourceSettings={sourceSettings} initialSatelliteMode="NONE" />
             <div className="legend">
               <div className="li"><span className="sw" style={{ background: "#8ff06a" }} /> Nodo online</div>
               <div className="li"><span className="sw" style={{ background: "#ff9f45" }} /> Foco satelital</div>
@@ -253,8 +292,8 @@ export default function Dashboard() {
             ))}
           </aside>
         </>
-      ) : token && view === "fuego" ? <FireSmokePanel token={token} org={org} devices={localDevices} alerts={localAlerts} detections={localDetections} earth={earthIntel} center={commandCenter} sourceSettings={sourceSettings} />
-        : token && view === "plagas" ? <ForestryPestPanel token={token} devices={localDevices} alerts={localAlerts} detections={localDetections} sourceSettings={sourceSettings} />
+      ) : token && view === "fuego" ? <FireSmokePanel token={token} org={org} devices={localDevices} alerts={localAlerts} detections={localDetections} zones={localZones} earth={earthIntel} center={commandCenter} sourceSettings={sourceSettings} />
+        : token && view === "plagas" ? <ForestryPestPanel token={token} devices={localDevices} alerts={localAlerts} detections={localDetections} zones={localZones} sourceSettings={sourceSettings} />
         : token && view === "observatorio" ? <ObservatoryPanel token={token} devices={localDevices} detections={localDetections} commandIntel={earthIntel} commandAssessment={commandAssessment} sourceSettings={sourceSettings} />
         : token && view === "dispositivos" ? <DevicesPanel token={token} />
           : token && view === "reglas" ? <RulesPanel token={token} />

@@ -13,18 +13,24 @@ class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=256)
 
-class ChangePasswordIn(BaseModel):
+
+class PasswordChangeIn(BaseModel):
     current_password: str = Field(min_length=6, max_length=256)
     new_password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        if value.strip() != value:
+            raise ValueError("La contraseña no puede comenzar ni terminar con espacios")
+        if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
+            raise ValueError("La contraseña debe incluir al menos una letra y un número")
+        return value
 
     @model_validator(mode="after")
     def validate_password_change(self):
         if self.current_password == self.new_password:
-            raise ValueError("La contraseña nueva debe ser diferente")
-        if not any(char.isalpha() for char in self.new_password):
-            raise ValueError("La contraseña nueva debe incluir una letra")
-        if not any(char.isdigit() for char in self.new_password):
-            raise ValueError("La contraseña nueva debe incluir un número")
+            raise ValueError("La contraseña nueva debe ser diferente de la actual")
         return self
 
 
@@ -127,24 +133,81 @@ class OrgOut(BaseModel):
     territory_scope: str = "provincial"
 
 
-# --- Devices ---
+# --- Devices y telemetria ---
+MarkerShape = Literal["circle", "square", "triangle"]
+TelemetryMode = Literal["mqtt", "open_meteo", "manual"]
+
+
 class DeviceTypeIn(BaseModel):
-    name: str
-    variables: list[dict[str, Any]] = []
+    name: str = Field(min_length=2, max_length=120)
+    variables: list[dict[str, Any]] = Field(default_factory=list, max_length=40)
+
+
+class DeviceTypeOut(DeviceTypeIn):
+    id: UUID
 
 
 class DeviceIn(BaseModel):
-    name: str
-    external_id: str
+    name: str = Field(min_length=2, max_length=120)
+    external_id: str = Field(min_length=2, max_length=120)
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
     device_type_id: UUID | None = None
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list, max_length=30)
+    marker_shape: MarkerShape = "circle"
+    telemetry_mode: TelemetryMode = "mqtt"
+    zone_id: UUID | None = None
+    pipeline_enabled: bool = True
+    telemetry_config: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("external_id")
+    @classmethod
+    def normalize_external_id(cls, value: str) -> str:
+        cleaned = value.strip().lower().replace(" ", "-")
+        if not cleaned:
+            raise ValueError("El identificador externo es obligatorio")
+        return cleaned
 
     @model_validator(mode="after")
     def validate_misiones_location(self):
         ensure_in_misiones(self.lat, self.lon)
         return self
+
+
+class DeviceUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    tags: list[str] | None = Field(default=None, max_length=30)
+    marker_shape: MarkerShape | None = None
+    telemetry_mode: TelemetryMode | None = None
+    zone_id: UUID | None = None
+    pipeline_enabled: bool | None = None
+    telemetry_config: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_location_pair(self):
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("Latitud y longitud deben enviarse juntas")
+        if self.lat is not None and self.lon is not None:
+            ensure_in_misiones(self.lat, self.lon)
+        return self
+
+
+class DeviceReadingsIn(BaseModel):
+    values: dict[str, float] = Field(min_length=1, max_length=50)
+    observed_at: datetime | None = None
+
+    @field_validator("values")
+    @classmethod
+    def validate_variables(cls, values: dict[str, float]) -> dict[str, float]:
+        normalized: dict[str, float] = {}
+        for key, value in values.items():
+            variable = key.strip().lower().replace(" ", "_")
+            if not variable or len(variable) > 80:
+                raise ValueError("Nombre de variable inválido")
+            normalized[variable] = float(value)
+        return normalized
 
 
 class DeviceOut(BaseModel):
@@ -156,8 +219,17 @@ class DeviceOut(BaseModel):
     status: str
     battery: float | None = None
     rssi: int | None = None
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
     last_seen: datetime | None = None
+    marker_shape: MarkerShape = "circle"
+    telemetry_mode: TelemetryMode = "mqtt"
+    zone_id: UUID | None = None
+    zone_name: str | None = None
+    pipeline_enabled: bool = True
+    telemetry_config: dict[str, Any] = Field(default_factory=dict)
+    last_pipeline_at: datetime | None = None
+    last_pipeline_status: str | None = None
+    latest_readings: dict[str, float] = Field(default_factory=dict)
 
 
 class DeviceCreatedOut(DeviceOut):
@@ -453,6 +525,147 @@ class AdminNotificationOut(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     read: bool = False
     created_at: datetime
+
+
+# --- Administración general de plataforma ---
+class PlatformSummaryOut(BaseModel):
+    organizations_total: int
+    organizations_active: int
+    users_total: int
+    users_active: int
+    platform_admins: int
+    pending_license_requests: int
+    logins_24h: int
+
+
+class PlatformUserCreateIn(BaseModel):
+    org_id: UUID
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    role: Literal["admin", "operador", "visualizador"] = "operador"
+    temporary_password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("temporary_password")
+    @classmethod
+    def validate_initial_password(cls, value: str) -> str:
+        if value.strip() != value:
+            raise ValueError("La contraseña temporal no puede tener espacios al inicio o al final")
+        if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
+            raise ValueError("La contraseña temporal debe incluir una letra y un número")
+        return value
+
+
+class PlatformUserOut(BaseModel):
+    id: UUID
+    org_id: UUID
+    org_name: str
+    name: str
+    email: EmailStr
+    role: Literal["admin", "operador", "visualizador"]
+    is_active: bool
+    organization_active: bool
+    auth_provider: Literal["password", "google"]
+    email_verified: bool
+    must_change_password: bool
+    last_login_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformUserUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    role: Literal["admin", "operador", "visualizador"] | None = None
+    is_active: bool | None = None
+
+
+class PlatformPasswordResetIn(BaseModel):
+    temporary_password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("temporary_password")
+    @classmethod
+    def validate_temporary_password(cls, value: str) -> str:
+        if value.strip() != value:
+            raise ValueError("La contraseña temporal no puede tener espacios al inicio o al final")
+        if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
+            raise ValueError("La contraseña temporal debe incluir una letra y un número")
+        return value
+
+
+class PlatformOrganizationOut(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    vertical: str
+    province: str
+    municipality: str | None = None
+    is_active: bool
+    users_total: int
+    users_active: int
+    plan_key: str | None = None
+    plan_name: str | None = None
+    subscription_status: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformOrganizationUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    is_active: bool | None = None
+
+
+class PlatformAuditOut(BaseModel):
+    id: UUID
+    org_id: UUID | None = None
+    org_name: str | None = None
+    user_id: UUID | None = None
+    actor_name: str | None = None
+    action: str
+    resource: str
+    resource_id: UUID | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+# --- Pipeline de telemetria ---
+class TelemetryPipelineSettingsIn(BaseModel):
+    enabled: bool = True
+    auto_run: bool = False
+    interval_minutes: int = Field(default=15, ge=2, le=1440)
+    stale_minutes: int = Field(default=30, ge=5, le=10080)
+    refresh_firms: bool = True
+    evaluate_rules: bool = True
+
+
+class TelemetryPipelineSettingsOut(TelemetryPipelineSettingsIn):
+    org_id: UUID
+    firms_configured: bool = False
+    updated_at: datetime
+
+
+class PipelineRunOut(BaseModel):
+    id: UUID
+    status: Literal["running", "completed", "partial", "failed"]
+    source: str = "command_core"
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    devices_total: int = 0
+    devices_updated: int = 0
+    readings_inserted: int = 0
+    detections_ingested: int = 0
+    alerts_created: int = 0
+    errors: list[dict[str, Any]] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class BootstrapTelemetryIn(BaseModel):
+    count: int = Field(default=2, ge=1, le=6)
+    zone_id: UUID | None = None
+
+
+class BootstrapTelemetryOut(BaseModel):
+    created: list[DeviceCreatedOut] = Field(default_factory=list)
+    zone_id: UUID
+    detail: str
 
 
 # --- KPIs ---

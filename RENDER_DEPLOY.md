@@ -1,115 +1,170 @@
-# EcoNexo en Render — guía validada para la API
+# EcoNexo rc.6 en Render
 
-Este repositorio incluye dos opciones:
-
-- `render.yaml`: beta con Web Service, Render Postgres y worker NASA FIRMS.
-- `render.production.yaml`: servicio Starter y Postgres `basic-256mb`.
-
-El frontend continúa en Cloudflare. Render aloja la API FastAPI y PostgreSQL/PostGIS.
-
-> **Importante:** `render.yaml` es solo para beta o validación. El Web Service gratuito entra en reposo por inactividad y la base gratuita expira a los 30 días sin backups. Para lanzamiento oficial usar `render.production.yaml` o planes pagos equivalentes.
-
-## Opción A — Blueprint
-
-1. Subir el repositorio a GitHub.
-2. En Render elegir **New > Blueprint**.
-3. Seleccionar el repositorio.
-4. Usar `render.yaml` para beta o indicar `render.production.yaml` para producción.
-5. Confirmar la creación de `econexo-db` y `econexo-api`.
-
-El Blueprint configura:
-
-- Docker con raíz `apps/api`.
-- `DATABASE_URL` desde la base administrada.
-- secretos JWT generados por Render.
-- `econexo-satellite`, worker que consulta NASA FIRMS cada 15 minutos y entrega los focos a la API con el token interno.
-- en beta gratuita, migraciones idempotentes al iniciar el servicio (`RUN_MIGRATIONS_ON_START=true`).
-- en producción paga, migraciones con `python -m app.migrate` como Pre-Deploy Command.
-- health check `/health`.
-- MQTT, S3 y servicio de anomalías desactivados hasta configurar proveedores externos.
-
-## Opción B — servicio ya creado manualmente
-
-En **Settings > Build & Deploy**:
+Esta edición despliega tres componentes:
 
 ```text
-Language: Docker
+PostgreSQL/PostGIS  -> econexo-db
+API FastAPI         -> EcoNexo / econexo.onrender.com
+Frontend estático   -> econexo-web.onrender.com
+```
+
+Los archivos `render.yaml` y `render.production.yaml` también permiten crear la arquitectura completa mediante Blueprint.
+
+## 1. API existente
+
+En el Web Service de la API:
+
+```text
+Runtime: Docker
 Branch: main
 Root Directory: apps/api
 Dockerfile Path: Dockerfile
 Docker Build Context: .
-Pre-Deploy Command: `python -m app.migrate` solo en planes pagos
+Docker Command: vacío
 Health Check Path: /health
 ```
 
-En **Environment > Add from .env**, pegar `.env.render.example` y reemplazar:
-
-- `DATABASE_URL`: Internal Database URL de Render Postgres.
-- `JWT_SECRET`: secreto de 64 caracteres.
-- `INTERNAL_SERVICE_TOKEN`: otro secreto diferente.
-- `PLATFORM_ADMIN_EMAILS`: email del administrador comercial de EcoNexo; admite varios separados por coma.
-- `SALES_EMAIL`: email que recibirá solicitudes comerciales.
-- `NASA_FIRMS_KEY`: MAP_KEY real solicitada en NASA FIRMS. En un Blueprint existente debe cargarse manualmente en `econexo-api`; el worker la recibe por referencia.
-
-En un servicio pago con Pre-Deploy Command, usar:
-
-```env
-RUN_MIGRATIONS_ON_START=false
-```
-
-En el plan gratuito, que no admite Pre-Deploy Command, usar:
+En el plan gratuito:
 
 ```env
 RUN_MIGRATIONS_ON_START=true
 ```
 
-El ejecutor usa advisory lock y checksums, por lo que no vuelve a aplicar migraciones registradas.
-
-## Comprobaciones
+En un plan pago con Pre-Deploy Command:
 
 ```text
-https://TU-SERVICIO.onrender.com/health
-https://TU-SERVICIO.onrender.com/docs
-https://TU-SERVICIO.onrender.com/ready
+Pre-Deploy Command: python -m app.migrate
 ```
-
-`/health` debe responder 200. `/ready` puede responder 503 hasta sincronizar el límite oficial GeoRef de Misiones y completar la auditoría territorial.
-
-## Frontend Cloudflare
-
-Reconstruir el frontend con:
-
-```powershell
-$env:NEXT_PUBLIC_API_URL="https://TU-SERVICIO.onrender.com"
-$env:NEXT_PUBLIC_WS_URL="wss://TU-SERVICIO.onrender.com"
-cd apps\web
-npm ci
-npm run deploy:cloudflare:production
-```
-
-La API debe contener en Render:
 
 ```env
-PUBLIC_APP_URL=https://econexo-misiones.econexo-misiones.workers.dev
-CORS_ORIGINS=https://econexo-misiones.econexo-misiones.workers.dev
+RUN_MIGRATIONS_ON_START=false
 ```
 
-No agregar barra final.
-
-## Ingesta NASA FIRMS
-
-El Blueprint crea `econexo-satellite` como Background Worker Starter. Este servicio tiene costo independiente en Render. La variable `NASA_FIRMS_KEY` se carga en `econexo-api`; el worker reutiliza esa variable y `INTERNAL_SERVICE_TOKEN` mediante referencias privadas de Render. Sin MAP_KEY, producción queda deliberadamente sin focos simulados.
-
-Después del deploy, revisar los logs del worker. Una ejecución correcta informa `FIRMS: N focos de calor` y `Ingesta al API`.
-
-## Servicios opcionales
-
-La API core inicia con:
+Importar `.env.render.example` y completar como mínimo:
 
 ```env
-MQTT_ENABLED=false
-ANOMALY_ENABLED=false
-S3_ENABLED=false
+DATABASE_URL=INTERNAL_DATABASE_URL_DE_RENDER
+JWT_SECRET=SECRETO_ALEATORIO_1
+INTERNAL_SERVICE_TOKEN=SECRETO_ALEATORIO_2
+PUBLIC_APP_URL=https://econexo-web.onrender.com
+CORS_ORIGINS=https://econexo-web.onrender.com
+PLATFORM_ADMIN_EMAILS=econexoargentina@gmail.com
+SALES_EMAIL=econexoargentina@gmail.com
 ```
 
-Para habilitar fotos, configurar un bucket S3/R2 privado y cambiar `S3_ENABLED=true`. Para telemetría en tiempo real, usar un broker MQTT con TLS y cambiar `MQTT_ENABLED=true`.
+Para obtener focos reales dentro del pipeline integrado:
+
+```env
+NASA_FIRMS_KEY=MAP_KEY_DE_NASA_FIRMS
+FIRMS_INLINE_ENABLED=true
+FIRMS_SOURCE=VIIRS_SNPP_NRT
+```
+
+Sin `NASA_FIRMS_KEY`, producción no inventa focos. El resto del pipeline y los nodos Open-Meteo siguen funcionando.
+
+## 2. Administrador general
+
+Solo durante el primer alta o restablecimiento:
+
+```env
+PLATFORM_ADMIN_BOOTSTRAP_ENABLED=true
+PLATFORM_ADMIN_INITIAL_PASSWORD=CONTRASENA_TEMPORAL_SEGURA
+PLATFORM_ADMIN_FORCE_PASSWORD_CHANGE=true
+PLATFORM_ADMIN_RESET_INITIAL_PASSWORD=true
+```
+
+Ingresar con `econexoargentina@gmail.com`, cambiar la clave y luego dejar:
+
+```env
+PLATFORM_ADMIN_BOOTSTRAP_ENABLED=false
+PLATFORM_ADMIN_INITIAL_PASSWORD=
+PLATFORM_ADMIN_RESET_INITIAL_PASSWORD=false
+```
+
+La consola privada se abre manualmente en:
+
+```text
+https://econexo-web.onrender.com/plataforma/
+```
+
+## 3. Frontend estático
+
+En el Static Site:
+
+```text
+Branch: main
+Root Directory: apps/web
+Build Command: npm ci && npm run typecheck && npm run build:cloudflare:production
+Publish Directory: out
+```
+
+Importar `.env.web.render.example`. Para el servicio API actual:
+
+```env
+NEXT_PUBLIC_API_URL=https://econexo.onrender.com
+NEXT_PUBLIC_WS_URL=wss://econexo.onrender.com
+NEXT_PUBLIC_DEMO_MODE=false
+NEXT_PUBLIC_STATIC_EXPORT=true
+```
+
+Después de cambiar una variable `NEXT_PUBLIC_*`, usar **Clear build cache & deploy** porque Next.js incorpora esos valores durante el build.
+
+## 4. Orden de despliegue
+
+1. Subir el código a `main`.
+2. Desplegar la API primero para aplicar la migración `14_telemetry_pipeline_and_map.sql`.
+3. Verificar `https://econexo.onrender.com/health`.
+4. Verificar `https://econexo.onrender.com/docs`.
+5. Reconstruir `econexo-web` con caché limpia.
+6. Ingresar como administrador.
+7. Abrir `Admin Core > Telemetría`.
+8. Usar **Crear red inicial y ejecutar** o crear nodos manualmente.
+9. En Centro de Comando, usar **Ejecutar pipeline**.
+
+## 5. Qué actualiza el pipeline
+
+Cada corrida puede:
+
+- actualizar nodos virtuales Open-Meteo;
+- persistir temperatura, humedad, humedad superficial del suelo, precipitación, viento, ráfagas y VPD;
+- actualizar estados online/offline;
+- consultar NASA FIRMS cuando existe MAP_KEY;
+- deduplicar focos;
+- correlacionar focos con geocercas de incendio o multiamenaza;
+- evaluar reglas no-code;
+- crear alertas y fuentes de evidencia;
+- refrescar el mapa y el feed por WebSocket.
+
+Los nodos virtuales aparecen como cuadros, triángulos o círculos, según la configuración guardada en Admin Core.
+
+## 6. Capas del mapa
+
+Las opciones Humedad y Área quemada ya no quedan bloqueadas:
+
+- **Humedad:** muestra un proxy operativo basado en lecturas de nodos/Open-Meteo cuando no hay WMS.
+- **Área quemada:** muestra halos FIRMS como proxy de focos térmicos; no se presenta como perímetro quemado confirmado.
+- **Color natural y NDVI:** permanecen seleccionables, pero requieren una instancia WMS válida para mostrar un mosaico satelital.
+
+Para mosaicos reales, configurar en `Admin Core > Fuentes SpaceAI`:
+
+```text
+https://sh.dataspace.copernicus.eu/ogc/wms/INSTANCE_ID
+```
+
+Luego probar GetCapabilities y asignar los nombres de capas.
+
+## 7. Diagnóstico rápido
+
+```text
+GET https://econexo.onrender.com/health
+GET https://econexo.onrender.com/ready
+GET https://econexo.onrender.com/docs
+```
+
+En el navegador, el request de estado debe apuntar a:
+
+```text
+https://econexo.onrender.com/health
+```
+
+Si apunta a `localhost`, el frontend fue construido con variables antiguas. Si devuelve CORS, corregir `CORS_ORIGINS` en la API y redesplegarla.

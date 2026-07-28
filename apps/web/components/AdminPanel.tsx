@@ -14,9 +14,10 @@ import type {
 } from "../app/lib/types";
 import AdminNotificationsPanel from "./AdminNotificationsPanel";
 import SubscriptionPanel from "./SubscriptionPanel";
+import TelemetryAdminPanel from "./TelemetryAdminPanel";
 import { MISIONES_CENTER, MISIONES_MUNICIPALITIES, assertMisionesCoordinates, misionesLocationLabel, municipalityDepartment } from "../app/lib/misiones";
 
-type Tab = "overview" | "messages" | "subscription" | "users" | "zones" | "organization" | "sources" | "launch" | "audit";
+type Tab = "overview" | "messages" | "subscription" | "users" | "zones" | "telemetry" | "organization" | "sources" | "launch" | "audit";
 type BoundaryStatus = { province: string; available: boolean; official: boolean; boundaries: Array<{ source: string; is_official: boolean; fetched_at?: string | null; area_km2?: number | string }> };
 type CopernicusTestResult = { ok: boolean; service_title: string | null; layers: string[]; detail: string };
 type ZoneDraft = {
@@ -274,7 +275,7 @@ export default function AdminPanel({
 
   const tabs: Array<[Tab, string]> = [
     ["overview", "Control"], ["messages", `Mensajes${unreadNotifications ? ` (${unreadNotifications})` : ""}`],
-    ["subscription", "Suscripción"], ["users", "Usuarios"], ["zones", "Geocercas"], ["organization", "Organización"],
+    ["subscription", "Suscripción"], ["users", "Usuarios"], ["zones", "Geocercas"], ["telemetry", "Telemetría"], ["organization", "Organización"],
     ["sources", "Fuentes SpaceAI"], ["launch", "Lanzamiento"], ["audit", "Auditoría"],
   ];
 
@@ -334,6 +335,8 @@ export default function AdminPanel({
           </div>
         </article>
       </section>}
+
+      {tab === "telemetry" && <TelemetryAdminPanel token={token} zones={zones} onChanged={() => void load()} />}
 
       {tab === "zones" && <section className="admin-zone-layout">
         <form className="admin-form-card admin-zone-form" onSubmit={saveZone}>

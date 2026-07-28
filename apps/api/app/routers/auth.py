@@ -2,25 +2,15 @@
 from __future__ import annotations
 
 import asyncpg
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from .. import db
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from ..admin_notifications import create_notification, request_context
-from ..rate_limit import enforce_rate_limit
-from ..schemas import EmailRegisterIn, GoogleAuthIn, LoginIn, TokenOut
-from ..subscriptions import ensure_subscription, sync_modules
 from ..config import get_settings
 from ..deps import CurrentUser, current_user
-
-from ..schemas import (
-    ChangePasswordIn,
-    EmailRegisterIn,
-    GoogleAuthIn,
-    LoginIn,
-    TokenOut,
-)
-
+from ..rate_limit import enforce_rate_limit
+from ..schemas import EmailRegisterIn, GoogleAuthIn, LoginIn, PasswordChangeIn, TokenOut
+from ..subscriptions import ensure_subscription, sync_modules
 from ..security import (
     create_access_token,
     hash_secret,
@@ -33,90 +23,109 @@ from ..security import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _field(row, key: str, default=None):
+    try:
+        value = row[key]
+    except (KeyError, TypeError):
+        return default
+    return default if value is None else value
+
+
 def _token(row, *, provider: str, is_new_user: bool = False) -> TokenOut:
     email = str(row["email"]).strip().lower()
-
-    token = create_access_token(
-        str(row["id"]),
-        str(row["org_id"]),
-        row["role"],
-    )
-
+    token = create_access_token(str(row["id"]), str(row["org_id"]), row["role"])
     return TokenOut(
         access_token=token,
         org_id=row["org_id"],
         role=row["role"],
         name=row["name"],
         email=email,
-        avatar_url=row.get("avatar_url"),
+        avatar_url=_field(row, "avatar_url"),
         auth_provider=provider,
         is_new_user=is_new_user,
         platform_admin=email in get_settings().platform_admin_list,
-        must_change_password=bool(
-            row.get("must_change_password", False)
-        ),
+        must_change_password=bool(_field(row, "must_change_password", False)),
     )
 
 
-@router.post(
-    "/change-password",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-)
-async def change_password(
-    body: ChangePasswordIn,
-    user: CurrentUser = Depends(current_user),
-) -> Response:
+@router.post("/login", response_model=TokenOut)
+async def login(body: LoginIn, request: Request) -> TokenOut:
+    await enforce_rate_limit(
+        request, bucket="auth-password", limit=10, window_seconds=15 * 60
+    )
     row = await db.pool().fetchrow(
         """
-        SELECT password_hash
-        FROM users
-        WHERE id=$1 AND org_id=$2 AND is_active
+        SELECT u.id, u.org_id, u.role, u.name, u.email, u.password_hash,
+               u.avatar_url, u.must_change_password
+        FROM users u
+        JOIN organizations o ON o.id=u.org_id
+        WHERE lower(u.email)=lower($1) AND u.is_active AND o.is_active
         """,
+        str(body.email),
+    )
+    if row is None or not verify_secret(body.password, row["password_hash"]):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales inválidas")
+    await db.pool().execute("UPDATE users SET last_login_at=now() WHERE id=$1", row["id"])
+    await ensure_subscription(row["org_id"], row["id"])
+    context = request_context(request)
+    await create_notification(
+        org_id=row["org_id"], kind="login_success", visibility="both", severity="info",
+        title="Nuevo ingreso a EcoNexo",
+        message=f"{row['name']} ingresó al centro de comando con email y contraseña.",
+        actor_user_id=row["id"], actor_email=row["email"],
+        metadata={**context, "provider": "password"},
+    )
+    return _token(row, provider="password")
+
+
+@router.post("/change-password")
+async def change_password(
+    body: PasswordChangeIn,
+    request: Request,
+    user: CurrentUser = Depends(current_user),
+) -> dict[str, object]:
+    await enforce_rate_limit(
+        request, bucket="auth-change-password", limit=8, window_seconds=15 * 60
+    )
+    row = await db.pool().fetchrow(
+        "SELECT password_hash FROM users WHERE id=$1 AND org_id=$2 AND is_active",
         user.id,
         user.org_id,
     )
-
-    if row is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "Usuario no encontrado",
-        )
-
-    if not verify_secret(
-        body.current_password,
-        row["password_hash"],
-    ):
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "La contraseña actual es incorrecta",
-        )
-
-    if verify_secret(
-        body.new_password,
-        row["password_hash"],
-    ):
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "La contraseña nueva debe ser diferente",
-        )
-
+    if row is None or not verify_secret(body.current_password, row["password_hash"]):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "La contraseña actual es incorrecta")
     await db.pool().execute(
         """
-        UPDATE users
-        SET password_hash=$3,
-            must_change_password=false,
-            password_changed_at=now()
+        UPDATE users SET password_hash=$3, must_change_password=false,
+            password_changed_at=now(), updated_at=now()
         WHERE id=$1 AND org_id=$2
         """,
         user.id,
         user.org_id,
         hash_secret(body.new_password),
     )
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    await db.pool().execute(
+        """
+        INSERT INTO audit_events (org_id,user_id,action,resource,resource_id,metadata)
+        VALUES ($1,$2,'change_password','user',$2,
+                jsonb_build_object('platform_admin',$3::boolean))
+        """,
+        user.org_id,
+        user.id,
+        user.platform_admin,
     )
-    return _token(row, provider="password")
+    await create_notification(
+        org_id=user.org_id,
+        kind="password_changed",
+        visibility="platform_admins" if user.platform_admin else "org_admins",
+        severity="success",
+        title="Contraseña actualizada",
+        message=f"{user.email} actualizó su contraseña de acceso.",
+        actor_user_id=user.id,
+        actor_email=user.email,
+        metadata=request_context(request),
+    )
+    return {"status": "ok", "must_change_password": False}
 
 
 async def _unique_org_slug(base_name: str) -> str:
@@ -190,7 +199,7 @@ async def register_email(body: EmailRegisterIn, request: Request) -> TokenOut:
                         $1,$2,$3,'admin',$4,
                         'password',false,now(),$5,now()
                     )
-                    RETURNING id, org_id, role, name, email, avatar_url
+                    RETURNING id, org_id, role, name, email, avatar_url, must_change_password
                     """,
                     org_id,
                     email,
@@ -250,15 +259,24 @@ async def google_auth(body: GoogleAuthIn, request: Request) -> TokenOut:
     p = db.pool()
     row = await p.fetchrow(
         """
-        SELECT id, org_id, role, name, email, avatar_url
-        FROM users
-        WHERE (google_sub=$1 OR lower(email)=lower($2)) AND is_active
+        SELECT u.id, u.org_id, u.role, u.name, u.email, u.avatar_url,
+               u.must_change_password
+        FROM users u
+        JOIN organizations o ON o.id=u.org_id
+        WHERE (u.google_sub=$1 OR lower(u.email)=lower($2))
+          AND u.is_active AND o.is_active
         ORDER BY (google_sub=$1) DESC
         LIMIT 1
         """,
         identity["sub"], identity["email"],
     )
     if row is not None:
+        email = str(row["email"]).lower()
+        if bool(row["must_change_password"]) and email in get_settings().platform_admin_list:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Ingresá con la contraseña temporal y cambiala antes de vincular Google.",
+            )
         row = await p.fetchrow(
             """
             UPDATE users
@@ -269,7 +287,7 @@ async def google_auth(body: GoogleAuthIn, request: Request) -> TokenOut:
                 name=COALESCE(NULLIF(name, ''), $4),
                 last_login_at=now()
             WHERE id=$1
-            RETURNING id, org_id, role, name, email, avatar_url
+            RETURNING id, org_id, role, name, email, avatar_url, must_change_password
             """,
             row["id"], identity["sub"], identity["picture"], identity["name"],
         )
@@ -325,7 +343,7 @@ async def google_auth(body: GoogleAuthIn, request: Request) -> TokenOut:
                 VALUES (
                     $1,$2,$3,'admin',$4,$5,'google',true,NULLIF($6,''),now(),$7,now()
                 )
-                RETURNING id, org_id, role, name, email, avatar_url
+                RETURNING id, org_id, role, name, email, avatar_url, must_change_password
                 """,
                 org_id,
                 identity["email"],

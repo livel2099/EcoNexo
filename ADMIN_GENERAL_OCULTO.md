@@ -1,6 +1,6 @@
 # EcoNexo — Administrador general oculto
 
-Versión: `1.0.0-rc.5-render`
+Versión: `1.0.0-rc.6-render`
 
 ## Alcance
 

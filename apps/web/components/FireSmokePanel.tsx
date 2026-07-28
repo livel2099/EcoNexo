@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "../app/lib/api";
 import type { EarthIntel } from "../app/lib/earth-intel";
-import type { Alert, AlertShareInput, AlertShareResult, Detection, Device, EnvironmentalSourceSettings, ModuleEntitlement, Org } from "../app/lib/types";
+import type { Alert, AlertShareInput, AlertShareResult, Detection, Device, EnvironmentalSourceSettings, ModuleEntitlement, Org, RiskZone } from "../app/lib/types";
 import { isInMisiones, misionesLocationLabel } from "../app/lib/misiones";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
@@ -35,6 +35,7 @@ export default function FireSmokePanel({
   devices,
   alerts,
   detections,
+  zones,
   earth,
   center,
   sourceSettings,
@@ -44,6 +45,7 @@ export default function FireSmokePanel({
   devices: Device[];
   alerts: Alert[];
   detections: Detection[];
+  zones: RiskZone[];
   earth: EarthIntel | null;
   center: [number, number];
   sourceSettings: EnvironmentalSourceSettings;
@@ -154,7 +156,7 @@ export default function FireSmokePanel({
       </section>
 
       <section className="fire-map-shell">
-        <MapView devices={devices} alerts={fireAlerts} detections={recent.map((entry) => entry.item)} reports={[]} center={center} earth={earth} sourceSettings={sourceSettings} initialSatelliteMode="NONE" />
+        <MapView devices={devices} alerts={fireAlerts} detections={recent.map((entry) => entry.item)} reports={[]} zones={zones.filter((zone) => zone.kind === "incendio" || zone.kind === "general")} center={center} earth={earth} sourceSettings={sourceSettings} initialSatelliteMode="NONE" />
       </section>
 
       <section className="fire-data-strip">

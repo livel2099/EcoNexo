@@ -3,14 +3,27 @@
 import { useEffect, useRef, useState } from "react";
 import type { LayerGroup, Map as LeafletMap, TileLayer, WMSOptions } from "leaflet";
 import type { EarthIntel } from "../app/lib/earth-intel";
-import type { Alert, Detection, Device, EnvironmentalSourceSettings, Report } from "../app/lib/types";
-import { MISIONES_BOUNDS, MISIONES_CENTER, MISIONES_POLYGON, isInMisiones } from "../app/lib/misiones";
+import type {
+  Alert,
+  Detection,
+  Device,
+  EnvironmentalSourceSettings,
+  Report,
+  RiskZone,
+} from "../app/lib/types";
+import {
+  MISIONES_BOUNDS,
+  MISIONES_CENTER,
+  MISIONES_POLYGON,
+  isInMisiones,
+} from "../app/lib/misiones";
 
 interface Props {
   devices: Device[];
   alerts: Alert[];
   detections: Detection[];
   reports: Report[];
+  zones?: RiskZone[];
   center: [number, number];
   earth?: EarthIntel | null;
   onAlert?: (id: string) => void;
@@ -21,17 +34,26 @@ interface Props {
 
 type BaseMap = "dark" | "street";
 type SatelliteMode = "NONE" | "TRUE_COLOR" | "NDVI" | "MOISTURE_INDEX" | "NBR_RAW";
-type SatelliteStatus = "off" | "zoom" | "loading" | "live" | "degraded";
-type TerritoryFeature = { type: "Feature"; properties?: { province?: string; official?: boolean; source?: string }; geometry?: Record<string, unknown> };
+type SatelliteStatus = "off" | "zoom" | "loading" | "live" | "fallback" | "degraded";
+type TerritoryFeature = {
+  type: "Feature";
+  properties?: { province?: string; official?: boolean; source?: string };
+  geometry?: Record<string, unknown>;
+};
 
 const COPERNICUS_WMS_ENV = (process.env.NEXT_PUBLIC_COPERNICUS_WMS_URL || "").trim();
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "https://econexo.onrender.com").replace(/\/$/, "");
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 const SEVERITY_COLOR: Record<string, string> = {
   critica: "#ff5d52",
   alta: "#ff9f45",
   media: "#ffd166",
   baja: "#8ff06a",
+};
+const ZONE_COLOR: Record<string, string> = {
+  incendio: "#ff9f45",
+  hidrica: "#33daff",
+  general: "#b8a4ff",
 };
 const SATELLITE_LABEL: Record<SatelliteMode, string> = {
   NONE: "Sin capa",
@@ -51,7 +73,27 @@ function popupText(value: string): string {
   })[char] || char);
 }
 
-export default function MapView({ devices, alerts, detections, reports, center, earth, onAlert, initialSatelliteMode = "NONE", sourceSettings, showForestryAssets = false }: Props) {
+function devicePopup(device: Device): string {
+  const values = Object.entries(device.latest_readings || {})
+    .slice(0, 5)
+    .map(([key, value]) => `${popupText(key)}: ${Number(value).toLocaleString("es-AR", { maximumFractionDigits: 2 })}`)
+    .join("<br>");
+  return `<b>${popupText(device.name)}</b><br>${popupText(device.status)} · ${popupText(device.telemetry_mode)}${device.zone_name ? `<br>Zona: ${popupText(device.zone_name)}` : ""}${values ? `<hr>${values}` : ""}`;
+}
+
+export default function MapView({
+  devices,
+  alerts,
+  detections,
+  reports,
+  zones = [],
+  center,
+  earth,
+  onAlert,
+  initialSatelliteMode = "NONE",
+  sourceSettings,
+  showForestryAssets = false,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const baseLayerRef = useRef<TileLayer | null>(null);
@@ -61,10 +103,12 @@ export default function MapView({ devices, alerts, detections, reports, center, 
   const [ready, setReady] = useState(false);
   const [baseMap, setBaseMap] = useState<BaseMap>("street");
   const [satelliteMode, setSatelliteMode] = useState<SatelliteMode>(initialSatelliteMode);
-  const [satelliteStatus, setSatelliteStatus] = useState<SatelliteStatus>("loading");
+  const [satelliteStatus, setSatelliteStatus] = useState<SatelliteStatus>("off");
   const [territoryFeature, setTerritoryFeature] = useState<TerritoryFeature | null>(null);
   const [territoryOfficial, setTerritoryOfficial] = useState(false);
-  const runtimeCopernicusWms = sourceSettings?.copernicus_enabled ? sourceSettings.copernicus_wms_url : null;
+  const runtimeCopernicusWms = sourceSettings?.copernicus_enabled
+    ? sourceSettings.copernicus_wms_url
+    : null;
   const copernicusWms = (runtimeCopernicusWms || COPERNICUS_WMS_ENV).trim().replace(/\/$/, "");
   const copernicusEnabled = Boolean(copernicusWms);
   const satelliteLayers: Record<Exclude<SatelliteMode, "NONE">, string> = {
@@ -84,7 +128,7 @@ export default function MapView({ devices, alerts, detections, reports, center, 
         setTerritoryFeature(feature);
         setTerritoryOfficial(Boolean(feature?.properties?.official));
       })
-      .catch(() => { /* El polígono local sigue visible como fallback. */ });
+      .catch(() => undefined);
     return () => { active = false; };
   }, []);
 
@@ -92,7 +136,9 @@ export default function MapView({ devices, alerts, detections, reports, center, 
     let disposed = false;
     void import("leaflet").then(({ default: L }) => {
       if (disposed || !containerRef.current || mapRef.current) return;
-      const safeCenter: [number, number] = isInMisiones(centerLat, centerLon) ? [centerLat, centerLon] : MISIONES_CENTER;
+      const safeCenter: [number, number] = isInMisiones(centerLat, centerLon)
+        ? [centerLat, centerLon]
+        : MISIONES_CENTER;
       const map = L.map(containerRef.current, {
         zoomControl: true,
         attributionControl: true,
@@ -167,7 +213,11 @@ export default function MapView({ devices, alerts, detections, reports, center, 
       return;
     }
     if (!copernicusEnabled || !copernicusWms) {
-      setSatelliteStatus("degraded");
+      setSatelliteStatus(
+        satelliteMode === "MOISTURE_INDEX" || satelliteMode === "NBR_RAW"
+          ? "fallback"
+          : "degraded",
+      );
       return;
     }
 
@@ -198,11 +248,13 @@ export default function MapView({ devices, alerts, detections, reports, center, 
       const layer = L.tileLayer.wms(copernicusWms, options);
       activeLayer = layer;
       layer.on("loading", () => setSatelliteStatus(map.getZoom() < 9 ? "zoom" : "loading"));
-      layer.on("load", () => { tileErrors = 0; setSatelliteStatus(map.getZoom() < 9 ? "zoom" : "live"); });
+      layer.on("load", () => {
+        tileErrors = 0;
+        setSatelliteStatus(map.getZoom() < 9 ? "zoom" : "live");
+      });
       layer.on("tileerror", () => {
         tileErrors += 1;
         setSatelliteStatus("degraded");
-        // Mantener siempre visible el mapa base si Sentinel Hub no responde.
         if (tileErrors >= 4 && map.hasLayer(layer)) map.removeLayer(layer);
       });
       satelliteLayerRef.current = layer.addTo(map);
@@ -213,7 +265,16 @@ export default function MapView({ devices, alerts, detections, reports, center, 
       map.off("zoomend", syncZoomStatus);
       removeActive();
     };
-  }, [copernicusEnabled, copernicusWms, ready, satelliteLayers.NBR_RAW, satelliteLayers.MOISTURE_INDEX, satelliteLayers.NDVI, satelliteLayers.TRUE_COLOR, satelliteMode]);
+  }, [
+    copernicusEnabled,
+    copernicusWms,
+    ready,
+    satelliteLayers.NBR_RAW,
+    satelliteLayers.MOISTURE_INDEX,
+    satelliteLayers.NDVI,
+    satelliteLayers.TRUE_COLOR,
+    satelliteMode,
+  ]);
 
   useEffect(() => {
     const layer = dataLayerRef.current;
@@ -232,10 +293,28 @@ export default function MapView({ devices, alerts, detections, reports, center, 
         interactive: false,
       };
       if (territoryFeature) {
-        L.geoJSON(territoryFeature as unknown as Parameters<typeof L.geoJSON>[0], { style: territoryStyle }).addTo(layer);
+        L.geoJSON(
+          territoryFeature as unknown as Parameters<typeof L.geoJSON>[0],
+          { style: territoryStyle },
+        ).addTo(layer);
       } else {
         L.polygon(MISIONES_POLYGON, territoryStyle).addTo(layer);
       }
+
+      zones.filter((item) => isInMisiones(item.lat, item.lon)).forEach((zone) => {
+        const color = ZONE_COLOR[zone.kind] || ZONE_COLOR.general;
+        L.circle([zone.lat, zone.lon], {
+          radius: zone.radius_m,
+          color,
+          weight: 2,
+          opacity: 0.9,
+          fillColor: color,
+          fillOpacity: satelliteMode === "NDVI" ? 0.14 : 0.06,
+          dashArray: "7 6",
+        }).bindPopup(
+          `<b>${popupText(zone.name)}</b><br>Zona ${popupText(zone.kind)} · ${(zone.radius_m / 1000).toLocaleString("es-AR", { maximumFractionDigits: 1 })} km`,
+        ).addTo(layer);
+      });
 
       if (showForestryAssets) {
         const sanAntonio: [number, number] = [-26.01709, -53.78987];
@@ -244,40 +323,136 @@ export default function MapView({ devices, alerts, detections, reports, center, 
           .bindPopup("<b>San Antonio · vigilancia forestal</b><br>Área prioritaria para recorridas, trampas, reportes y verificación fitosanitaria.")
           .addTo(layer);
         L.circleMarker(bernardoRadar, { radius: 10, color: "#6dd7ff", fillColor: "#0d3340", fillOpacity: 0.9, weight: 2 })
-          .bindPopup("<b>Referencia municipal · radar de Bernardo de Irigoyen</b><br>El punto representa la localidad, no la posición exacta de la antena. Aporta contexto de precipitación, tormentas y ecos atmosféricos; no identifica una especie de plaga.")
+          .bindPopup("<b>Referencia municipal · radar de Bernardo de Irigoyen</b><br>Contexto meteorológico regional; no identifica especies de plagas.")
           .addTo(layer);
         L.polyline([sanAntonio, bernardoRadar], { color: "#6dd7ff", weight: 2, opacity: 0.72, dashArray: "6 7" })
           .bindTooltip("Corredor de contexto meteorológico · aproximadamente 27 km")
           .addTo(layer);
       }
 
+      if (satelliteMode === "MOISTURE_INDEX" && !copernicusEnabled) {
+        let moistureSignals = 0;
+        devices.forEach((device) => {
+          const humidity = device.latest_readings?.soil_moisture ?? device.latest_readings?.humidity;
+          if (humidity == null) return;
+          const normalized = Math.max(0, Math.min(100, Number(humidity)));
+          moistureSignals += 1;
+          L.circle([device.lat, device.lon], {
+            radius: 3000,
+            color: "#33daff",
+            weight: 1,
+            fillColor: "#33daff",
+            fillOpacity: 0.05 + normalized / 500,
+          }).bindTooltip(`Proxy telemétrico de humedad: ${normalized.toFixed(1)}%`).addTo(layer);
+        });
+        if (!moistureSignals) {
+          const raw = earth?.weather.soilMoisture ?? earth?.weather.humidity;
+          if (raw != null) {
+            const asPercent = raw <= 1 ? raw * 100 : raw;
+            const normalized = Math.max(0, Math.min(100, Number(asPercent)));
+            L.circle([centerLat, centerLon], {
+              radius: 9000,
+              color: "#33daff",
+              weight: 1,
+              fillColor: "#33daff",
+              fillOpacity: 0.05 + normalized / 500,
+              dashArray: "5 6",
+            }).bindTooltip(`Contexto Open-Meteo de humedad: ${normalized.toFixed(1)}%`).addTo(layer);
+          }
+        }
+      }
+
+      if (satelliteMode === "NBR_RAW" && !copernicusEnabled) {
+        const fireSignals = detections.length
+          ? detections.map((item) => ({ lat: item.lat, lon: item.lon, label: "Proxy FIRMS de foco térmico" }))
+          : alerts
+              .filter((item) => item.type === "incendio")
+              .map((item) => ({ lat: item.lat, lon: item.lon, label: "Alerta operativa de incendio" }));
+        fireSignals.forEach((signal) => {
+          L.circle([signal.lat, signal.lon], {
+            radius: 4500,
+            color: "#ff5d52",
+            weight: 2,
+            fillColor: "#ff9f45",
+            fillOpacity: 0.12,
+            dashArray: "4 5",
+          }).bindTooltip(`${signal.label}; no representa perímetro quemado confirmado`).addTo(layer);
+        });
+      }
+
       devices.filter((item) => isInMisiones(item.lat, item.lon)).forEach((device) => {
-        const color = device.status === "online" ? "#8ff06a" : device.status === "alerta" ? "#ff5d52" : "#6f8581";
-        L.circleMarker([device.lat, device.lon], {
-          radius: 6, color, fillColor: color, fillOpacity: 0.92, weight: 1,
-        }).bindPopup(`<b>${popupText(device.name)}</b><br>${popupText(device.status)} · batería ${device.battery ?? "?"}%`).addTo(layer);
+        const color = device.status === "online"
+          ? "#8ff06a"
+          : device.status === "alerta"
+            ? "#ff5d52"
+            : "#6f8581";
+        const shape = device.marker_shape || "circle";
+        const icon = L.divIcon({
+          className: "econexo-device-icon",
+          html: `<span class="device-marker-shape ${shape}" style="--device-color:${color}"></span>`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
+        });
+        L.marker([device.lat, device.lon], { icon })
+          .bindPopup(devicePopup(device))
+          .addTo(layer);
       });
+
       detections.filter((item) => isInMisiones(item.lat, item.lon)).forEach((detection) => {
         L.circleMarker([detection.lat, detection.lon], {
-          radius: 8, color: "#ff9f45", fillColor: "#ff9f45", fillOpacity: 0.38, weight: 2,
-        }).bindPopup(`<b>Detección satelital</b><br>${popupText(detection.source)} · confianza ${Math.round((detection.confidence ?? 0) * 100)}%`).addTo(layer);
+          radius: 8,
+          color: "#ff9f45",
+          fillColor: "#ff9f45",
+          fillOpacity: 0.38,
+          weight: 2,
+        }).bindPopup(
+          `<b>Detección satelital</b><br>${popupText(detection.source)} · confianza ${Math.round((detection.confidence ?? 0) * 100)}%`,
+        ).addTo(layer);
       });
+
       reports.filter((item) => isInMisiones(item.lat, item.lon)).forEach((report) => {
         L.circleMarker([report.lat, report.lon], {
-          radius: 6, color: "#33daff", fillColor: "#33daff", fillOpacity: 0.7, weight: 2,
+          radius: 6,
+          color: "#33daff",
+          fillColor: "#33daff",
+          fillOpacity: 0.7,
+          weight: 2,
         }).bindPopup(`<b>Reporte ciudadano</b><br>${popupText(report.type)}`).addTo(layer);
       });
+
       alerts.filter((item) => isInMisiones(item.lat, item.lon)).forEach((alert) => {
         const color = SEVERITY_COLOR[alert.severity] || "#ff5d52";
         L.circleMarker([alert.lat, alert.lon], {
-          radius: 13, color, fillColor: color, fillOpacity: 0.2, weight: 2,
+          radius: 13,
+          color,
+          fillColor: color,
+          fillOpacity: 0.2,
+          weight: 2,
         }).on("click", () => onAlert?.(alert.id))
-          .bindPopup(`<b>${popupText(alert.title)}</b><br>${popupText(alert.severity)} · confianza ${Math.round(alert.confidence * 100)}%`)
+          .bindPopup(
+            `<b>${popupText(alert.title)}</b><br>${popupText(alert.severity)} · confianza ${Math.round(alert.confidence * 100)}%`,
+          )
           .addTo(layer);
       });
     });
     return () => { cancelled = true; };
-  }, [alerts, detections, devices, onAlert, ready, reports, showForestryAssets, territoryFeature, territoryOfficial]);
+  }, [
+    alerts,
+    copernicusEnabled,
+    detections,
+    devices,
+    earth,
+    centerLat,
+    centerLon,
+    onAlert,
+    ready,
+    reports,
+    satelliteMode,
+    showForestryAssets,
+    territoryFeature,
+    territoryOfficial,
+    zones,
+  ]);
 
   const localSignals = [
     ...devices.map((item) => ({ lat: item.lat, lon: item.lon })),
@@ -292,8 +467,13 @@ export default function MapView({ devices, alerts, detections, reports, center, 
     off: "capa desactivada",
     zoom: "acercá el mapa para cargar",
     loading: "sincronizando mosaico",
-    live: "mosaico disponible",
-    degraded: copernicusWms ? "instancia o capa no disponible" : "configuración pendiente en Admin Core",
+    live: "mosaico Copernicus disponible",
+    fallback: satelliteMode === "MOISTURE_INDEX"
+      ? "proxy de telemetría; configure Copernicus para índice satelital"
+      : "proxy FIRMS; no es un perímetro quemado confirmado",
+    degraded: copernicusWms
+      ? "instancia o capa no disponible"
+      : "requiere instancia Copernicus; la capa permanece seleccionable",
   };
 
   return (
@@ -303,7 +483,14 @@ export default function MapView({ devices, alerts, detections, reports, center, 
         <div className="toolbar-title"><span>◫</span> MAPA MISIONES</div>
         <div className="layer-buttons">
           {(Object.keys(SATELLITE_LABEL) as SatelliteMode[]).map((mode) => (
-            <button key={mode} disabled={mode !== "NONE" && !copernicusEnabled} title={mode !== "NONE" && !copernicusEnabled ? "Configurá y validá Copernicus en Admin Core → Fuentes SpaceAI" : undefined} className={satelliteMode === mode ? "active" : ""} onClick={() => setSatelliteMode(mode)}>
+            <button
+              key={mode}
+              title={mode !== "NONE" && !copernicusEnabled
+                ? "Se muestra un fallback operativo cuando existe; configure Copernicus en Admin Core para el mosaico satelital."
+                : undefined}
+              className={satelliteMode === mode ? "active" : ""}
+              onClick={() => setSatelliteMode(mode)}
+            >
               {SATELLITE_LABEL[mode]}
             </button>
           ))}
@@ -318,7 +505,10 @@ export default function MapView({ devices, alerts, detections, reports, center, 
       </div>
       <div className={`satellite-status ${satelliteStatus}`}>
         <span className="dot" />
-        <span><b>{satelliteMode === "NONE" ? "COPERNICUS" : SATELLITE_LABEL[satelliteMode]}</b><small>{statusText[satelliteStatus]}</small></span>
+        <span>
+          <b>{satelliteMode === "NONE" ? "CAPAS" : SATELLITE_LABEL[satelliteMode]}</b>
+          <small>{statusText[satelliteStatus]}</small>
+        </span>
       </div>
       {earth && (
         <div className="map-atmosphere-hud">
@@ -328,8 +518,8 @@ export default function MapView({ devices, alerts, detections, reports, center, 
       )}
       <div className="map-territory-hud">
         <strong>MISIONES · 79 MUNICIPIOS</strong>
-        <span>{insideSignals} señales visibles · {territoryOfficial ? "límite oficial GeoRef" : "límite operativo"}</span>
-        {outsideSignals > 0 && <small>{outsideSignals} señales regionales ocultas para evitar confusión territorial</small>}
+        <span>{insideSignals} señales · {zones.length} zonas · {territoryOfficial ? "límite oficial GeoRef" : "límite operativo"}</span>
+        {outsideSignals > 0 && <small>{outsideSignals} señales regionales ocultas</small>}
       </div>
       <div className="map-scan" aria-hidden="true" />
     </div>

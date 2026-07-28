@@ -1,8 +1,4 @@
-"""Configuracion tipada de EcoNexo.
-
-Los valores por defecto son exclusivamente para desarrollo local. En produccion,
-las variables sensibles y los endpoints publicos deben configurarse por entorno.
-"""
+"""Configuracion tipada de EcoNexo para desarrollo local y Render."""
 from __future__ import annotations
 
 import os
@@ -15,10 +11,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     environment: str = "development"
-    release_version: str = "1.0.0-rc.4-render"
+    release_version: str = "1.0.0-rc.6-render"
 
-    # Render y otros PaaS entregan habitualmente una URL completa. Si esta
-    # presente, tiene prioridad sobre las variables POSTGRES_* individuales.
     database_url: str = ""
     postgres_host: str = "localhost"
     postgres_port: int = 5432
@@ -36,11 +30,8 @@ class Settings(BaseSettings):
 
     google_client_id: str = ""
     google_client_ids: str = ""
-
     internal_service_token: str = "change_me_internal_service_token"
 
-    # Los adaptadores externos son opcionales para que el core pueda arrancar
-    # en una primera etapa de Render. Se habilitan cuando existe infraestructura.
     mqtt_enabled: bool = True
     mqtt_host: str = "localhost"
     mqtt_port: int = 1883
@@ -57,16 +48,34 @@ class Settings(BaseSettings):
 
     anomaly_enabled: bool = True
     anomaly_service_url: str = "http://localhost:8100"
+
+    open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
+    nasa_firms_key: str = ""
+    firms_inline_enabled: bool = True
+    firms_source: str = "VIIRS_SNPP_NRT"
+    pipeline_max_devices_per_run: int = 100
+    pipeline_http_timeout_seconds: float = 20.0
+
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     public_app_url: str = "http://localhost:3000"
     forwarded_allow_ips: str = "127.0.0.1"
-    platform_admin_emails: str = ""
+
+    platform_admin_emails: str = "econexoargentina@gmail.com"
+    platform_admin_bootstrap_enabled: bool = False
+    platform_admin_initial_password: str = ""
+    platform_admin_force_password_change: bool = True
+    platform_admin_reset_initial_password: bool = False
+    platform_admin_name: str = "Administrador General EcoNexo"
+    platform_admin_organization: str = "EcoNexo Plataforma"
     sales_email: str = ""
 
     @property
     def dsn(self) -> str:
-        if self.database_url.strip():
-            return self.database_url.strip()
+        value = self.database_url.strip()
+        if value:
+            if value.startswith("postgres://"):
+                value = "postgresql://" + value[len("postgres://"):]
+            return value
         return (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -102,7 +111,7 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.environment.strip().lower() == "production"
+        return self.environment.strip().lower() in {"production", "prod"}
 
     @property
     def is_render(self) -> bool:
@@ -125,6 +134,8 @@ class Settings(BaseSettings):
             ":CONTRASENA",
             "HOST-INTERNO",
             "YOUR_",
+            "TU_",
+            "SECRETO_",
         )
         return not normalized or any(marker in normalized for marker in markers)
 
@@ -141,12 +152,13 @@ class Settings(BaseSettings):
         ):
             findings.append("INTERNAL_SERVICE_TOKEN")
 
-        # DATABASE_URL es el camino recomendado en Render. Para configuracion
-        # tradicional, la contraseña local de ejemplo no se admite.
         if self.database_url.strip():
             if self._looks_placeholder(self.database_url):
                 findings.append("DATABASE_URL")
-        elif self._looks_placeholder(self.postgres_password) or self.postgres_password == "econexo_dev_pw":
+        elif (
+            self._looks_placeholder(self.postgres_password)
+            or self.postgres_password == "econexo_dev_pw"
+        ):
             findings.append("DATABASE_URL/POSTGRES_PASSWORD")
 
         if (
@@ -175,6 +187,15 @@ class Settings(BaseSettings):
         ):
             findings.append("PLATFORM_ADMIN_EMAILS")
 
+        if self.platform_admin_bootstrap_enabled:
+            password = self.platform_admin_initial_password
+            if self._looks_placeholder(password) or len(password) < 12:
+                findings.append("PLATFORM_ADMIN_INITIAL_PASSWORD")
+            if not any(char.isalpha() for char in password) or not any(
+                char.isdigit() for char in password
+            ):
+                findings.append("PLATFORM_ADMIN_INITIAL_PASSWORD_COMPLEXITY")
+
         sales_email = self.sales_email.strip().lower()
         if (
             "@" not in sales_email
@@ -184,7 +205,10 @@ class Settings(BaseSettings):
             findings.append("SALES_EMAIL")
 
         if self.s3_enabled:
-            if self.s3_secret_key == "econexo_dev_pw" or self._looks_placeholder(self.s3_secret_key):
+            if (
+                self.s3_secret_key == "econexo_dev_pw"
+                or self._looks_placeholder(self.s3_secret_key)
+            ):
                 findings.append("S3_SECRET_KEY")
             if self._looks_placeholder(self.s3_access_key):
                 findings.append("S3_ACCESS_KEY")
@@ -205,6 +229,8 @@ class Settings(BaseSettings):
             findings.append("DB_POOL_MIN_SIZE")
         if self.db_pool_max_size < self.db_pool_min_size:
             findings.append("DB_POOL_MAX_SIZE")
+        if self.pipeline_max_devices_per_run < 1:
+            findings.append("PIPELINE_MAX_DEVICES_PER_RUN")
 
         return findings
 

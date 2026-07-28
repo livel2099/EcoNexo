@@ -1,4 +1,33 @@
+# 1.0.0-rc.6 — Telemetría y Command Pipeline para Render
+
+- Nueva migración `14_telemetry_pipeline_and_map.sql`.
+- Nodos configurables como círculo, cuadro o triángulo y vinculables a geocercas.
+- Modos MQTT, carga manual y Open-Meteo como contexto modelado.
+- Panel `Admin Core > Telemetría` con ABM, política de scheduler, lecturas manuales e historial.
+- Ejecución del pipeline desde Centro de Comando, con bootstrap de una red inicial.
+- Actualización de estado, lecturas, reglas, alertas, FIRMS y feed WebSocket.
+- Detecciones FIRMS deduplicadas y visibles para cada organización; sin fixtures en producción.
+- Zonas de incendio y multiamenaza pueden elevar alertas desde focos FIRMS.
+- Capas Humedad y Área quemada seleccionables sin Copernicus mediante fallbacks claramente rotulados.
+- Mapa con geocercas, dispositivos geométricos, lecturas recientes, focos y alertas.
+- Blueprint Render ampliado para API, PostgreSQL y Static Site.
+- Cliente API endurecido para almacenamiento bloqueado, URL productiva y cold start del plan gratuito.
+- 50 pruebas API, TypeScript, Python, CSS y contratos OpenAPI validados.
+
 # Changelog
+
+## 1.0.0-rc.4 - 2026-07-27
+
+- Corregidas respuestas HTTP 204 del panel de mensajes administrativos.
+- Configuración de producción compatible con Render mediante `DATABASE_URL`.
+- Blueprints beta y producción, migraciones con checksum y advisory lock.
+- Adaptadores MQTT, S3 y anomalías opcionales para el despliegue core.
+- Dockerfile con validación previa, puerto `PORT` y compilación de sintaxis.
+- Plantillas `.env.render.example` y documentación de despliegue.
+- Pool PostgreSQL configurable y soporte de URL interna administrada.
+- CI corregido para dependencias de desarrollo separadas.
+- Script de arranque Docker separado y validado; migraciones al inicio para plan gratuito y Pre-Deploy para plan pago.
+- Guardas de producción rechazan placeholders de `.env` antes de abrir el servidor.
 
 ## 1.0.0-rc.3 - 2026-07-27
 
@@ -130,3 +159,14 @@
 - Área prioritaria San Antonio y contexto del radar meteorológico de Bernardo de Irigoyen.
 - Advertencias explícitas: el radar no identifica especies ni confirma una plaga.
 - Migración `10_copernicus_forestry_pests.sql`.
+
+## 1.0.0-rc.5 — Administrador general oculto
+
+- Consola privada `/plataforma` sin enlace en la navegación ni sitemap.
+- Bootstrap seguro del administrador `econexoargentina@gmail.com` mediante variables de Render.
+- Cambio obligatorio de contraseña temporal.
+- ABM global de usuarios y organizaciones con baja lógica.
+- Restablecimiento de contraseña temporal y auditoría global.
+- Endpoints `/platform/*` excluidos de Swagger y protegidos por `PLATFORM_ADMIN_EMAILS`.
+- Migraciones `12_platform_admin_console.sql` y `13_platform_admin_organization_status.sql`.
+- Corrección defensiva de `sessionStorage` y `localStorage` en el frontend.

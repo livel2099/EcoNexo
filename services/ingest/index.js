@@ -8,15 +8,20 @@
 const mqtt = require("mqtt");
 const { Pool } = require("pg");
 
-const pool = new Pool({
-  host: process.env.POSTGRES_HOST || "localhost",
-  port: +(process.env.POSTGRES_PORT || 5432),
-  database: process.env.POSTGRES_DB || "econexo",
-  user: process.env.POSTGRES_USER || "econexo",
-  password: process.env.POSTGRES_PASSWORD || "econexo_dev_pw",
-});
+const pool = new Pool(
+  process.env.DATABASE_URL
+    ? { connectionString: process.env.DATABASE_URL }
+    : {
+        host: process.env.POSTGRES_HOST || "localhost",
+        port: +(process.env.POSTGRES_PORT || 5432),
+        database: process.env.POSTGRES_DB || "econexo",
+        user: process.env.POSTGRES_USER || "econexo",
+        password: process.env.POSTGRES_PASSWORD || "econexo_dev_pw",
+      }
+);
 
-const url = `mqtt://${process.env.MQTT_HOST || "localhost"}:${process.env.MQTT_PORT || 1883}`;
+const url = process.env.MQTT_URL ||
+  `mqtt://${process.env.MQTT_HOST || "localhost"}:${process.env.MQTT_PORT || 1883}`;
 const client = mqtt.connect(url, { reconnectPeriod: 3000 });
 
 const META = new Set(["battery", "rssi", "ts"]);

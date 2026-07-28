@@ -1,4 +1,4 @@
-# Render Blueprint de produccion. Genera secretos y conecta Postgres internamente.
+# EcoNexo rc.6 - Blueprint de producción para Render.
 databases:
   - name: econexo-db
     plan: basic-256mb
@@ -27,25 +27,23 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: RELEASE_VERSION
-        value: 1.0.0-rc.5-render
+        value: 1.0.0-rc.6-render
       - key: DATABASE_URL
         fromDatabase:
           name: econexo-db
           property: connectionString
       - key: DB_POOL_MIN_SIZE
         value: "1"
-      - key: RUN_MIGRATIONS_ON_START
-        value: "false"
       - key: DB_POOL_MAX_SIZE
         value: "10"
       - key: DB_COMMAND_TIMEOUT_SECONDS
         value: "30"
+      - key: RUN_MIGRATIONS_ON_START
+        value: "false"
       - key: JWT_SECRET
         generateValue: true
       - key: INTERNAL_SERVICE_TOKEN
         generateValue: true
-      - key: NASA_FIRMS_KEY
-        sync: false
       - key: FORWARDED_ALLOW_IPS
         value: "*"
       - key: PUBLIC_APP_URL
@@ -78,35 +76,51 @@ services:
         value: "false"
       - key: S3_ENABLED
         value: "false"
+      - key: OPEN_METEO_FORECAST_URL
+        value: https://api.open-meteo.com/v1/forecast
+      - key: NASA_FIRMS_KEY
+        sync: false
+      - key: FIRMS_INLINE_ENABLED
+        value: "true"
+      - key: FIRMS_SOURCE
+        value: VIIRS_SNPP_NRT
+      - key: PIPELINE_MAX_DEVICES_PER_RUN
+        value: "250"
+      - key: PIPELINE_HTTP_TIMEOUT_SECONDS
+        value: "20"
 
-  - type: worker
-    name: econexo-satellite
-    runtime: docker
-    plan: starter
-    region: oregon
-    rootDir: services/satellite
-    dockerfilePath: Dockerfile
-    dockerContext: .
+  - type: web
+    name: econexo-web
+    runtime: static
+    rootDir: apps/web
+    buildCommand: npm ci && npm run typecheck && npm run build:cloudflare:production
+    staticPublishPath: out
     autoDeployTrigger: checksPass
     envVars:
-      - key: ENVIRONMENT
-        value: production
-      - key: ALLOW_DEMO_SATELLITE_FIXTURES
+      - key: NEXT_PUBLIC_API_URL
+        value: https://econexo-api.onrender.com
+      - key: NEXT_PUBLIC_WS_URL
+        value: wss://econexo-api.onrender.com
+      - key: NEXT_PUBLIC_DEMO_MODE
         value: "false"
-      - key: FIRMS_POLL_SECONDS
-        value: "900"
-      - key: API_HOSTPORT
-        fromService:
-          type: web
-          name: econexo-api
-          property: hostport
-      - key: INTERNAL_SERVICE_TOKEN
-        fromService:
-          type: web
-          name: econexo-api
-          envVarKey: INTERNAL_SERVICE_TOKEN
-      - key: NASA_FIRMS_KEY
-        fromService:
-          type: web
-          name: econexo-api
-          envVarKey: NASA_FIRMS_KEY
+      - key: NEXT_PUBLIC_STATIC_EXPORT
+        value: "true"
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        value: ""
+      - key: NEXT_PUBLIC_OPEN_METEO_FORECAST_URL
+        value: https://api.open-meteo.com/v1/forecast
+      - key: NEXT_PUBLIC_OPEN_METEO_AIR_URL
+        value: https://air-quality-api.open-meteo.com/v1/air-quality
+      - key: NEXT_PUBLIC_OPEN_METEO_FLOOD_URL
+        value: https://flood-api.open-meteo.com/v1/flood
+      - key: NEXT_PUBLIC_COPERNICUS_WMS_URL
+        value: ""
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://econexo-web.onrender.com
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin

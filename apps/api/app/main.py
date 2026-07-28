@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
 from .config import get_settings
+from .platform_admin import ensure_platform_admin
 from .routers import (
     admin,
     alerts,
@@ -27,6 +28,8 @@ from .routers import (
     modules,
     notifications,
     orgs,
+    platform,
+    pipeline,
     reports,
     rules,
     satellite,
@@ -35,33 +38,46 @@ from .routers import (
     zones,
 )
 from .security import decode_token
+from .telemetry_pipeline import pipeline_scheduler
 from .ws import manager, mqtt_bridge
 
 logging.basicConfig(level=logging.INFO)
-_stop = asyncio.Event()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    insecure = get_settings().insecure_production_values()
+    settings = get_settings()
+    insecure = settings.insecure_production_values()
     if insecure:
         raise RuntimeError(
             "Configuracion insegura para produccion: " + ", ".join(insecure)
         )
+
     await db.connect()
-    bridge = asyncio.create_task(mqtt_bridge(_stop))
-    yield
-    _stop.set()
-    bridge.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await bridge
-    await db.disconnect()
+    await ensure_platform_admin()
+    stop = asyncio.Event()
+    bridge: asyncio.Task[None] | None = None
+    if settings.mqtt_enabled:
+        bridge = asyncio.create_task(mqtt_bridge(stop), name="mqtt-bridge")
+    scheduler = asyncio.create_task(pipeline_scheduler(stop), name="telemetry-pipeline-scheduler")
+
+    try:
+        yield
+    finally:
+        stop.set()
+        tasks = [task for task in (bridge, scheduler) if task is not None]
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        await db.disconnect()
 
 
 app = FastAPI(
     title="EcoNexo API",
     description="Inteligencia bioclimatica activa — sistema de decision en tiempo real.",
-    version="1.0.0-rc.3-misiones",
+    version=get_settings().release_version,
     lifespan=lifespan,
 )
 
@@ -76,6 +92,8 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(orgs.router)
+app.include_router(platform.router)
+app.include_router(pipeline.router)
 app.include_router(devices.router)
 app.include_router(alerts.router)
 app.include_router(rules.router)
@@ -104,9 +122,43 @@ async def security_headers(request: Request, call_next):
     return response
 
 
+@app.get("/", tags=["meta"], include_in_schema=False)
+async def root() -> dict:
+    return {
+        "name": "EcoNexo API",
+        "status": "online",
+        "release": s.release_version,
+        "environment": s.environment,
+        "territory": "Misiones",
+        "documentation": "/docs",
+        "health": "/health",
+        "readiness": "/ready",
+    }
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    return Response(status_code=204)
+
+
 @app.get("/health", tags=["meta"])
 async def health() -> dict:
-    return {"status": "ok", "service": "econexo-api", "territory": "Misiones"}
+    return {
+        "status": "ok",
+        "service": "econexo-api",
+        "release": s.release_version,
+        "environment": s.environment,
+        "territory": "Misiones",
+        "features": {
+            "mqtt": s.mqtt_enabled,
+            "object_storage": s.s3_enabled,
+            "anomaly_service": s.anomaly_enabled,
+            "google_oauth": bool(s.google_audiences),
+            "telemetry_pipeline": True,
+            "firms_inline": s.firms_inline_enabled,
+            "firms_configured": bool(s.nasa_firms_key.strip()),
+        },
+    }
 
 
 @app.get("/ready", tags=["meta"])
@@ -178,7 +230,20 @@ async def ws_endpoint(websocket: WebSocket, token: str = Query(default="")) -> N
     if payload is None:
         await websocket.close(code=4401)
         return
-    org_id = payload["org_id"]
+    row = await db.pool().fetchrow(
+        """
+        SELECT u.org_id, u.is_active, u.must_change_password,
+               o.is_active AS organization_active
+        FROM users u JOIN organizations o ON o.id=u.org_id
+        WHERE u.id=$1::uuid AND u.org_id=$2::uuid
+        """,
+        payload["sub"],
+        payload["org_id"],
+    )
+    if row is None or not row["is_active"] or not row["organization_active"] or row["must_change_password"]:
+        await websocket.close(code=4403)
+        return
+    org_id = str(row["org_id"])
     await manager.connect(org_id, websocket)
     try:
         while True:
