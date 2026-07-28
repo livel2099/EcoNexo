@@ -303,7 +303,14 @@ export default function MapView({ devices, alerts, detections, reports, center, 
         <div className="toolbar-title"><span>◫</span> MAPA MISIONES</div>
         <div className="layer-buttons">
           {(Object.keys(SATELLITE_LABEL) as SatelliteMode[]).map((mode) => (
-            <button key={mode} disabled={mode !== "NONE" && !copernicusEnabled} title={mode !== "NONE" && !copernicusEnabled ? "Configurá y validá Copernicus en Admin Core → Fuentes SpaceAI" : undefined} className={satelliteMode === mode ? "active" : ""} onClick={() => setSatelliteMode(mode)}>
+            <button
+              key={mode}
+              type="button"
+              title={mode !== "NONE" && !copernicusEnabled ? "Seleccioná la vista para consultar su estado. Configurá Copernicus en Admin Core → Fuentes SpaceAI para cargar el mosaico." : undefined}
+              className={`${satelliteMode === mode ? "active" : ""}${mode !== "NONE" && !copernicusEnabled ? " unconfigured" : ""}`}
+              aria-pressed={satelliteMode === mode}
+              onClick={() => setSatelliteMode(mode)}
+            >
               {SATELLITE_LABEL[mode]}
             </button>
           ))}
