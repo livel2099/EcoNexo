@@ -104,6 +104,8 @@ class TokenOut(BaseModel):
     avatar_url: str | None = None
     auth_provider: Literal["password", "google"] = "password"
     is_new_user: bool = False
+    platform_admin: bool = False
+    must_change_password: bool = False
 
 
 class CitizenSessionOut(BaseModel):
