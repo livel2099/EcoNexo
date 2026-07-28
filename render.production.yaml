@@ -44,6 +44,8 @@ services:
         generateValue: true
       - key: INTERNAL_SERVICE_TOKEN
         generateValue: true
+      - key: NASA_FIRMS_KEY
+        sync: false
       - key: FORWARDED_ALLOW_IPS
         value: "*"
       - key: PUBLIC_APP_URL
@@ -76,3 +78,35 @@ services:
         value: "false"
       - key: S3_ENABLED
         value: "false"
+
+  - type: worker
+    name: econexo-satellite
+    runtime: docker
+    plan: starter
+    region: oregon
+    rootDir: services/satellite
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: ALLOW_DEMO_SATELLITE_FIXTURES
+        value: "false"
+      - key: FIRMS_POLL_SECONDS
+        value: "900"
+      - key: API_HOSTPORT
+        fromService:
+          type: web
+          name: econexo-api
+          property: hostport
+      - key: INTERNAL_SERVICE_TOKEN
+        fromService:
+          type: web
+          name: econexo-api
+          envVarKey: INTERNAL_SERVICE_TOKEN
+      - key: NASA_FIRMS_KEY
+        fromService:
+          type: web
+          name: econexo-api
+          envVarKey: NASA_FIRMS_KEY

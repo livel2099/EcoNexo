@@ -14,26 +14,6 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=6, max_length=256)
 
 
-class PasswordChangeIn(BaseModel):
-    current_password: str = Field(min_length=6, max_length=256)
-    new_password: str = Field(min_length=12, max_length=256)
-
-    @field_validator("new_password")
-    @classmethod
-    def validate_new_password(cls, value: str) -> str:
-        if value.strip() != value:
-            raise ValueError("La contraseña no puede comenzar ni terminar con espacios")
-        if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
-            raise ValueError("La contraseña debe incluir al menos una letra y un número")
-        return value
-
-    @model_validator(mode="after")
-    def validate_password_change(self):
-        if self.current_password == self.new_password:
-            raise ValueError("La contraseña nueva debe ser diferente de la actual")
-        return self
-
-
 class EmailRegisterIn(BaseModel):
     organization_name: str = Field(min_length=2, max_length=120)
     vertical: Literal["municipio", "forestal", "energetica"]
@@ -110,8 +90,6 @@ class TokenOut(BaseModel):
     avatar_url: str | None = None
     auth_provider: Literal["password", "google"] = "password"
     is_new_user: bool = False
-    platform_admin: bool = False
-    must_change_password: bool = False
 
 
 class CitizenSessionOut(BaseModel):
@@ -458,105 +436,6 @@ class AdminNotificationOut(BaseModel):
     actor_email: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     read: bool = False
-    created_at: datetime
-
-
-# --- Administración general de plataforma ---
-class PlatformSummaryOut(BaseModel):
-    organizations_total: int
-    organizations_active: int
-    users_total: int
-    users_active: int
-    platform_admins: int
-    pending_license_requests: int
-    logins_24h: int
-
-
-class PlatformUserCreateIn(BaseModel):
-    org_id: UUID
-    name: str = Field(min_length=2, max_length=120)
-    email: EmailStr
-    role: Literal["admin", "operador", "visualizador"] = "operador"
-    temporary_password: str = Field(min_length=12, max_length=256)
-
-    @field_validator("temporary_password")
-    @classmethod
-    def validate_initial_password(cls, value: str) -> str:
-        if value.strip() != value:
-            raise ValueError("La contraseña temporal no puede tener espacios al inicio o al final")
-        if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
-            raise ValueError("La contraseña temporal debe incluir una letra y un número")
-        return value
-
-
-class PlatformUserOut(BaseModel):
-    id: UUID
-    org_id: UUID
-    org_name: str
-    name: str
-    email: EmailStr
-    role: Literal["admin", "operador", "visualizador"]
-    is_active: bool
-    organization_active: bool
-    auth_provider: Literal["password", "google"]
-    email_verified: bool
-    must_change_password: bool
-    last_login_at: datetime | None = None
-    created_at: datetime
-    updated_at: datetime
-
-
-class PlatformUserUpdateIn(BaseModel):
-    name: str | None = Field(default=None, min_length=2, max_length=120)
-    role: Literal["admin", "operador", "visualizador"] | None = None
-    is_active: bool | None = None
-
-
-class PlatformPasswordResetIn(BaseModel):
-    temporary_password: str = Field(min_length=12, max_length=256)
-
-    @field_validator("temporary_password")
-    @classmethod
-    def validate_temporary_password(cls, value: str) -> str:
-        if value.strip() != value:
-            raise ValueError("La contraseña temporal no puede tener espacios al inicio o al final")
-        if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
-            raise ValueError("La contraseña temporal debe incluir una letra y un número")
-        return value
-
-
-class PlatformOrganizationOut(BaseModel):
-    id: UUID
-    name: str
-    slug: str
-    vertical: str
-    province: str
-    municipality: str | None = None
-    is_active: bool
-    users_total: int
-    users_active: int
-    plan_key: str | None = None
-    plan_name: str | None = None
-    subscription_status: str | None = None
-    created_at: datetime
-    updated_at: datetime
-
-
-class PlatformOrganizationUpdateIn(BaseModel):
-    name: str | None = Field(default=None, min_length=2, max_length=120)
-    is_active: bool | None = None
-
-
-class PlatformAuditOut(BaseModel):
-    id: UUID
-    org_id: UUID | None = None
-    org_name: str | None = None
-    user_id: UUID | None = None
-    actor_name: str | None = None
-    action: str
-    resource: str
-    resource_id: UUID | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
 

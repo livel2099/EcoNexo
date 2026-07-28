@@ -2,7 +2,7 @@
 
 Este repositorio incluye dos opciones:
 
-- `render.yaml`: beta con Web Service y Render Postgres gratuitos.
+- `render.yaml`: beta con Web Service, Render Postgres y worker NASA FIRMS.
 - `render.production.yaml`: servicio Starter y Postgres `basic-256mb`.
 
 El frontend continúa en Cloudflare. Render aloja la API FastAPI y PostgreSQL/PostGIS.
@@ -22,6 +22,7 @@ El Blueprint configura:
 - Docker con raíz `apps/api`.
 - `DATABASE_URL` desde la base administrada.
 - secretos JWT generados por Render.
+- `econexo-satellite`, worker que consulta NASA FIRMS cada 15 minutos y entrega los focos a la API con el token interno.
 - en beta gratuita, migraciones idempotentes al iniciar el servicio (`RUN_MIGRATIONS_ON_START=true`).
 - en producción paga, migraciones con `python -m app.migrate` como Pre-Deploy Command.
 - health check `/health`.
@@ -48,6 +49,7 @@ En **Environment > Add from .env**, pegar `.env.render.example` y reemplazar:
 - `INTERNAL_SERVICE_TOKEN`: otro secreto diferente.
 - `PLATFORM_ADMIN_EMAILS`: email del administrador comercial de EcoNexo; admite varios separados por coma.
 - `SALES_EMAIL`: email que recibirá solicitudes comerciales.
+- `NASA_FIRMS_KEY`: MAP_KEY real solicitada en NASA FIRMS. En un Blueprint existente debe cargarse manualmente en `econexo-api`; el worker la recibe por referencia.
 
 En un servicio pago con Pre-Deploy Command, usar:
 
@@ -93,6 +95,12 @@ CORS_ORIGINS=https://econexo-misiones.econexo-misiones.workers.dev
 ```
 
 No agregar barra final.
+
+## Ingesta NASA FIRMS
+
+El Blueprint crea `econexo-satellite` como Background Worker Starter. Este servicio tiene costo independiente en Render. La variable `NASA_FIRMS_KEY` se carga en `econexo-api`; el worker reutiliza esa variable y `INTERNAL_SERVICE_TOKEN` mediante referencias privadas de Render. Sin MAP_KEY, producción queda deliberadamente sin focos simulados.
+
+Después del deploy, revisar los logs del worker. Una ejecución correcta informa `FIRMS: N focos de calor` y `Ingesta al API`.
 
 ## Servicios opcionales
 

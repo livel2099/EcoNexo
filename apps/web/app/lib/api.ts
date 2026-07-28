@@ -10,119 +10,45 @@ import {
   demoSubmitReport,
 } from "./demo";
 
-const DEFAULT_API_URL = process.env.NODE_ENV === "production"
-  ? "https://econexo.onrender.com"
-  : "http://localhost:8000";
-const DEFAULT_WS_URL = process.env.NODE_ENV === "production"
-  ? "wss://econexo.onrender.com"
-  : "ws://localhost:8000";
-
-export const API = (process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL).replace(/\/+$/, "");
-export const WS = (process.env.NEXT_PUBLIC_WS_URL || DEFAULT_WS_URL).replace(/\/+$/, "");
+export const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const WS = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 export const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 export const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
 const KEY = "econexo_session";
 const DEFAULT_TIMEOUT_MS = 12_000;
 
-type StorageKind = "session" | "local";
-
-function getBrowserStorage(kind: StorageKind): Storage | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    return kind === "session"
-      ? window.sessionStorage
-      : window.localStorage;
-  } catch {
-    return null;
-  }
+export function saveSession(session: Session) {
+  sessionStorage.setItem(KEY, JSON.stringify(session));
+  localStorage.removeItem(KEY);
 }
-
-function readStorage(storage: Storage | null, key: string): string | null {
-  if (!storage) return null;
-
-  try {
-    return storage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeStorage(
-  storage: Storage | null,
-  key: string,
-  value: string,
-): boolean {
-  if (!storage) return false;
-
-  try {
-    storage.setItem(key, value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function removeStorage(storage: Storage | null, key: string): void {
-  if (!storage) return;
-
-  try {
-    storage.removeItem(key);
-  } catch {
-    // El navegador puede bloquear el almacenamiento.
-  }
-}
-
-export function saveSession(session: Session): void {
-  const serialized = JSON.stringify(session);
-  const sessionStore = getBrowserStorage("session");
-  const localStore = getBrowserStorage("local");
-
-  const saved = writeStorage(sessionStore, KEY, serialized);
-  removeStorage(localStore, KEY);
-
-  if (!saved) {
-    throw new Error(
-      "El navegador bloqueó el almacenamiento de la sesión. Habilitá el almacenamiento para EcoNexo.",
-    );
-  }
-}
-
 export function getSession(): Session | null {
-  const sessionStore = getBrowserStorage("session");
-  const localStore = getBrowserStorage("local");
-
-  const current = readStorage(sessionStore, KEY);
-  const legacy = readStorage(localStore, KEY);
+  if (typeof window === "undefined") return null;
+  const current = sessionStorage.getItem(KEY);
+  const legacy = localStorage.getItem(KEY);
   const raw = current || legacy;
-
   if (!raw) return null;
-
   try {
     const session = JSON.parse(raw) as Session;
-
     if (!current) {
-      writeStorage(sessionStore, KEY, raw);
-      removeStorage(localStore, KEY);
+      sessionStorage.setItem(KEY, raw);
+      localStorage.removeItem(KEY);
     }
-
     return session;
   } catch {
-    removeStorage(sessionStore, KEY);
-    removeStorage(localStore, KEY);
+    clearSession();
     return null;
   }
 }
-
-export function clearSession(): void {
-  removeStorage(getBrowserStorage("session"), KEY);
-  removeStorage(getBrowserStorage("local"), KEY);
+export function clearSession() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(KEY);
+  localStorage.removeItem(KEY);
 }
 
 async function request(url: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
-  const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (cause) {
@@ -130,11 +56,11 @@ async function request(url: string, init: RequestInit = {}, timeoutMs = DEFAULT_
       throw new Error(`La API de EcoNexo no respondió a tiempo (${API}).`);
     }
     throw new Error(
-      `No se pudo conectar con la API de EcoNexo en ${API}. Verificá que ${API}/health responda.`,
+      `No se pudo conectar con la API de EcoNexo en ${API}. Verificá que Docker esté iniciado y que ${API}/health responda.`,
       { cause },
     );
   } finally {
-    globalThis.clearTimeout(timer);
+    window.clearTimeout(timer);
   }
 }
 
@@ -161,16 +87,12 @@ async function checked<T>(response: Response, fallback: string, redirectUnauthor
 
 export async function getApiStatus(): Promise<boolean> {
   if (IS_DEMO) return true;
-  for (const path of ["/health", "/"]) {
-    try {
-      const response = await request(`${API}${path}`, { cache: "no-store" }, 4_000);
-      if (response.ok) return true;
-    } catch {
-      // Algunos bloqueadores interceptan rutas de health-check. El endpoint
-      // raíz permite confirmar conectividad sin impedir el inicio de sesión.
-    }
+  try {
+    const response = await request(`${API}/health`, { cache: "no-store" }, 4_000);
+    return response.ok;
+  } catch {
+    return false;
   }
-  return false;
 }
 
 export async function login(email: string, password: string): Promise<Session> {
@@ -180,14 +102,6 @@ export async function login(email: string, password: string): Promise<Session> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   }), "No se pudo iniciar sesión", false);
-}
-
-export async function changePassword(token: string, currentPassword: string, newPassword: string): Promise<void> {
-  await checked<void>(await request(`${API}/auth/change-password`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
-  }), "No se pudo cambiar la contraseña", false);
 }
 
 export interface EmailRegisterInput {

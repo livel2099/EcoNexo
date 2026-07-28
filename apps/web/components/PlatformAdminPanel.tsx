@@ -264,7 +264,7 @@ export default function PlatformAdminPanel() {
         </div>
       </section>}
 
-      {tab === "subscriptions" && <SubscriptionPanel token={token} />}
+      {tab === "subscriptions" && <SubscriptionPanel token={token} platformAdmin />}
 
       {tab === "audit" && <section className="platform-table-card">
         <div className="platform-table-title"><h2>Auditoría global</h2><span>últimos {audit.length} eventos</span></div>

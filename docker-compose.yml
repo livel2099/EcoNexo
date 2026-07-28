@@ -85,24 +85,17 @@ services:
     environment:
       <<: *db-env
       ENVIRONMENT: ${ENVIRONMENT:-development}
-      PORT: "8000"
-      DATABASE_URL: ${DATABASE_URL:-}
-      DB_POOL_MIN_SIZE: ${DB_POOL_MIN_SIZE:-1}
-      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-5}
       JWT_SECRET: ${JWT_SECRET:-change_me_dev_secret}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
       PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
       SALES_EMAIL: ${SALES_EMAIL:-}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-change_me_internal_service_token}
-      MQTT_ENABLED: ${MQTT_ENABLED:-true}
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
-      S3_ENABLED: ${S3_ENABLED:-true}
       S3_ENDPOINT: http://minio:9000
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
       S3_BUCKET: ${S3_BUCKET:-econexo-reports}
-      S3_REGION: ${S3_REGION:-us-east-1}
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-econexo}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-econexo_dev_pw}
       ANOMALY_SERVICE_URL: http://anomaly:8100
