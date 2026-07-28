@@ -111,7 +111,23 @@ async def security_headers(request: Request, call_next):
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return response
 
+@app.get("/", tags=["meta"], include_in_schema=False)
+async def root() -> dict:
+    return {
+        "name": "EcoNexo API",
+        "status": "online",
+        "release": s.release_version,
+        "environment": s.environment,
+        "territory": "Misiones",
+        "documentation": "/docs",
+        "health": "/health",
+        "readiness": "/ready",
+    }
 
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    return Response(status_code=204)
 @app.get("/health", tags=["meta"])
 async def health() -> dict:
     return {
