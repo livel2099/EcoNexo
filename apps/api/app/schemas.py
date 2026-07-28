@@ -13,6 +13,20 @@ class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=256)
 
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(min_length=6, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+    @model_validator(mode="after")
+    def validate_password_change(self):
+        if self.current_password == self.new_password:
+            raise ValueError("La contraseña nueva debe ser diferente")
+        if not any(char.isalpha() for char in self.new_password):
+            raise ValueError("La contraseña nueva debe incluir una letra")
+        if not any(char.isdigit() for char in self.new_password):
+            raise ValueError("La contraseña nueva debe incluir un número")
+        return self
+
 
 class EmailRegisterIn(BaseModel):
     organization_name: str = Field(min_length=2, max_length=120)
