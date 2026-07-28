@@ -130,7 +130,7 @@ async def ensure_platform_admin() -> None:
                 """
                 INSERT INTO audit_events (org_id,user_id,action,resource,resource_id,metadata)
                 VALUES ($1,$2,$3,'platform_admin',$2,
-                        jsonb_build_object('email',$4,'bootstrap',true))
+                        jsonb_build_object('email',$4::text,'bootstrap',true))
                 """,
                 user["org_id"],
                 user["id"],
