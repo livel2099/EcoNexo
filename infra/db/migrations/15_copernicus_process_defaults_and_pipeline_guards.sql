@@ -24,7 +24,15 @@ ALTER TABLE environmental_source_settings
   ) NOT VALID;
 
 ALTER TABLE environmental_source_settings
-  ALTER COLUMN copernicus_enabled SET DEFAULT true;
+  DROP CONSTRAINT IF EXISTS environment_sources_copernicus_config_check;
+
+ALTER TABLE environmental_source_settings
+  ADD CONSTRAINT environment_sources_copernicus_config_check
+  CHECK (
+    NOT copernicus_enabled
+    OR copernicus_use_system_default
+    OR NULLIF(btrim(copernicus_wms_url), '') IS NOT NULL
+  ) NOT VALID;
 
 -- La actualización habilita el proveedor predeterminado de sistema en registros
 -- existentes sin borrar una instancia WMS explícita ya configurada.
