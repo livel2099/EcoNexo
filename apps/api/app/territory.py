@@ -6,6 +6,7 @@ operación crítica no depende de un tercero.
 """
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass
 
@@ -194,6 +195,34 @@ def local_context(lat: float, lon: float) -> dict[str, object]:
         "distance_to_reference_km": round(_distance_km(lat, lon, hub.lat, hub.lon), 2),
         "source": "EcoNexo territorial fallback v" + TERRITORY_VERSION,
     }
+
+
+def decode_geojson_geometry(value: object) -> dict | None:
+    """Normaliza una geometría GeoJSON almacenada como JSONB o texto JSON.
+
+    Devuelve ``None`` para valores inválidos, colecciones vacías o tipos que no
+    representan una geometría GeoJSON utilizable.
+    """
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+    if not isinstance(value, dict):
+        return None
+
+    geometry_type = value.get("type")
+    valid_types = {
+        "Point", "MultiPoint", "LineString", "MultiLineString",
+        "Polygon", "MultiPolygon",
+    }
+    if geometry_type not in valid_types:
+        return None
+
+    coordinates = value.get("coordinates")
+    if not isinstance(coordinates, list) or not coordinates:
+        return None
+    return {"type": geometry_type, "coordinates": coordinates}
 
 
 def georef_misiones_feature(payload: dict) -> dict | None:

@@ -1,8 +1,21 @@
+> EcoNexo 1.0.0-rc.6.2 — Copernicus Process API predeterminado y auditoría integral
+
 # EcoNexo
 
 **Plataforma de inteligencia ambiental para detectar, correlacionar y documentar incidentes antes de que escalen.**
 
-EcoNexo combina sensores IoT, observación satelital, meteorología, reportes ciudadanos y reglas operativas para producir alertas priorizadas, trazabilidad e informes institucionales. Esta edición fue preparada como **candidato de lanzamiento técnico 1.0.0-rc.3 para la provincia de Misiones**. La arquitectura y los flujos principales están implementados y territorialmente restringidos; la publicación oficial todavía exige completar identidad societaria, revisión jurídica, infraestructura pública, credenciales productivas y la puerta de aceptación indicada en la documentación.
+EcoNexo combina sensores IoT, observación satelital, meteorología, reportes ciudadanos y reglas operativas para producir alertas priorizadas, trazabilidad e informes institucionales. Esta edición fue preparada como **candidato de lanzamiento técnico 1.0.0-rc.6.2 para la provincia de Misiones**. La arquitectura y los flujos principales están implementados y territorialmente restringidos; la publicación oficial todavía exige completar identidad societaria, revisión jurídica, infraestructura pública, credenciales productivas y la puerta de aceptación indicada en la documentación.
+
+## Deploy en Render
+
+La API incluye Blueprint, migraciones versionadas y plantilla de variables:
+
+- `render.yaml` — Blueprint beta con PostgreSQL, API y frontend estático.
+- `render.production.yaml` — Blueprint pago con migraciones Pre-Deploy.
+- `.env.render.example` — variables de la API.
+- `.env.web.render.example` — variables del Static Site.
+- `RENDER_DEPLOY.md` — guía paso a paso.
+
 
 ## Qué incorpora esta edición
 
@@ -10,8 +23,10 @@ EcoNexo combina sensores IoT, observación satelital, meteorología, reportes ci
 - Google Identity Services permanece como proveedor opcional cuando se configura `GOOGLE_CLIENT_ID`.
 - Centro de comando multiorganización, dispositivos, alertas, reglas, KPI, mapa y feed en tiempo real, limitado a los 17 departamentos y 79 municipios de Misiones.
 - **Alerta IA / Observatorio SpaceAI** con telemetría por dispositivo, contexto Open-Meteo/CAMS/GloFAS, focos NASA FIRMS, gemelo digital, mensajes revisables y Health Threat Index R0-R5.
+- **Copernicus Sentinel-2 predeterminado mediante Process API server-side**: color natural, NDVI, NDMI de humedad y NBR de quema; OAuth privado en la API y WMS por organización como fallback compatible.
 - Módulo licenciable **Focos de incendio forestal y humo**, con lenguaje claro, mapa base nítido, evidencia satelital diferenciada de confirmación oficial y registro de comunicaciones.
 - **Admin Core / ABM** para usuarios, roles, organización, geocercas PostGIS, fuentes ambientales, dispositivos, reglas y auditoría.
+- **Pipeline operativo rc.6** configurable desde Admin Core: nodos MQTT, manuales u Open-Meteo; marcadores círculo/cuadro/triángulo; ejecución desde Command Core; persistencia de lecturas; reglas; FIRMS; alertas; WebSocket e historial de corridas.
 - Bandeja **Mensajes**: cada login correcto por email o Google notifica a los administradores con contexto de acceso e IP anonimizada.
 - Suscripciones limitadas por organización: sandbox, diagnóstico, piloto, municipal, provincia/pro, enterprise y academia; solicitud, aprobación comercial, vencimiento, consumo y módulos habilitados.
 - Canal ciudadano con formulario completo, consentimiento, geolocalización bajo demanda, carga de fotografías, token firmado, límites de uso, validación de imágenes y moderación.
@@ -115,7 +130,7 @@ for migration in infra/db/migrations/*.sql; do
 done
 ```
 
-Las migraciones 02-04 agregan identidad por contraseña/Google, aceptación legal, informes institucionales, snapshots SpaceAI, fuentes ambientales, geocercas y auditoría. La migración 05 agrega licencias modulares y trazabilidad de comunicaciones de Alerta IA. Las migraciones 06-09 incorporan alcance Misiones, exclusión de registros externos, auditoría territorial y límite provincial versionado con sincronización oficial desde GeoRef Argentina. La migración 10 incorpora Copernicus y sanidad forestal; la 11 agrega planes, suscripciones, límites de consumo, solicitudes comerciales y mensajes administrativos de login. En producción se recomienda incorporar Alembic o un job de migración versionado antes de escalar réplicas.
+Las migraciones 02-04 agregan identidad por contraseña/Google, aceptación legal, informes institucionales, snapshots SpaceAI, fuentes ambientales, geocercas y auditoría. La migración 05 agrega licencias modulares y trazabilidad de comunicaciones de Alerta IA. Las migraciones 06-09 incorporan alcance Misiones, exclusión de registros externos, auditoría territorial y límite provincial versionado con sincronización oficial desde GeoRef Argentina. La migración 10 incorpora Copernicus y sanidad forestal; la 11 agrega integridad, planes, suscripciones, límites y mensajes; las migraciones 12-13 crean la consola privada de plataforma; la 14 incorpora telemetría configurable, historial del pipeline y deduplicación FIRMS; la 15 habilita Copernicus de sistema por defecto, registra sus pruebas y evita ejecuciones concurrentes duplicadas del pipeline. En Render, `python -m app.migrate` registra checksums y usa un advisory lock. El plan gratuito ejecuta migraciones al arrancar; el plan pago debe usar Pre-Deploy Command antes de escalar réplicas.
 
 ## Validación
 
@@ -128,12 +143,13 @@ cd apps/web && npm ci && npm run typecheck && npm run build
 
 Estado de esta entrega:
 
-- API: 37 pruebas aprobadas (`pytest -q`).
-- Python: compilación de módulos aprobada (`python -m compileall`).
-- Web y móvil: archivos TypeScript/TSX parseados con TypeScript 5.8.3 sin errores de sintaxis.
-- JSON, YAML y CSS: parseo aprobado; la hoja CSS contiene 860 reglas de nivel superior sin errores.
-- La instalación completa de dependencias web, el `npm run typecheck` y el build de Next.js deben repetirse en la estación de destino: el entorno de ensamblado no pudo completar `npm ci` por indisponibilidad de su gateway de paquetes.
-- La app móvil incluye código fuente y perfiles EAS; no incluye APK/IPA porque faltan el `projectId`, las credenciales de firma y la ejecución del build externo.
+- API: **70 pruebas aprobadas** (`pytest -q`), incluidos OAuth/Process API de Copernicus, WMS, CORS, GeoJSON, migraciones y concurrencia del pipeline.
+- Python: compilación completa aprobada (`python -m compileall`).
+- FastAPI: 98 objetos de ruta, 82 rutas únicas y 83 operaciones documentadas; `/platform/*` permanece fuera de Swagger y protegido.
+- Web: `npm run typecheck` aprobado con TypeScript 5.7.2.
+- CSS, JSON y YAML: parseo aprobado.
+- El build integral de Next.js debe repetirse en Render: este entorno no pudo descargar el binario Linux de SWC desde su gateway de paquetes, aunque el chequeo de tipos y la sintaxis están aprobados.
+- La app móvil incluye código fuente y perfiles EAS; no incluye APK/IPA porque faltan credenciales de firma y el build externo.
 
 ## Aplicación móvil
 
@@ -173,6 +189,7 @@ Puerta de lanzamiento: [docs/OFFICIAL_LAUNCH_MISIONES.md](docs/OFFICIAL_LAUNCH_M
 - [Fuentes de datos](docs/DATA_SOURCES.md)
 - [SpaceAI y Open-Meteo](docs/SPACEAI_OPEN_METEO.md)
 - [Admin Core / ABM](docs/ADMIN_ABM.md)
+- [Pipeline de telemetría rc.6](docs/TELEMETRY_PIPELINE_RC6.md)
 - [Suscripciones y mensajes administrativos](docs/SUBSCRIPTIONS_AND_ADMIN_MESSAGES.md)
 - [Reportes oficiales](docs/OFFICIAL_REPORTS.md)
 - [Método de informes técnicos](docs/REPORTING_METHOD.md)
@@ -199,8 +216,20 @@ La configuración recomendada ya no depende de una variable pública de compilac
 ### Sanidad forestal del norte
 
 La navegación incluye un módulo licenciable para San Antonio y General Manuel Belgrano. Combina contexto meteorológico, NDVI, humedad, recorridas, trampas, reportes y trazabilidad. El radar de Bernardo de Irigoyen se usa como contexto meteorológico regional y no confirma ni identifica una plaga.
-# EcoNexo
-# EcoNexo
-# econexoarg
-# econexo
-# ECONEXO-BETA
+## Telemetría y Command Pipeline (rc.6)
+
+`Admin Core > Telemetría` permite crear nodos, ubicarlos en geocercas, elegir círculo, cuadro o triángulo, cambiar la fuente y ejecutar el pipeline. Si la organización no tiene nodos, **Crear red inicial y ejecutar** genera dos nodos virtuales Open-Meteo dentro de una zona operativa. El Centro de Comando muestra dispositivos, zonas de riesgo, focos FIRMS y alertas; las capas Humedad y Área quemada permanecen seleccionables aun sin Copernicus mediante fallbacks expresamente rotulados.
+
+Guía técnica: [`docs/TELEMETRY_PIPELINE_RC6.md`](docs/TELEMETRY_PIPELINE_RC6.md).
+
+## Consola privada del administrador general (rc.5)
+
+La edición incluye una consola no enlazada en la navegación pública:
+
+```text
+/plataforma
+```
+
+El correo autorizado es `econexoargentina@gmail.com` mediante `PLATFORM_ADMIN_EMAILS`. La contraseña inicial se configura únicamente en Render con `PLATFORM_ADMIN_INITIAL_PASSWORD`; nunca debe incorporarse al repositorio ni usar el prefijo `NEXT_PUBLIC_`. El primer ingreso exige cambiarla en `/cambiar-contrasena`.
+
+Guía completa: [`ADMIN_GENERAL_OCULTO.md`](ADMIN_GENERAL_OCULTO.md).

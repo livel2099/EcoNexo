@@ -19,7 +19,7 @@ export default function robots(): MetadataRoute.Robots {
           "/seguridad",
           "/accesibilidad",
         ],
-        disallow: ["/dashboard", "/informe"],
+        disallow: ["/dashboard", "/informe", "/plataforma", "/cambiar-contrasena"],
       },
     ],
   };

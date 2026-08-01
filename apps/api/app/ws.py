@@ -1,8 +1,7 @@
-"""Feed en tiempo real (WebSocket) alimentado por el bus MQTT.
+"""Feed en tiempo real (WebSocket) alimentado por MQTT.
 
-El API se suscribe a los topics internos que publican los microservicios
-(readings normalizados y alertas) y los reenvia por WebSocket al dashboard,
-scopeados por organizacion.
+El adaptador MQTT puede deshabilitarse en despliegues iniciales de Render con
+MQTT_ENABLED=false. El resto del API y los WebSockets siguen disponibles.
 """
 from __future__ import annotations
 
@@ -18,9 +17,9 @@ from .config import get_settings
 
 log = logging.getLogger("econexo.ws")
 
-# Topics internos del bus (publicados por ingest/api).
 TOPIC_READINGS = "econexo/internal/+/readings"
 TOPIC_ALERTS = "econexo/internal/+/alerts"
+TOPIC_PIPELINE = "econexo/internal/+/pipeline"
 
 
 class ConnectionManager:
@@ -52,22 +51,38 @@ manager = ConnectionManager()
 
 async def mqtt_bridge(stop: asyncio.Event) -> None:
     """Puente MQTT -> WebSocket. Reconecta si el broker no esta listo."""
-    s = get_settings()
+    settings = get_settings()
+    if not settings.mqtt_enabled:
+        log.info("MQTT deshabilitado por configuracion")
+        return
+
     while not stop.is_set():
         try:
-            async with aiomqtt.Client(hostname=s.mqtt_host, port=s.mqtt_port) as client:
+            async with aiomqtt.Client(
+                hostname=settings.mqtt_host,
+                port=settings.mqtt_port,
+            ) as client:
                 await client.subscribe(TOPIC_READINGS)
                 await client.subscribe(TOPIC_ALERTS)
-                log.info("MQTT bridge conectado a %s:%s", s.mqtt_host, s.mqtt_port)
+                await client.subscribe(TOPIC_PIPELINE)
+                log.info(
+                    "MQTT bridge conectado a %s:%s",
+                    settings.mqtt_host,
+                    settings.mqtt_port,
+                )
                 async for msg in client.messages:
                     await _dispatch(str(msg.topic), msg.payload)
-        except Exception as exc:  # broker caido / arrancando
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
             log.warning("MQTT bridge reintentando: %s", exc)
-            await asyncio.sleep(3)
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=5)
+            except TimeoutError:
+                pass
 
 
 async def _dispatch(topic: str, payload: bytes) -> None:
-    # topic: econexo/internal/{org_id}/{kind}
     parts = topic.split("/")
     if len(parts) < 4:
         return
@@ -80,10 +95,23 @@ async def _dispatch(topic: str, payload: bytes) -> None:
 
 
 async def publish(topic: str, data: dict) -> None:
-    """Publica en el bus MQTT (best-effort)."""
-    s = get_settings()
+    """Entrega el evento al WebSocket local y, si existe, tambien a MQTT.
+
+    Esto mantiene el Command Core en tiempo real en Render aunque MQTT_ENABLED
+    sea false. MQTT queda como bus opcional para hardware y microservicios.
+    """
+    parts = topic.split("/")
+    if len(parts) >= 4:
+        await manager.broadcast(parts[2], {"kind": parts[3], "data": data})
+
+    settings = get_settings()
+    if not settings.mqtt_enabled:
+        return
     try:
-        async with aiomqtt.Client(hostname=s.mqtt_host, port=s.mqtt_port) as client:
+        async with aiomqtt.Client(
+            hostname=settings.mqtt_host,
+            port=settings.mqtt_port,
+        ) as client:
             await client.publish(topic, json.dumps(data, default=str))
     except Exception as exc:
         log.warning("publish fallo (%s): %s", topic, exc)

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from .. import db
 from ..audit import record_audit
+from ..copernicus import public_status
 from ..deps import CurrentUser, current_user, require_role
 from ..environment import alert_type_for_domain, should_activate
 from ..schemas import EnvironmentalSnapshot, EnvironmentalSnapshotRecordOut, EnvironmentalSourceSettingsOut
@@ -30,8 +31,10 @@ def _record_out(row) -> EnvironmentalSnapshotRecordOut:
 async def _settings(org_id: UUID) -> tuple[bool, str]:
     row = await db.pool().fetchrow(
         """
-        INSERT INTO environmental_source_settings (org_id)
-        VALUES ($1)
+        INSERT INTO environmental_source_settings (
+          org_id, copernicus_enabled, copernicus_use_system_default
+        )
+        VALUES ($1,true,true)
         ON CONFLICT (org_id) DO NOTHING
         RETURNING auto_activate_alerts, operational_alert_min_level
         """,
@@ -171,8 +174,10 @@ async def source_settings(
     """
     row = await db.pool().fetchrow(
         """
-        INSERT INTO environmental_source_settings (org_id)
-        VALUES ($1)
+        INSERT INTO environmental_source_settings (
+          org_id, copernicus_enabled, copernicus_use_system_default
+        )
+        VALUES ($1,true,true)
         ON CONFLICT (org_id) DO NOTHING
         RETURNING *
         """,
@@ -187,7 +192,19 @@ async def source_settings(
     data.pop("updated_by", None)
     data.pop("created_at", None)
     data["firms_map_key_configured"] = bool(os.getenv("NASA_FIRMS_KEY", "").strip())
-    data["copernicus_configured"] = bool((data.get("copernicus_wms_url") or "").strip())
+    state = public_status(data)
+    data.update(
+        copernicus_configured=state["configured"],
+        copernicus_provider=state["provider"],
+        copernicus_process_configured=state["process_configured"],
+        copernicus_wms_configured=state["wms_configured"],
+        copernicus_system_default=state["system_default"],
+        copernicus_effective_wms_url=state["effective_wms_url"],
+        copernicus_last_test_at=state["last_test_at"],
+        copernicus_last_test_ok=state["last_test_ok"],
+        copernicus_last_error=state["last_error"],
+        copernicus_available_layers=state["available_layers"],
+    )
     return EnvironmentalSourceSettingsOut(**data)
 
 

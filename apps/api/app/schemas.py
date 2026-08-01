@@ -5,6 +5,7 @@ from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
+from .copernicus import canonical_wms_url
 from .territory import DEPARTMENTS, ensure_in_misiones, municipality_department
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, model_validator
 
@@ -12,6 +13,26 @@ from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, model
 class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=256)
+
+
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(min_length=6, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        if value.strip() != value:
+            raise ValueError("La contraseña no puede comenzar ni terminar con espacios")
+        if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
+            raise ValueError("La contraseña debe incluir al menos una letra y un número")
+        return value
+
+    @model_validator(mode="after")
+    def validate_password_change(self):
+        if self.current_password == self.new_password:
+            raise ValueError("La contraseña nueva debe ser diferente de la actual")
+        return self
 
 
 class EmailRegisterIn(BaseModel):
@@ -90,6 +111,8 @@ class TokenOut(BaseModel):
     avatar_url: str | None = None
     auth_provider: Literal["password", "google"] = "password"
     is_new_user: bool = False
+    platform_admin: bool = False
+    must_change_password: bool = False
 
 
 class CitizenSessionOut(BaseModel):
@@ -111,24 +134,81 @@ class OrgOut(BaseModel):
     territory_scope: str = "provincial"
 
 
-# --- Devices ---
+# --- Devices y telemetria ---
+MarkerShape = Literal["circle", "square", "triangle"]
+TelemetryMode = Literal["mqtt", "open_meteo", "manual"]
+
+
 class DeviceTypeIn(BaseModel):
-    name: str
-    variables: list[dict[str, Any]] = []
+    name: str = Field(min_length=2, max_length=120)
+    variables: list[dict[str, Any]] = Field(default_factory=list, max_length=40)
+
+
+class DeviceTypeOut(DeviceTypeIn):
+    id: UUID
 
 
 class DeviceIn(BaseModel):
-    name: str
-    external_id: str
+    name: str = Field(min_length=2, max_length=120)
+    external_id: str = Field(min_length=2, max_length=120)
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
     device_type_id: UUID | None = None
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list, max_length=30)
+    marker_shape: MarkerShape = "circle"
+    telemetry_mode: TelemetryMode = "mqtt"
+    zone_id: UUID | None = None
+    pipeline_enabled: bool = True
+    telemetry_config: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("external_id")
+    @classmethod
+    def normalize_external_id(cls, value: str) -> str:
+        cleaned = value.strip().lower().replace(" ", "-")
+        if not cleaned:
+            raise ValueError("El identificador externo es obligatorio")
+        return cleaned
 
     @model_validator(mode="after")
     def validate_misiones_location(self):
         ensure_in_misiones(self.lat, self.lon)
         return self
+
+
+class DeviceUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    tags: list[str] | None = Field(default=None, max_length=30)
+    marker_shape: MarkerShape | None = None
+    telemetry_mode: TelemetryMode | None = None
+    zone_id: UUID | None = None
+    pipeline_enabled: bool | None = None
+    telemetry_config: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_location_pair(self):
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("Latitud y longitud deben enviarse juntas")
+        if self.lat is not None and self.lon is not None:
+            ensure_in_misiones(self.lat, self.lon)
+        return self
+
+
+class DeviceReadingsIn(BaseModel):
+    values: dict[str, float] = Field(min_length=1, max_length=50)
+    observed_at: datetime | None = None
+
+    @field_validator("values")
+    @classmethod
+    def validate_variables(cls, values: dict[str, float]) -> dict[str, float]:
+        normalized: dict[str, float] = {}
+        for key, value in values.items():
+            variable = key.strip().lower().replace(" ", "_")
+            if not variable or len(variable) > 80:
+                raise ValueError("Nombre de variable inválido")
+            normalized[variable] = float(value)
+        return normalized
 
 
 class DeviceOut(BaseModel):
@@ -140,8 +220,17 @@ class DeviceOut(BaseModel):
     status: str
     battery: float | None = None
     rssi: int | None = None
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
     last_seen: datetime | None = None
+    marker_shape: MarkerShape = "circle"
+    telemetry_mode: TelemetryMode = "mqtt"
+    zone_id: UUID | None = None
+    zone_name: str | None = None
+    pipeline_enabled: bool = True
+    telemetry_config: dict[str, Any] = Field(default_factory=dict)
+    last_pipeline_at: datetime | None = None
+    last_pipeline_status: str | None = None
+    latest_readings: dict[str, float] = Field(default_factory=dict)
 
 
 class DeviceCreatedOut(DeviceOut):
@@ -439,6 +528,147 @@ class AdminNotificationOut(BaseModel):
     created_at: datetime
 
 
+# --- Administración general de plataforma ---
+class PlatformSummaryOut(BaseModel):
+    organizations_total: int
+    organizations_active: int
+    users_total: int
+    users_active: int
+    platform_admins: int
+    pending_license_requests: int
+    logins_24h: int
+
+
+class PlatformUserCreateIn(BaseModel):
+    org_id: UUID
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    role: Literal["admin", "operador", "visualizador"] = "operador"
+    temporary_password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("temporary_password")
+    @classmethod
+    def validate_initial_password(cls, value: str) -> str:
+        if value.strip() != value:
+            raise ValueError("La contraseña temporal no puede tener espacios al inicio o al final")
+        if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
+            raise ValueError("La contraseña temporal debe incluir una letra y un número")
+        return value
+
+
+class PlatformUserOut(BaseModel):
+    id: UUID
+    org_id: UUID
+    org_name: str
+    name: str
+    email: EmailStr
+    role: Literal["admin", "operador", "visualizador"]
+    is_active: bool
+    organization_active: bool
+    auth_provider: Literal["password", "google"]
+    email_verified: bool
+    must_change_password: bool
+    last_login_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformUserUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    role: Literal["admin", "operador", "visualizador"] | None = None
+    is_active: bool | None = None
+
+
+class PlatformPasswordResetIn(BaseModel):
+    temporary_password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("temporary_password")
+    @classmethod
+    def validate_temporary_password(cls, value: str) -> str:
+        if value.strip() != value:
+            raise ValueError("La contraseña temporal no puede tener espacios al inicio o al final")
+        if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
+            raise ValueError("La contraseña temporal debe incluir una letra y un número")
+        return value
+
+
+class PlatformOrganizationOut(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    vertical: str
+    province: str
+    municipality: str | None = None
+    is_active: bool
+    users_total: int
+    users_active: int
+    plan_key: str | None = None
+    plan_name: str | None = None
+    subscription_status: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformOrganizationUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    is_active: bool | None = None
+
+
+class PlatformAuditOut(BaseModel):
+    id: UUID
+    org_id: UUID | None = None
+    org_name: str | None = None
+    user_id: UUID | None = None
+    actor_name: str | None = None
+    action: str
+    resource: str
+    resource_id: UUID | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+# --- Pipeline de telemetria ---
+class TelemetryPipelineSettingsIn(BaseModel):
+    enabled: bool = True
+    auto_run: bool = False
+    interval_minutes: int = Field(default=15, ge=2, le=1440)
+    stale_minutes: int = Field(default=30, ge=5, le=10080)
+    refresh_firms: bool = True
+    evaluate_rules: bool = True
+
+
+class TelemetryPipelineSettingsOut(TelemetryPipelineSettingsIn):
+    org_id: UUID
+    firms_configured: bool = False
+    updated_at: datetime
+
+
+class PipelineRunOut(BaseModel):
+    id: UUID
+    status: Literal["running", "completed", "partial", "failed"]
+    source: str = "command_core"
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    devices_total: int = 0
+    devices_updated: int = 0
+    readings_inserted: int = 0
+    detections_ingested: int = 0
+    alerts_created: int = 0
+    errors: list[dict[str, Any]] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class BootstrapTelemetryIn(BaseModel):
+    count: int = Field(default=2, ge=1, le=6)
+    zone_id: UUID | None = None
+
+
+class BootstrapTelemetryOut(BaseModel):
+    created: list[DeviceCreatedOut] = Field(default_factory=list)
+    zone_id: UUID
+    detail: str
+
+
 # --- KPIs ---
 class KpiOut(BaseModel):
     detection_time_s: float | None
@@ -451,6 +681,10 @@ class KpiOut(BaseModel):
     response_reduction_target: float = 0.40
     global_status: Literal["normal", "atencion", "critico"]
     active_alerts: int
+
+def _canonical_copernicus_wms_url(raw: str | None) -> str | None:
+    return canonical_wms_url(raw)
+
 
 # --- Administracion, geocercas e inteligencia ambiental SpaceAI ---
 SpaceAILevel = Literal["R0", "R1", "R2", "R3", "R4", "R5"]
@@ -561,12 +795,13 @@ class EnvironmentalSourceSettingsIn(BaseModel):
     air_quality_enabled: bool = True
     flood_enabled: bool = True
     firms_enabled: bool = True
-    copernicus_enabled: bool = False
+    copernicus_enabled: bool = True
+    copernicus_use_system_default: bool = True
     copernicus_wms_url: str | None = Field(default=None, max_length=500)
     copernicus_true_color_layer: str = Field(default="TRUE_COLOR", min_length=1, max_length=100)
     copernicus_ndvi_layer: str = Field(default="NDVI", min_length=1, max_length=100)
-    copernicus_moisture_layer: str = Field(default="MOISTURE_INDEX", min_length=1, max_length=100)
-    copernicus_burn_layer: str = Field(default="NBR_RAW", min_length=1, max_length=100)
+    copernicus_moisture_layer: str = Field(default="NDMI", min_length=1, max_length=100)
+    copernicus_burn_layer: str = Field(default="NBR", min_length=1, max_length=100)
     forestry_pest_enabled: bool = True
     sinarame_radar_enabled: bool = True
     refresh_minutes: int = Field(default=10, ge=2, le=180)
@@ -577,17 +812,11 @@ class EnvironmentalSourceSettingsIn(BaseModel):
     @model_validator(mode="after")
     def validate_misiones_location_and_copernicus(self):
         ensure_in_misiones(self.default_latitude, self.default_longitude)
-        value = (self.copernicus_wms_url or "").strip().rstrip("/")
-        if value:
-            from urllib.parse import urlparse
-            parsed = urlparse(value)
-            if parsed.scheme != "https" or parsed.hostname != "sh.dataspace.copernicus.eu":
-                raise ValueError("La URL WMS debe usar HTTPS y el dominio oficial sh.dataspace.copernicus.eu")
-            if not parsed.path.startswith("/ogc/wms/") or not parsed.path.removeprefix("/ogc/wms/").strip("/"):
-                raise ValueError("Usá la URL https://sh.dataspace.copernicus.eu/ogc/wms/INSTANCE_ID")
-            self.copernicus_wms_url = value
-        elif self.copernicus_enabled:
-            raise ValueError("Para habilitar Copernicus primero cargá la URL WMS de una instancia propia")
+        self.copernicus_wms_url = canonical_wms_url(self.copernicus_wms_url)
+        self.copernicus_true_color_layer = self.copernicus_true_color_layer.strip()
+        self.copernicus_ndvi_layer = self.copernicus_ndvi_layer.strip()
+        self.copernicus_moisture_layer = self.copernicus_moisture_layer.strip()
+        self.copernicus_burn_layer = self.copernicus_burn_layer.strip()
         return self
 
 
@@ -595,6 +824,15 @@ class EnvironmentalSourceSettingsOut(EnvironmentalSourceSettingsIn):
     org_id: UUID
     firms_map_key_configured: bool = False
     copernicus_configured: bool = False
+    copernicus_provider: Literal["process_api", "wms", "none"] = "none"
+    copernicus_process_configured: bool = False
+    copernicus_wms_configured: bool = False
+    copernicus_system_default: bool = True
+    copernicus_effective_wms_url: str | None = None
+    copernicus_last_test_at: datetime | None = None
+    copernicus_last_test_ok: bool | None = None
+    copernicus_last_error: str | None = None
+    copernicus_available_layers: list[str] = Field(default_factory=list)
     updated_at: datetime
 
 
@@ -603,20 +841,48 @@ class CopernicusWmsTestIn(BaseModel):
 
     @model_validator(mode="after")
     def validate_url(self):
-        from urllib.parse import urlparse
-        value = self.url.strip().rstrip("/")
-        parsed = urlparse(value)
-        if parsed.scheme != "https" or parsed.hostname != "sh.dataspace.copernicus.eu" or not parsed.path.startswith("/ogc/wms/"):
-            raise ValueError("Solo se permite una instancia WMS oficial de Copernicus Data Space")
+        value = canonical_wms_url(self.url)
+        if value is None:
+            raise ValueError("Ingresá una instancia WMS de Copernicus Data Space")
         self.url = value
+        return self
+
+
+class CopernicusTestIn(BaseModel):
+    provider: Literal["auto", "process_api", "wms"] = "auto"
+    url: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_test(self):
+        self.url = canonical_wms_url(self.url)
+        if self.provider == "wms" and not self.url:
+            raise ValueError("Para probar WMS indicá la URL de la instancia")
         return self
 
 
 class CopernicusWmsTestOut(BaseModel):
     ok: bool
+    provider: Literal["process_api", "wms", "none"] = "none"
+    configured: bool = False
     service_title: str | None = None
     layers: list[str] = Field(default_factory=list)
     detail: str
+
+
+class CopernicusStatusOut(BaseModel):
+    enabled: bool
+    provider: Literal["process_api", "wms", "none"]
+    configured: bool
+    process_configured: bool
+    wms_configured: bool
+    system_default: bool
+    effective_wms_url: str | None = None
+    supported_layers: list[str] = Field(default_factory=list)
+    collection: str = "sentinel-2-l2a"
+    last_test_at: datetime | None = None
+    last_test_ok: bool | None = None
+    last_error: str | None = None
+    available_layers: list[str] = Field(default_factory=list)
 
 
 class EnvironmentalIndexSnapshot(BaseModel):

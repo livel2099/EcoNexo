@@ -16,6 +16,7 @@ import {
 import SiteFooter from "./SiteFooter";
 import TechLogo from "./TechLogo";
 import { MISIONES_MUNICIPALITIES, municipalityDepartment } from "../app/lib/misiones";
+import type { Session } from "../app/lib/types";
 
 declare global {
   interface Window {
@@ -36,6 +37,12 @@ type Vertical = "municipio" | "forestal" | "energetica";
 type ApiStatus = "checking" | "online" | "offline" | "demo";
 
 const LEGAL_VERSION = "2026-07-27";
+
+function destinationForSession(session: Session): string {
+  if (session.must_change_password) return "/cambiar-contrasena";
+  if (session.platform_admin) return "/plataforma";
+  return "/dashboard";
+}
 
 export default function AuthGateway() {
   const router = useRouter();
@@ -62,7 +69,8 @@ export default function AuthGateway() {
   }, [mode, organizationName, vertical, municipality, termsAccepted]);
 
   useEffect(() => {
-    if (getSession()) router.replace("/dashboard");
+    const session = getSession();
+    if (session) router.replace(destinationForSession(session));
   }, [router]);
 
   const checkConnection = useCallback(async () => {
@@ -94,7 +102,7 @@ export default function AuthGateway() {
         legal_version: LEGAL_VERSION,
       });
       saveSession(session);
-      router.replace("/dashboard");
+      router.replace(destinationForSession(session));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo iniciar sesión con Google");
       void checkConnection();
@@ -136,12 +144,12 @@ export default function AuthGateway() {
     googleButton.current.replaceChildren();
     window.google.accounts.id.renderButton(googleButton.current, {
       type: "standard",
-      theme: "filled_black",
+      theme: "outline",
       size: "large",
-      shape: "pill",
+      shape: "rectangular",
       text: mode === "register" ? "signup_with" : "signin_with",
-      logo_alignment: "center",
-      width: 400,
+      logo_alignment: "left",
+      width: 340,
       locale: "es",
     });
   }, [googleReady, mode, googleRegistrationReady]);
@@ -185,7 +193,7 @@ export default function AuthGateway() {
           })
         : await login(email, password);
       saveSession(session);
-      router.replace("/dashboard");
+      router.replace(destinationForSession(session));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : mode === "register" ? "No se pudo crear la organización" : "Credenciales inválidas");
       void checkConnection();

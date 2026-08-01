@@ -13,7 +13,12 @@ from ..deps import CurrentUser, current_user, require_role
 from ..rate_limit import enforce_rate_limit
 from ..schemas import CitizenSessionOut, ReportModerateIn, ReportOut
 from ..security import create_citizen_token, decode_citizen_token
-from ..storage import put_photo, resolve_photo_url, validate_image
+from ..storage import (
+    StorageUnavailableError,
+    put_photo,
+    resolve_photo_url,
+    validate_image,
+)
 from ..territory import ensure_in_misiones, local_context
 from ..ws import publish
 
@@ -119,7 +124,12 @@ async def create_report(
             extension = validate_image(data, photo.content_type or "")
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
-        photo_reference = put_photo(data, photo.content_type or "image/jpeg", extension)
+        try:
+            photo_reference = put_photo(
+                data, photo.content_type or "image/jpeg", extension
+            )
+        except StorageUnavailableError as exc:
+            raise HTTPException(503, str(exc)) from exc
 
     corr = await _correlation_score(org_id, lat, lon)
     row = await p.fetchrow(
@@ -179,7 +189,12 @@ async def create_internal_report(
             extension = validate_image(data, photo.content_type or "")
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
-        photo_reference = put_photo(data, photo.content_type or "image/jpeg", extension)
+        try:
+            photo_reference = put_photo(
+                data, photo.content_type or "image/jpeg", extension
+            )
+        except StorageUnavailableError as exc:
+            raise HTTPException(503, str(exc)) from exc
 
     corr = await _correlation_score(user.org_id, lat, lon)
     row = await db.pool().fetchrow(

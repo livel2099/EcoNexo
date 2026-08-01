@@ -1,5 +1,7 @@
 -- EcoNexo SpaceAI: fuentes ambientales, snapshots versionados y trazabilidad.
 
+BEGIN;
+
 ALTER TYPE alert_type ADD VALUE IF NOT EXISTS 'calidad_aire';
 ALTER TYPE alert_type ADD VALUE IF NOT EXISTS 'estres_termico';
 ALTER TYPE alert_type ADD VALUE IF NOT EXISTS 'riesgo_hidrico';
@@ -67,3 +69,5 @@ ALTER TABLE impact_reports ADD COLUMN IF NOT EXISTS methodology_version TEXT;
 ALTER TABLE impact_reports ADD COLUMN IF NOT EXISTS official_metadata JSONB NOT NULL DEFAULT '{}';
 CREATE INDEX IF NOT EXISTS idx_impact_reports_snapshot
     ON impact_reports(environmental_snapshot_id) WHERE environmental_snapshot_id IS NOT NULL;
+
+COMMIT;

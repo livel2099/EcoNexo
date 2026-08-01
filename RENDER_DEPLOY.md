@@ -96,6 +96,7 @@ Branch: main
 Root Directory: apps/web
 Build Command: npm ci && npm run typecheck && npm run build:cloudflare:production
 Publish Directory: out
+Node: 22.16.0 (fijado por NODE_VERSION, .node-version y package.json)
 ```
 
 Importar `.env.web.render.example`. Para el servicio API actual:

@@ -1,5 +1,7 @@
 -- EcoNexo investor-ready: Google auth, consentimiento legal e informes compartibles.
 
+BEGIN;
+
 ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT NOT NULL DEFAULT 'password';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
@@ -16,7 +18,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'impact_report_status') THEN
         CREATE TYPE impact_report_status AS ENUM ('borrador', 'publicado', 'archivado');
     END IF;
-END
+END;
 $block$;
 
 CREATE TABLE IF NOT EXISTS impact_reports (
@@ -56,3 +58,5 @@ CREATE TABLE IF NOT EXISTS audit_events (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_events_org_created
     ON audit_events(org_id, created_at DESC);
+
+COMMIT;

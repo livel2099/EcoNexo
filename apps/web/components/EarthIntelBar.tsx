@@ -58,7 +58,6 @@ export default function EarthIntelBar({ lat, lon, onUpdate }: Props) {
   const [intel, setIntel] = useState<EarthIntel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
 
   const load = useCallback(async (force = false, signal?: AbortSignal) => {
     setLoading(true);
@@ -99,25 +98,12 @@ export default function EarthIntelBar({ lat, lon, onUpdate }: Props) {
   }
 
   return (
-    <section className={`earthbar${collapsed ? " earthbar-collapsed" : ""}`} aria-label="Condiciones meteorológicas y atmosféricas">
+    <section className="earthbar" aria-label="Condiciones meteorológicas y atmosféricas">
       <div className="earth-source">
-        <button
-          className="earth-collapse"
-          onClick={() => setCollapsed((value) => !value)}
-          aria-expanded={!collapsed}
-          title={collapsed ? "Expandir inteligencia terrestre" : "Contraer inteligencia terrestre"}
-          aria-label={collapsed ? "Expandir inteligencia terrestre" : "Contraer inteligencia terrestre"}
-        >
-          {collapsed ? "▸" : "▾"}
-        </button>
         <span className="orbit-glyph">◉</span>
         <span>
           <strong>INTELIGENCIA TERRESTRE</strong>
-          <small>
-            {collapsed
-              ? `${fmt(intel?.weather.temperature ?? null, "°", 1)} · ${weatherLabel(intel?.weather.weatherCode ?? null)}`
-              : `${misionesLocationLabel(lat, lon)} · Open‑Meteo/CAMS`}
-          </small>
+          <small>{misionesLocationLabel(lat, lon)} · Open‑Meteo/CAMS</small>
         </span>
         <span className={`source-state ${error ? "offline" : intel?.stale ? "stale" : "live"}`}>
           {error ? "sin enlace" : intel?.stale ? "caché" : "en vivo"}

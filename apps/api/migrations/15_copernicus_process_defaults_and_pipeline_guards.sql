@@ -12,6 +12,9 @@ ALTER TABLE environmental_source_settings
   ADD COLUMN IF NOT EXISTS copernicus_available_layers JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 ALTER TABLE environmental_source_settings
+  ALTER COLUMN copernicus_enabled SET DEFAULT true;
+
+ALTER TABLE environmental_source_settings
   DROP CONSTRAINT IF EXISTS environment_sources_copernicus_config_check;
 
 ALTER TABLE environmental_source_settings

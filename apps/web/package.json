@@ -1,6 +1,6 @@
 {
   "name": "econexo-web",
-  "version": "1.0.0-rc.3",
+  "version": "1.0.0-rc.6.2",
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
@@ -37,5 +37,8 @@
   "overrides": {
     "postcss": "8.5.21",
     "sharp": "0.35.3"
+  },
+  "engines": {
+    "node": ">=22.16.0 <23.0.0"
   }
 }
