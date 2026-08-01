@@ -1,7 +1,5 @@
 -- EcoNexo Admin Core / ABM: estado, timestamps, geocercas circulares y auditoria.
 
-BEGIN;
-
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
@@ -28,7 +26,7 @@ BEGIN
         ALTER TABLE risk_zones
           ADD CONSTRAINT risk_zones_radius_check CHECK (radius_m BETWEEN 50 AND 100000);
     END IF;
-END;
+END
 $block$;
 
 CREATE INDEX IF NOT EXISTS idx_risk_zones_center ON risk_zones USING GIST(center);
@@ -63,7 +61,5 @@ BEGIN
             );
         END IF;
     END LOOP;
-END;
+END
 $block$;
-
-COMMIT;

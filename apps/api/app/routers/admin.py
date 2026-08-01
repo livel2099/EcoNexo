@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import json
 import os
+import xml.etree.ElementTree as ET
+
+import httpx
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from .. import db
 from ..audit import record_audit
-from ..copernicus import CopernicusError, public_status, test_wms
 from ..deps import CurrentUser, require_role
 from ..schemas import (
     AdminSummaryOut,
@@ -47,10 +49,8 @@ def _user_out(row) -> AdminUserOut:
 async def _settings_row(org_id: UUID, user_id: UUID | None = None):
     return await db.pool().fetchrow(
         """
-        INSERT INTO environmental_source_settings (
-          org_id, updated_by, copernicus_enabled, copernicus_use_system_default
-        )
-        VALUES ($1,$2,true,true)
+        INSERT INTO environmental_source_settings (org_id, updated_by)
+        VALUES ($1,$2)
         ON CONFLICT (org_id) DO UPDATE
           SET updated_by=COALESCE(environmental_source_settings.updated_by, EXCLUDED.updated_by)
         RETURNING *
@@ -65,19 +65,7 @@ def _settings_out(row) -> EnvironmentalSourceSettingsOut:
     data.pop("updated_by", None)
     data.pop("created_at", None)
     data["firms_map_key_configured"] = bool(os.getenv("NASA_FIRMS_KEY", "").strip())
-    state = public_status(data)
-    data.update(
-        copernicus_configured=state["configured"],
-        copernicus_provider=state["provider"],
-        copernicus_process_configured=state["process_configured"],
-        copernicus_wms_configured=state["wms_configured"],
-        copernicus_system_default=state["system_default"],
-        copernicus_effective_wms_url=state["effective_wms_url"],
-        copernicus_last_test_at=state["last_test_at"],
-        copernicus_last_test_ok=state["last_test_ok"],
-        copernicus_last_error=state["last_error"],
-        copernicus_available_layers=state["available_layers"],
-    )
+    data["copernicus_configured"] = bool((data.get("copernicus_wms_url") or "").strip())
     return EnvironmentalSourceSettingsOut(**data)
 
 
@@ -289,12 +277,11 @@ async def update_source_settings(
         INSERT INTO environmental_source_settings (
           org_id, default_latitude, default_longitude, open_meteo_enabled,
           air_quality_enabled, flood_enabled, firms_enabled, copernicus_enabled,
-          copernicus_use_system_default, copernicus_wms_url,
-          copernicus_true_color_layer, copernicus_ndvi_layer,
+          copernicus_wms_url, copernicus_true_color_layer, copernicus_ndvi_layer,
           copernicus_moisture_layer, copernicus_burn_layer, forestry_pest_enabled,
           sinarame_radar_enabled, refresh_minutes, fire_radius_km,
           operational_alert_min_level, auto_activate_alerts, updated_by
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
         ON CONFLICT (org_id) DO UPDATE SET
           default_latitude=EXCLUDED.default_latitude,
           default_longitude=EXCLUDED.default_longitude,
@@ -303,7 +290,6 @@ async def update_source_settings(
           flood_enabled=EXCLUDED.flood_enabled,
           firms_enabled=EXCLUDED.firms_enabled,
           copernicus_enabled=EXCLUDED.copernicus_enabled,
-          copernicus_use_system_default=EXCLUDED.copernicus_use_system_default,
           copernicus_wms_url=EXCLUDED.copernicus_wms_url,
           copernicus_true_color_layer=EXCLUDED.copernicus_true_color_layer,
           copernicus_ndvi_layer=EXCLUDED.copernicus_ndvi_layer,
@@ -327,7 +313,6 @@ async def update_source_settings(
         body.flood_enabled,
         body.firms_enabled,
         body.copernicus_enabled,
-        body.copernicus_use_system_default,
         body.copernicus_wms_url,
         body.copernicus_true_color_layer,
         body.copernicus_ndvi_layer,
@@ -357,44 +342,39 @@ async def test_copernicus_wms(
     body: CopernicusWmsTestIn,
     user: CurrentUser = Depends(require_role("admin")),
 ) -> CopernicusWmsTestOut:
-    """Compatibilidad: prueba una instancia WMS oficial especificada."""
-    ok = False
-    title = None
-    layers: list[str] = []
-    detail = ""
+    """Prueba GetCapabilities sin aceptar destinos arbitrarios."""
+    capabilities_url = f"{body.url}?SERVICE=WMS&REQUEST=GetCapabilities"
     try:
-        title, layers = await test_wms(body.url)
-        ok = True
-        detail = f"Conexión WMS correcta. {len(layers)} capas informadas por GetCapabilities."
-    except (CopernicusError, ValueError) as exc:
-        detail = str(exc)
-
-    await db.pool().execute(
-        """
-        UPDATE environmental_source_settings SET
-          copernicus_last_test_at=now(), copernicus_last_test_ok=$2,
-          copernicus_last_error=$3, copernicus_available_layers=$4::jsonb,
-          updated_by=$5, updated_at=now()
-        WHERE org_id=$1
-        """,
-        user.org_id,
-        ok,
-        None if ok else detail[:1000],
-        json.dumps(layers[:100], ensure_ascii=False),
-        user.id,
-    )
-    await record_audit(
-        org_id=user.org_id,
-        user_id=user.id,
-        action="test",
-        resource="copernicus_wms",
-        resource_id=user.org_id,
-        metadata={"provider": "wms", "ok": ok, "layers": layers[:30]},
-    )
-    return CopernicusWmsTestOut(
-        ok=ok, provider="wms", configured=ok, service_title=title,
-        layers=layers[:100], detail=detail,
-    )
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=False) as client:
+            response = await client.get(capabilities_url, headers={"User-Agent": "EcoNexo-Misiones/1.0"})
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+        title = None
+        layers: list[str] = []
+        for element in root.iter():
+            tag = element.tag.rsplit("}", 1)[-1]
+            if tag == "Title" and title is None and element.text:
+                title = element.text.strip()
+            elif tag == "Name" and element.text:
+                value = element.text.strip()
+                if value and value not in layers and value.upper() != "WMS":
+                    layers.append(value)
+        await record_audit(
+            org_id=user.org_id,
+            user_id=user.id,
+            action="test",
+            resource="copernicus_wms",
+            resource_id=user.org_id,
+            metadata={"host": "sh.dataspace.copernicus.eu", "layers": layers[:30]},
+        )
+        return CopernicusWmsTestOut(
+            ok=True,
+            service_title=title,
+            layers=layers[:100],
+            detail=f"Conexión correcta. {len(layers)} capas informadas por GetCapabilities.",
+        )
+    except (httpx.HTTPError, ET.ParseError) as exc:
+        return CopernicusWmsTestOut(ok=False, detail=f"No se pudo validar la instancia WMS: {type(exc).__name__}")
 
 
 @router.get("/audit", response_model=list[AuditEventOut])

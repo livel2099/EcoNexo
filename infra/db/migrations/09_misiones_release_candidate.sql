@@ -2,8 +2,6 @@
 -- Idempotente. Amplia auditoria, asegura el centro de fuentes y expone un
 -- estado consolidado para la puerta de preproduccion.
 
-BEGIN;
-
 DO $block$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='organizations_misiones_only_check') THEN
@@ -16,7 +14,7 @@ BEGIN
         ST_MakePoint(default_longitude, default_latitude)::geography
       )) NOT VALID;
   END IF;
-END;
+END
 $block$;
 
 CREATE OR REPLACE VIEW misiones_external_data_audit AS
@@ -53,5 +51,3 @@ SELECT
 
 COMMENT ON VIEW misiones_launch_status IS
   'Puerta territorial consolidada. Produccion requiere official_boundary=true y external_data_clean=true.';
-
-COMMIT;

@@ -7,33 +7,9 @@ export interface Session {
   avatar_url: string | null;
   auth_provider: "password" | "google";
   is_new_user?: boolean;
-  platform_admin?: boolean;
-  must_change_password?: boolean;
 }
 export interface Org { id: string; name: string; slug: string; vertical: string; primary_color: string; baseline_response_s: number; province: string; department: string | null; municipality: string | null; territory_scope: "provincial" | "departamental" | "municipal" | "area_operativa"; }
-export type DeviceMarkerShape = "circle" | "square" | "triangle";
-export type TelemetryMode = "mqtt" | "open_meteo" | "manual";
-export interface Device {
-  id: string;
-  name: string;
-  external_id: string;
-  lat: number;
-  lon: number;
-  status: string;
-  battery: number | null;
-  rssi: number | null;
-  tags: string[];
-  last_seen: string | null;
-  marker_shape: DeviceMarkerShape;
-  telemetry_mode: TelemetryMode;
-  zone_id: string | null;
-  zone_name: string | null;
-  pipeline_enabled: boolean;
-  telemetry_config: Record<string, unknown>;
-  last_pipeline_at: string | null;
-  last_pipeline_status: string | null;
-  latest_readings: Record<string, number>;
-}
+export interface Device { id: string; name: string; external_id: string; lat: number; lon: number; status: string; battery: number | null; rssi: number | null; tags: string[]; last_seen: string | null; }
 export interface AlertSource { source_type: string; ref_id: string | null; weight: number; detail: Record<string, unknown> | null; }
 export interface Alert { id: string; type: string; severity: string; status: string; lat: number; lon: number; confidence: number; title: string; detected_at: string; acknowledged_at: string | null; resolved_at: string | null; sources: AlertSource[]; }
 export interface Detection { id: string; source: string; lat: number; lon: number; brightness: number | null; confidence: number | null; frp: number | null; acquired_at: string; }
@@ -198,7 +174,6 @@ export interface EnvironmentalSourceSettings {
   flood_enabled: boolean;
   firms_enabled: boolean;
   copernicus_enabled: boolean;
-  copernicus_use_system_default: boolean;
   copernicus_wms_url: string | null;
   copernicus_true_color_layer: string;
   copernicus_ndvi_layer: string;
@@ -212,32 +187,7 @@ export interface EnvironmentalSourceSettings {
   auto_activate_alerts: boolean;
   firms_map_key_configured: boolean;
   copernicus_configured: boolean;
-  copernicus_provider: "process_api" | "wms" | "none";
-  copernicus_process_configured: boolean;
-  copernicus_wms_configured: boolean;
-  copernicus_system_default: boolean;
-  copernicus_effective_wms_url: string | null;
-  copernicus_last_test_at: string | null;
-  copernicus_last_test_ok: boolean | null;
-  copernicus_last_error: string | null;
-  copernicus_available_layers: string[];
   updated_at: string;
-}
-
-export interface CopernicusStatus {
-  enabled: boolean;
-  provider: "process_api" | "wms" | "none";
-  configured: boolean;
-  process_configured: boolean;
-  wms_configured: boolean;
-  system_default: boolean;
-  effective_wms_url: string | null;
-  supported_layers: string[];
-  collection: string;
-  last_test_at: string | null;
-  last_test_ok: boolean | null;
-  last_error: string | null;
-  available_layers: string[];
 }
 
 export interface RiskZone {
@@ -249,33 +199,6 @@ export interface RiskZone {
   radius_m: number;
   created_at: string;
   updated_at: string;
-}
-
-export interface TelemetryPipelineSettings {
-  org_id: string;
-  enabled: boolean;
-  auto_run: boolean;
-  interval_minutes: number;
-  stale_minutes: number;
-  refresh_firms: boolean;
-  evaluate_rules: boolean;
-  firms_configured: boolean;
-  updated_at: string;
-}
-
-export interface PipelineRun {
-  id: string;
-  status: "running" | "completed" | "partial" | "failed";
-  source: string;
-  started_at: string | null;
-  finished_at: string | null;
-  devices_total: number;
-  devices_updated: number;
-  readings_inserted: number;
-  detections_ingested: number;
-  alerts_created: number;
-  errors: Array<Record<string, unknown>>;
-  summary: Record<string, unknown>;
 }
 
 export interface AdminSummary {
@@ -418,64 +341,5 @@ export interface AdminNotification {
   actor_email: string | null;
   metadata: Record<string, unknown>;
   read: boolean;
-  created_at: string;
-}
-
-
-// --- Consola oculta del administrador general ---
-export interface PlatformSummary {
-  organizations_total: number;
-  organizations_active: number;
-  users_total: number;
-  users_active: number;
-  platform_admins: number;
-  pending_license_requests: number;
-  logins_24h: number;
-}
-
-export interface PlatformUser {
-  id: string;
-  org_id: string;
-  org_name: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  is_active: boolean;
-  organization_active: boolean;
-  auth_provider: "password" | "google";
-  email_verified: boolean;
-  must_change_password: boolean;
-  last_login_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PlatformOrganization {
-  id: string;
-  name: string;
-  slug: string;
-  vertical: string;
-  province: string;
-  municipality: string | null;
-  is_active: boolean;
-  users_total: number;
-  users_active: number;
-  plan_key: string | null;
-  plan_name: string | null;
-  subscription_status: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PlatformAudit {
-  id: string;
-  org_id: string | null;
-  org_name: string | null;
-  user_id: string | null;
-  actor_name: string | null;
-  action: string;
-  resource: string;
-  resource_id: string | null;
-  metadata: Record<string, unknown>;
   created_at: string;
 }

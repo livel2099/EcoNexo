@@ -89,14 +89,11 @@ def test_secure_production_configuration_passes_launch_guard() -> None:
         jwt_secret="a" * 64,
         internal_service_token="b" * 64,
         s3_secret_key="c" * 64,
-        s3_endpoint="https://s3.example.com",
-        s3_public_endpoint="https://s3.example.com",
+        s3_public_endpoint="https://files.econexo.com.ar",
         s3_server_side_encryption="AES256",
         public_app_url="https://app.econexo.com.ar",
         cors_origins="https://app.econexo.com.ar",
         forwarded_allow_ips="10.0.0.0/8",
-        platform_admin_emails="admin@econexo.com.ar",
-        sales_email="comercial@econexo.com.ar",
     )
     assert settings.insecure_production_values() == []
 
@@ -124,41 +121,3 @@ def test_copernicus_source_settings_reject_arbitrary_host() -> None:
             copernicus_enabled=True,
             copernicus_wms_url="https://example.com/wms/demo",
         )
-
-
-def test_render_core_configuration_can_disable_optional_adapters(monkeypatch) -> None:
-    monkeypatch.setenv("RENDER_SERVICE_ID", "srv-test")
-    settings = Settings(
-        environment="production",
-        database_url="postgresql://user:password@internal/econexo",
-        jwt_secret="a" * 64,
-        internal_service_token="b" * 64,
-        public_app_url="https://econexo.example.com",
-        cors_origins="https://econexo.example.com",
-        forwarded_allow_ips="*",
-        mqtt_enabled=False,
-        anomaly_enabled=False,
-        s3_enabled=False,
-        platform_admin_emails="admin@econexo.com.ar",
-        sales_email="comercial@econexo.com.ar",
-    )
-    assert settings.insecure_production_values() == []
-    assert settings.dsn.startswith("postgresql://")
-
-
-def test_render_placeholders_are_rejected(monkeypatch) -> None:
-    monkeypatch.setenv("RENDER_SERVICE_ID", "srv-test")
-    settings = Settings(
-        environment="production",
-        database_url="postgresql://USUARIO:CONTRASENA@HOST-INTERNO/econexo",
-        jwt_secret="REEMPLAZAR_CON_64_CARACTERES_ALEATORIOS",
-        internal_service_token="REEMPLAZAR_CON_OTRO_SECRET_MUY_LARGO",
-        public_app_url="https://econexo.example.com",
-        cors_origins="https://econexo.example.com",
-        forwarded_allow_ips="*",
-        s3_enabled=False,
-    )
-    findings = settings.insecure_production_values()
-    assert "DATABASE_URL" in findings
-    assert "JWT_SECRET" in findings
-    assert "INTERNAL_SERVICE_TOKEN" in findings

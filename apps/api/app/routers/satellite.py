@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-import hashlib
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -48,58 +47,32 @@ async def ingest(body: IngestIn) -> dict:
         if not inside_misiones:
             ignored_external += 1
             continue
-        dedup_source = f"{d.source}|{d.lat:.5f}|{d.lon:.5f}|{d.acquired_at.isoformat()}"
-        dedup_key = hashlib.sha256(dedup_source.encode("utf-8")).hexdigest()
-        inserted = await p.fetchrow(
+        await p.execute(
             """
             INSERT INTO satellite_detections
-                (org_id,source,location,brightness,confidence,frp,acquired_at,raw,dedup_key)
-            VALUES ($1,$2,ST_MakePoint($4,$3)::geography,$5,$6,$7,$8,$9::jsonb,$10)
-            ON CONFLICT (dedup_key) DO UPDATE SET
-              brightness=EXCLUDED.brightness, confidence=EXCLUDED.confidence,
-              frp=EXCLUDED.frp, raw=EXCLUDED.raw
-            RETURNING id, (xmax = 0) AS inserted
+                (org_id, source, location, brightness, confidence, frp, acquired_at, raw)
+            VALUES ($1,$2, ST_MakePoint($4,$3)::geography, $5,$6,$7,$8,$9::jsonb)
             """,
-            d.org_id,d.source,d.lat,d.lon,d.brightness,d.confidence,d.frp,
-            d.acquired_at,"{}",dedup_key,
+            d.org_id, d.source, d.lat, d.lon, d.brightness, d.confidence, d.frp,
+            d.acquired_at, "{}",
         )
-        if inserted is None:
-            continue
-        if inserted["inserted"]:
-            created += 1
+        created += 1
         # correlacion con zona de riesgo de incendio
-        zones = await p.fetch(
+        zone = await p.fetchrow(
             """
             SELECT org_id FROM risk_zones
-            WHERE kind IN ('incendio','general')
-              AND ($3::uuid IS NULL OR org_id=$3)
-              AND ST_Covers(area::geometry, ST_SetSRID(ST_MakePoint($2,$1),4326))
+            WHERE kind='incendio' AND ST_Contains(area::geometry, ST_SetSRID(ST_MakePoint($2,$1), 4326))
+            LIMIT 1
             """,
-            d.lat,d.lon,d.org_id,
+            d.lat, d.lon,
         )
-        if (d.confidence or 0) >= 0.6:
-            for zone in zones:
-                duplicate = await p.fetchval(
-                    """
-                    SELECT EXISTS(
-                      SELECT 1 FROM alerts
-                      WHERE org_id=$1 AND type='incendio'
-                        AND detected_at > now() - interval '6 hours'
-                        AND ST_DWithin(location,ST_MakePoint($3,$2)::geography,1500)
-                    )
-                    """,
-                    zone["org_id"],d.lat,d.lon,
-                )
-                if duplicate:
-                    continue
-                await create_alert(
-                    org_id=zone["org_id"],alert_type="incendio",
-                    severity="critica" if (d.confidence or 0) >= 0.85 else "alta",
-                    lat=d.lat,lon=d.lon,title="Foco de calor detectado por satelite",
-                    sensor_source=Source("satelite",d.lat,d.lon,d.confidence or 0.7),
-                    radius_m=5000,
-                )
-                alerts += 1
+        if zone and (d.confidence or 0) >= 0.6:
+            await create_alert(
+                org_id=zone["org_id"], alert_type="incendio", severity="alta",
+                lat=d.lat, lon=d.lon, title="Foco de calor detectado por satelite",
+                sensor_source=Source("satelite", d.lat, d.lon, d.confidence or 0.7),
+            )
+            alerts += 1
     return {"ingested": created, "alerts_triggered": alerts, "ignored_outside_misiones": ignored_external}
 
 

@@ -66,55 +66,37 @@ function isoAgo(minutes: number): string {
 }
 
 function initialDevices(): Device[] {
-  const base = (device: Omit<Device, "marker_shape" | "telemetry_mode" | "zone_id" | "zone_name" | "pipeline_enabled" | "telemetry_config" | "last_pipeline_at" | "last_pipeline_status" | "latest_readings">, index: number): Device => ({
-    ...device,
-    marker_shape: (["square", "triangle", "circle"] as const)[index % 3],
-    telemetry_mode: index < 4 ? "mqtt" : "manual",
-    zone_id: index < 3 ? "zone-incendio-demo" : "zone-general-demo",
-    zone_name: index < 3 ? "Anillo preventivo Mirador Este" : "Corredor Yabotí",
-    pipeline_enabled: true,
-    telemetry_config: { provider: index < 4 ? "mqtt" : "manual", demo: true },
-    last_pipeline_at: isoAgo(5 + index),
-    last_pipeline_status: device.status === "offline" ? "stale" : "ok",
-    latest_readings: {
-      temp: 25 + index * 3.4,
-      humidity: Math.max(18, 76 - index * 9),
-      soil_moisture: Math.max(12, 54 - index * 6),
-      wind_gust: 14 + index * 7,
-    },
-  });
-
   return [
-    base({
+    {
       id: "dev-norte", name: "Guardaparque Norte", external_id: "ESP32-FOR-001",
       lat: -26.789, lon: -54.469, status: "online", battery: 92, rssi: -61,
       tags: ["temperatura", "humo", "MQ-4"], last_seen: isoAgo(1),
-    }, 0),
-    base({
+    },
+    {
       id: "dev-arroyo", name: "Arroyo Verde", external_id: "ESP32-FOR-002",
       lat: -26.815, lon: -54.432, status: "online", battery: 78, rssi: -67,
       tags: ["humedad", "PM2.5"], last_seen: isoAgo(2),
-    }, 1),
-    base({
+    },
+    {
       id: "dev-mirador", name: "Mirador Este", external_id: "ESP32-FOR-003",
       lat: -26.837, lon: -54.401, status: "alerta", battery: 66, rssi: -73,
       tags: ["temperatura", "humo", "viento"], last_seen: isoAgo(1),
-    }, 2),
-    base({
-      id: "dev-reserva", name: "Reserva Yabotí", external_id: "ESP32-FOR-004",
+    },
+    {
+      id: "dev-reserva", name: "Reserva Yaboti", external_id: "ESP32-FOR-004",
       lat: -26.862, lon: -54.474, status: "online", battery: 84, rssi: -58,
       tags: ["temperatura", "humedad"], last_seen: isoAgo(3),
-    }, 3),
-    base({
+    },
+    {
       id: "dev-oeste", name: "Puesto Oeste", external_id: "ESP32-FOR-005",
       lat: -26.806, lon: -54.507, status: "offline", battery: 19, rssi: -91,
       tags: ["PM2.5", "MQ-4"], last_seen: isoAgo(49),
-    }, 4),
-    base({
+    },
+    {
       id: "dev-ruta", name: "Acceso Ruta 12", external_id: "ESP32-FOR-006",
       lat: -26.846, lon: -54.526, status: "online", battery: 73, rssi: -69,
       tags: ["temperatura", "humo"], last_seen: isoAgo(4),
-    }, 5),
+    },
   ];
 }
 
@@ -260,13 +242,12 @@ function initialSourceSettings(): EnvironmentalSourceSettings {
     air_quality_enabled: true,
     flood_enabled: true,
     firms_enabled: true,
-    copernicus_enabled: true,
-    copernicus_use_system_default: true,
+    copernicus_enabled: false,
     copernicus_wms_url: null,
     copernicus_true_color_layer: "TRUE_COLOR",
     copernicus_ndvi_layer: "NDVI",
-    copernicus_moisture_layer: "NDMI",
-    copernicus_burn_layer: "NBR",
+    copernicus_moisture_layer: "MOISTURE_INDEX",
+    copernicus_burn_layer: "NBR_RAW",
     forestry_pest_enabled: true,
     sinarame_radar_enabled: true,
     refresh_minutes: 10,
@@ -275,15 +256,6 @@ function initialSourceSettings(): EnvironmentalSourceSettings {
     auto_activate_alerts: false,
     firms_map_key_configured: false,
     copernicus_configured: false,
-    copernicus_provider: "none",
-    copernicus_process_configured: false,
-    copernicus_wms_configured: false,
-    copernicus_system_default: true,
-    copernicus_effective_wms_url: null,
-    copernicus_last_test_at: null,
-    copernicus_last_test_ok: null,
-    copernicus_last_error: null,
-    copernicus_available_layers: [],
     updated_at: new Date().toISOString(),
   };
 }

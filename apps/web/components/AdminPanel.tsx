@@ -14,12 +14,11 @@ import type {
 } from "../app/lib/types";
 import AdminNotificationsPanel from "./AdminNotificationsPanel";
 import SubscriptionPanel from "./SubscriptionPanel";
-import TelemetryAdminPanel from "./TelemetryAdminPanel";
 import { MISIONES_CENTER, MISIONES_MUNICIPALITIES, assertMisionesCoordinates, misionesLocationLabel, municipalityDepartment } from "../app/lib/misiones";
 
-type Tab = "overview" | "messages" | "subscription" | "users" | "zones" | "telemetry" | "organization" | "sources" | "launch" | "audit";
+type Tab = "overview" | "messages" | "subscription" | "users" | "zones" | "organization" | "sources" | "launch" | "audit";
 type BoundaryStatus = { province: string; available: boolean; official: boolean; boundaries: Array<{ source: string; is_official: boolean; fetched_at?: string | null; area_km2?: number | string }> };
-type CopernicusTestResult = { ok: boolean; provider: "process_api" | "wms" | "none"; configured: boolean; service_title: string | null; layers: string[]; detail: string };
+type CopernicusTestResult = { ok: boolean; service_title: string | null; layers: string[]; detail: string };
 type ZoneDraft = {
   name: string;
   kind: RiskZoneKind;
@@ -245,20 +244,15 @@ export default function AdminPanel({
   }
 
   async function testCopernicus() {
-    if (!settings) return;
-    const url = settings.copernicus_wms_url?.trim() || null;
-    if (!settings.copernicus_use_system_default && !url) {
-      setError("Para usar WMS propio cargá la URL de tu instancia Copernicus.");
+    if (!settings?.copernicus_wms_url) {
+      setError("Cargá la URL WMS de tu instancia de Copernicus Data Space.");
       return;
     }
     setBusy(true); setError(""); setCopernicusTest(null);
     try {
-      const result = await apiPost<CopernicusTestResult>("/copernicus/test", token, {
-        provider: settings.copernicus_use_system_default ? "auto" : "wms",
-        url,
-      });
+      const result = await apiPost<CopernicusTestResult>("/admin/copernicus/test", token, { url: settings.copernicus_wms_url });
       setCopernicusTest(result);
-      if (result.ok) message(`Copernicus ${result.provider === "process_api" ? "Process API" : "WMS"} respondió correctamente.`);
+      if (result.ok) message(`Copernicus respondió correctamente: ${result.layers.length} capas detectadas.`);
       else setError(result.detail);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo probar Copernicus");
@@ -271,31 +265,7 @@ export default function AdminPanel({
     try { assertMisionesCoordinates(settings.default_latitude, settings.default_longitude); } catch (cause) { setError(cause instanceof Error ? cause.message : "El centro de monitoreo debe estar en Misiones."); return; }
     setBusy(true); setError("");
     try {
-      const {
-        org_id: _orgId,
-        firms_map_key_configured: _key,
-        copernicus_configured: _copernicus,
-        copernicus_provider: _provider,
-        copernicus_process_configured: _processConfigured,
-        copernicus_wms_configured: _wmsConfigured,
-        copernicus_system_default: _systemDefault,
-        copernicus_effective_wms_url: _effectiveWms,
-        copernicus_last_test_at: _lastTestAt,
-        copernicus_last_test_ok: _lastTestOk,
-        copernicus_last_error: _lastError,
-        copernicus_available_layers: _availableLayers,
-        updated_at: _updated,
-        ...rawPayload
-      } = settings;
-      const copernicusUrl = rawPayload.copernicus_wms_url?.trim() || null;
-      const payload = {
-        ...rawPayload,
-        copernicus_wms_url: copernicusUrl,
-        copernicus_true_color_layer: rawPayload.copernicus_true_color_layer.trim() || "TRUE_COLOR",
-        copernicus_ndvi_layer: rawPayload.copernicus_ndvi_layer.trim() || "NDVI",
-        copernicus_moisture_layer: rawPayload.copernicus_moisture_layer.trim() || "NDMI",
-        copernicus_burn_layer: rawPayload.copernicus_burn_layer.trim() || "NBR",
-      };
+      const { org_id: _orgId, firms_map_key_configured: _key, copernicus_configured: _copernicus, updated_at: _updated, ...payload } = settings;
       const value = await apiPatch<EnvironmentalSourceSettings>("/admin/source-settings", token, payload);
       setSettings(value); onSourceSettingsUpdate?.(value); await load(); message("Política de fuentes y alertas actualizada.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo guardar la configuración"); }
@@ -304,7 +274,7 @@ export default function AdminPanel({
 
   const tabs: Array<[Tab, string]> = [
     ["overview", "Control"], ["messages", `Mensajes${unreadNotifications ? ` (${unreadNotifications})` : ""}`],
-    ["subscription", "Suscripción"], ["users", "Usuarios"], ["zones", "Geocercas"], ["telemetry", "Telemetría"], ["organization", "Organización"],
+    ["subscription", "Suscripción"], ["users", "Usuarios"], ["zones", "Geocercas"], ["organization", "Organización"],
     ["sources", "Fuentes SpaceAI"], ["launch", "Lanzamiento"], ["audit", "Auditoría"],
   ];
 
@@ -365,8 +335,6 @@ export default function AdminPanel({
         </article>
       </section>}
 
-      {tab === "telemetry" && <TelemetryAdminPanel token={token} zones={zones} onChanged={() => void load()} />}
-
       {tab === "zones" && <section className="admin-zone-layout">
         <form className="admin-form-card admin-zone-form" onSubmit={saveZone}>
           <div className="panel-heading"><span>01</span><div><h3>{editingZoneId ? "Editar geocerca" : "Nueva geocerca"}</h3><p>Círculo geoespacial persistido en PostGIS para filtrar reglas, incidentes y reportes.</p></div></div>
@@ -421,23 +389,21 @@ export default function AdminPanel({
           <SourceToggle label="Copernicus CAMS" detail="PM2.5, AQI, gases, aerosoles e índice UV" checked={settings.air_quality_enabled} onChange={(value) => setSettings({ ...settings, air_quality_enabled: value })} />
           <SourceToggle label="GloFAS / Flood" detail="caudal modelado y tendencia hidrológica" checked={settings.flood_enabled} onChange={(value) => setSettings({ ...settings, flood_enabled: value })} />
           <SourceToggle label="NASA FIRMS" detail={`focos térmicos · MAP_KEY ${settings.firms_map_key_configured ? "configurada" : "pendiente / sin datos reales"}`} checked={settings.firms_enabled} onChange={(value) => setSettings({ ...settings, firms_enabled: value })} />
-          <SourceToggle label="Copernicus Sentinel-2" detail={settings.copernicus_configured ? `${settings.copernicus_provider === "process_api" ? "Process API" : "WMS"} configurado` : "predeterminado; faltan credenciales OAuth o INSTANCE_ID"} checked={settings.copernicus_enabled} onChange={(value) => setSettings({ ...settings, copernicus_enabled: value })} />
+          <SourceToggle label="Copernicus Sentinel-2 WMS" detail={settings.copernicus_configured ? "instancia propia configurada" : "requiere INSTANCE_ID de Copernicus Data Space"} checked={settings.copernicus_enabled} onChange={(value) => setSettings({ ...settings, copernicus_enabled: value })} />
           <SourceToggle label="Sanidad forestal" detail="módulo preventivo para recorridas, trampas y reportes fitosanitarios" checked={settings.forestry_pest_enabled} onChange={(value) => setSettings({ ...settings, forestry_pest_enabled: value })} />
           <SourceToggle label="Radar SINARAME" detail="contexto meteorológico regional; no identifica especies de plagas" checked={settings.sinarame_radar_enabled} onChange={(value) => setSettings({ ...settings, sinarame_radar_enabled: value })} />
         </div>
         <section className="copernicus-config-card">
-          <div><span className="eyebrow">COPERNICUS PREDETERMINADO · SENTINEL-2 L2A</span><h3>Imágenes e índices satelitales</h3><p>EcoNexo usa Process API por defecto cuando las credenciales OAuth están cargadas en Render. La alternativa WMS queda disponible para organizaciones con INSTANCE_ID propio.</p></div>
-          <div className="source-warning"><strong>Proveedor efectivo: {settings.copernicus_provider === "process_api" ? "Process API" : settings.copernicus_provider === "wms" ? "WMS" : "pendiente"}</strong><span>{settings.copernicus_configured ? "Disponible para Color natural, NDVI, NDMI de humedad y NBR de quema." : "Cargá COPERNICUS_CLIENT_ID y COPERNICUS_CLIENT_SECRET en la API de Render, o desactivá el valor predeterminado y usá WMS propio."}</span></div>
-          <SourceToggle label="Usar Copernicus predeterminado del sistema" detail="recomendado: OAuth y Process API administrados por el backend; los secretos nunca llegan al navegador" checked={settings.copernicus_use_system_default} onChange={(value) => { setCopernicusTest(null); setSettings({ ...settings, copernicus_use_system_default: value }); }} />
-          <label>URL WMS propia (opcional)<input type="url" disabled={settings.copernicus_use_system_default} placeholder="https://sh.dataspace.copernicus.eu/ogc/wms/INSTANCE_ID" value={settings.copernicus_wms_url || ""} onChange={(event) => { setCopernicusTest(null); setSettings({ ...settings, copernicus_wms_url: event.target.value || null }); }} /></label>
+          <div><span className="eyebrow">SENTINEL HUB · CONFIGURACIÓN EN TIEMPO DE EJECUCIÓN</span><h3>Capas Copernicus del mapa</h3><p>Creá una configuración en Copernicus Data Space y pegá la URL completa. No hace falta recompilar el frontend después de guardarla.</p></div>
+          <label>URL WMS de la instancia<input type="url" placeholder="https://sh.dataspace.copernicus.eu/ogc/wms/INSTANCE_ID" value={settings.copernicus_wms_url || ""} onChange={(event) => { setCopernicusTest(null); setSettings({ ...settings, copernicus_wms_url: event.target.value || null }); }} /></label>
           <div className="form-four copernicus-layers">
-            <label>Color natural<input disabled={settings.copernicus_use_system_default} value={settings.copernicus_true_color_layer} onChange={(event) => setSettings({ ...settings, copernicus_true_color_layer: event.target.value })} /></label>
-            <label>Vegetación NDVI<input disabled={settings.copernicus_use_system_default} value={settings.copernicus_ndvi_layer} onChange={(event) => setSettings({ ...settings, copernicus_ndvi_layer: event.target.value })} /></label>
-            <label>Humedad NDMI<input disabled={settings.copernicus_use_system_default} value={settings.copernicus_moisture_layer} onChange={(event) => setSettings({ ...settings, copernicus_moisture_layer: event.target.value })} /></label>
-            <label>Quema NBR<input disabled={settings.copernicus_use_system_default} value={settings.copernicus_burn_layer} onChange={(event) => setSettings({ ...settings, copernicus_burn_layer: event.target.value })} /></label>
+            <label>Color natural<input value={settings.copernicus_true_color_layer} onChange={(event) => setSettings({ ...settings, copernicus_true_color_layer: event.target.value })} /></label>
+            <label>Vegetación NDVI<input value={settings.copernicus_ndvi_layer} onChange={(event) => setSettings({ ...settings, copernicus_ndvi_layer: event.target.value })} /></label>
+            <label>Humedad<input value={settings.copernicus_moisture_layer} onChange={(event) => setSettings({ ...settings, copernicus_moisture_layer: event.target.value })} /></label>
+            <label>Área quemada<input value={settings.copernicus_burn_layer} onChange={(event) => setSettings({ ...settings, copernicus_burn_layer: event.target.value })} /></label>
           </div>
-          <div className="copernicus-test-row"><button type="button" disabled={busy || (!settings.copernicus_use_system_default && !settings.copernicus_wms_url)} onClick={() => void testCopernicus()}>Probar Copernicus</button><span className={copernicusTest?.ok ? "ok" : copernicusTest ? "bad" : ""}>{copernicusTest?.detail || settings.copernicus_last_error || "La prueba usa una imagen pequeña de Misiones o GetCapabilities, según el proveedor efectivo."}</span></div>
-          {copernicusTest?.ok && copernicusTest.layers.length > 0 && <div className="copernicus-layer-results"><strong>Capas disponibles</strong><div>{copernicusTest.layers.slice(0, 24).map((layer) => <code key={layer}>{layer}</code>)}</div></div>}
+          <div className="copernicus-test-row"><button type="button" disabled={busy || !settings.copernicus_wms_url} onClick={() => void testCopernicus()}>Probar GetCapabilities</button><span className={copernicusTest?.ok ? "ok" : copernicusTest ? "bad" : ""}>{copernicusTest?.detail || "La prueba confirma conexión y muestra los nombres reales de las capas."}</span></div>
+          {copernicusTest?.ok && copernicusTest.layers.length > 0 && <div className="copernicus-layer-results"><strong>Capas informadas</strong><div>{copernicusTest.layers.slice(0, 24).map((layer) => <code key={layer}>{layer}</code>)}</div></div>}
         </section>
         <div className="form-three"><label>Latitud base<input type="number" step="0.00001" min={-90} max={90} value={settings.default_latitude} onChange={(event) => setSettings({ ...settings, default_latitude: Number(event.target.value) })} /></label><label>Longitud base<input type="number" step="0.00001" min={-180} max={180} value={settings.default_longitude} onChange={(event) => setSettings({ ...settings, default_longitude: Number(event.target.value) })} /></label><label>Refresco (min)<input type="number" min={2} max={180} value={settings.refresh_minutes} onChange={(event) => setSettings({ ...settings, refresh_minutes: Number(event.target.value) })} /></label></div>
         <div className="form-three"><label>Radio FIRMS (km)<input type="number" min={1} max={500} value={settings.fire_radius_km} onChange={(event) => setSettings({ ...settings, fire_radius_km: Number(event.target.value) })} /></label><label>Nivel mínimo para alertar<select value={settings.operational_alert_min_level} onChange={(event) => setSettings({ ...settings, operational_alert_min_level: event.target.value as EnvironmentalSourceSettings["operational_alert_min_level"] })}>{LEVELS.map((level) => <option key={level}>{level}</option>)}</select></label><label className="toggle-field"><span>Autoactivar alertas</span><button type="button" className={`switch ${settings.auto_activate_alerts ? "on" : ""}`} onClick={() => setSettings({ ...settings, auto_activate_alerts: !settings.auto_activate_alerts })}><i /></button></label></div>
@@ -453,7 +419,7 @@ export default function AdminPanel({
             <LaunchCheck ok={Boolean(boundaryStatus?.official)} title="Límite oficial GeoRef" detail={boundaryStatus?.official ? `Sincronizado · ${boundaryStatus.boundaries[0]?.source || "GeoRef Argentina"}` : "Pendiente: usar el botón de sincronización antes del lanzamiento"} />
             <LaunchCheck ok={Boolean(settings && settings.default_latitude && settings.default_longitude)} title="Centro de monitoreo" detail={settings ? misionesLocationLabel(settings.default_latitude, settings.default_longitude) : "sin configuración"} />
             <LaunchCheck ok={Boolean(settings?.firms_map_key_configured)} title="NASA FIRMS productivo" detail={settings?.firms_map_key_configured ? "MAP_KEY configurada" : "pendiente: no publicar focos demo como reales"} />
-            <LaunchCheck ok={Boolean(settings?.copernicus_enabled && settings?.copernicus_configured)} title="Copernicus Sentinel-2" detail={settings?.copernicus_configured ? `${settings.copernicus_provider === "process_api" ? "Process API" : "WMS"} operativo` : "pendiente: credenciales OAuth en Render o INSTANCE_ID WMS"} />
+            <LaunchCheck ok={Boolean(settings?.copernicus_enabled && settings?.copernicus_configured)} title="Copernicus Sentinel-2" detail={settings?.copernicus_configured ? "instancia WMS propia configurada" : "pendiente: cargar INSTANCE_ID y probar GetCapabilities"} />
             <LaunchCheck ok={Boolean(settings?.forestry_pest_enabled)} title="Sanidad forestal norte" detail={settings?.sinarame_radar_enabled ? "San Antonio + contexto de radar Bernardo de Irigoyen" : "módulo activo sin contexto SINARAME"} />
             <LaunchCheck ok={Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID)} title="Ingreso con Google" detail={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? "OAuth visible" : "opcional, sin configurar"} />
             <LaunchCheck ok={Boolean(process.env.NEXT_PUBLIC_LEGAL_EMAIL)} title="Canal legal y privacidad" detail={process.env.NEXT_PUBLIC_LEGAL_EMAIL || "NEXT_PUBLIC_LEGAL_EMAIL pendiente"} />

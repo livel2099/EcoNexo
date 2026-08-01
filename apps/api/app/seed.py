@@ -94,9 +94,10 @@ async def _seed_org(
 
     kind = "incendio" if vertical == "forestal" else ("hidrica" if vertical == "energetica" else "general")
     await conn.execute(
-        "INSERT INTO risk_zones (org_id, name, kind, area) VALUES "
-        "($1,$2,$3, ST_MakePolygon(ST_GeomFromText($4, 4326))::geography)",
-        org_id, f"Zona prioritaria Misiones · {name}", kind, _square_wkt(lat, lon, 0.06),
+        "INSERT INTO risk_zones (org_id, name, kind, area, center, radius_m) VALUES "
+        "($1,$2,$3, ST_MakePolygon(ST_GeomFromText($4, 4326))::geography, "
+        "ST_Centroid(ST_MakePolygon(ST_GeomFromText($4, 4326)))::geography, $5)",
+        org_id, f"Zona prioritaria Misiones · {name}", kind, _square_wkt(lat, lon, 0.06), 5000.0,
     )
 
     n = NODES_PER_ORG[vertical]
@@ -104,6 +105,16 @@ async def _seed_org(
     for i in range(n):
         dlat = lat + random.uniform(-0.05, 0.05)
         dlon = lon + random.uniform(-0.05, 0.05)
+        # Mantener los nodos demo dentro del límite provincial: si el punto cae
+        # fuera de Misiones, se regenera con un desvío cada vez menor hasta entrar.
+        for _attempt in range(20):
+            if await conn.fetchval(
+                "SELECT econexo_inside_misiones(ST_MakePoint($1,$2)::geography)", dlon, dlat
+            ):
+                break
+            jitter = 0.03 / (_attempt + 1)
+            dlat = lat + random.uniform(-jitter, jitter)
+            dlon = lon + random.uniform(-jitter, jitter)
         did = await conn.fetchval(
             "INSERT INTO devices (org_id, device_type_id, name, external_id, location, "
             "status, battery, rssi, tags, mqtt_username, mqtt_password_hash, last_seen) "

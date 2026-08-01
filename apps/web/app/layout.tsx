@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import CookieConsent from "../components/CookieConsent";
 
 export const metadata: Metadata = {
   title: { default: "EcoNexo — Inteligencia bioclimática activa", template: "%s · EcoNexo" },
@@ -28,7 +29,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://basemaps.cartocdn.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossOrigin="anonymous" />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <CookieConsent />
+      </body>
     </html>
   );
 }

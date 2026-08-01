@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .. import db
 from ..deps import CurrentUser, require_role
@@ -75,15 +75,11 @@ async def unread_count(user: CurrentUser = Depends(require_role("admin"))) -> di
     return {"unread": int(value or 0)}
 
 
-@router.post(
-    "/{notification_id}/read",
-    status_code=204,
-    response_class=Response,
-)
+@router.post("/{notification_id}/read", status_code=204)
 async def mark_read(
     notification_id: UUID,
     user: CurrentUser = Depends(require_role("admin")),
-) -> Response:
+):
     allowed = await db.pool().fetchval(
         """
         SELECT EXISTS(
@@ -107,17 +103,10 @@ async def mark_read(
         notification_id,
         user.id,
     )
-    return Response(status_code=204)
 
 
-@router.post(
-    "/read-all",
-    status_code=204,
-    response_class=Response,
-)
-async def mark_all_read(
-    user: CurrentUser = Depends(require_role("admin")),
-) -> Response:
+@router.post("/read-all", status_code=204)
+async def mark_all_read(user: CurrentUser = Depends(require_role("admin"))):
     await db.pool().execute(
         """
         INSERT INTO admin_notification_reads (notification_id,user_id)
@@ -130,4 +119,3 @@ async def mark_all_read(
         user.org_id,
         user.platform_admin,
     )
-    return Response(status_code=204)

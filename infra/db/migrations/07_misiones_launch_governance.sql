@@ -1,15 +1,13 @@
 -- EcoNexo Misiones - gobernanza territorial para release candidate.
 -- Idempotente. Completa controles que no estaban cubiertos por la migración 06.
 
-BEGIN;
-
 DO $block$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='satellite_inside_misiones_check') THEN
     ALTER TABLE satellite_detections ADD CONSTRAINT satellite_inside_misiones_check
       CHECK (econexo_inside_misiones(location)) NOT VALID;
   END IF;
-END;
+END
 $block$;
 
 CREATE OR REPLACE VIEW misiones_external_data_audit AS
@@ -26,5 +24,3 @@ SELECT 'environmental_snapshots', count(*)::bigint FROM environmental_snapshots 
 
 COMMENT ON VIEW misiones_external_data_audit IS
   'Auditoría de registros históricos fuera del alcance Misiones. Debe devolver cero para lanzamiento.';
-
-COMMIT;
