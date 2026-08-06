@@ -9,10 +9,10 @@ export default function CircuitBackdrop({ dense = false }: { dense?: boolean }) 
       <svg viewBox="0 0 1600 900" preserveAspectRatio="none">
         <defs>
           <linearGradient id={strokeId} x1="0" x2="1">
-            <stop stopColor="#33daff" stopOpacity="0" />
-            <stop offset=".45" stopColor="#33daff" stopOpacity=".5" />
-            <stop offset=".72" stopColor="#8ff06a" stopOpacity=".65" />
-            <stop offset="1" stopColor="#8ff06a" stopOpacity="0" />
+            <stop stopColor="var(--cyan)" stopOpacity="0" />
+            <stop offset=".45" stopColor="var(--cyan)" stopOpacity=".5" />
+            <stop offset=".72" stopColor="var(--green-bright)" stopOpacity=".65" />
+            <stop offset="1" stopColor="var(--green-bright)" stopOpacity="0" />
           </linearGradient>
           <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="3" result="b" />
@@ -28,10 +28,10 @@ export default function CircuitBackdrop({ dense = false }: { dense?: boolean }) 
           <path pathLength="1" d="M1040 900V730l-72-72V510l90-90V255l-64-64V0" />
           <path pathLength="1" d="M0 430h330l45-45h180l62 62h340l48-48h375l80 80h220" />
         </g>
-        <g className="circuit-packets" fill="#8ff06a" filter={`url(#${glowId})`}>
+        <g className="circuit-packets" fill="var(--green-bright)" filter={`url(#${glowId})`}>
           <circle r="3"><animateMotion dur="9s" repeatCount="indefinite" path="M-80 160H250l55 55h260l80-80h290l75 75h520" /></circle>
           <circle r="2.6"><animateMotion dur="11s" begin="-4s" repeatCount="indefinite" path="M40 725h290l80-80h245l74 74h235l105-105h590" /></circle>
-          <circle r="2.5" fill="#33daff"><animateMotion dur="12s" begin="-7s" repeatCount="indefinite" path="M0 430h330l45-45h180l62 62h340l48-48h375l80 80h220" /></circle>
+          <circle r="2.5" fill="var(--cyan)"><animateMotion dur="12s" begin="-7s" repeatCount="indefinite" path="M0 430h330l45-45h180l62 62h340l48-48h375l80 80h220" /></circle>
         </g>
         <g className="circuit-junctions">
           {[

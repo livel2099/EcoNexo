@@ -286,8 +286,8 @@ export default function ObservatoryPanel({ token, devices, detections, commandIn
           <div className="hti-copy">
             <span>MODELO COMPUESTO</span>
             <h3>{selectedAssessment?.overallLabel || "Esperando datos"}</h3>
-            <p>Excedencia, persistencia, confiabilidad y co-exposición se integran en una lectura operacional. Las categorías R0-R5 siguen la matriz SpaceAI del documento técnico.</p>
-            <div className="hti-meta"><span>fuentes <b>{sourceHealth(activeIntel)}%</b></span><span>focos {sourceSettings.fire_radius_km} km <b>{selectedAssessment?.hotspots.count48h ?? 0}</b></span><span>método <b>0.2</b></span></div>
+            <p>Excedencia, persistencia, confiabilidad y co-exposición se integran en una lectura operacional. Un dominio crítico genera su propia alerta, pero no fuerza por sí solo el HTI general.</p>
+            <div className="hti-meta"><span>fuentes <b>{sourceHealth(activeIntel)}%</b></span><span>focos {sourceSettings.fire_radius_km} km <b>{selectedAssessment?.hotspots.count48h ?? 0}</b></span><span>método <b>0.3</b></span></div>
           </div>
         </div>
         <NeuralCircuit assessment={selectedAssessment} />

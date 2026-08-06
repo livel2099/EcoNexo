@@ -8,7 +8,7 @@ import type {
   ThreatDomainId,
 } from "./types";
 
-export const SPACEAI_METHODOLOGY_VERSION = "SpaceAI 1.0 · Matriz técnica 2026-06-03 · EcoNexo HTI 0.2";
+export const SPACEAI_METHODOLOGY_VERSION = "SpaceAI 1.0 · Matriz técnica 2026-06-03 · EcoNexo HTI 0.3";
 
 const LEVEL_LABELS: Record<SpaceAILevel, string> = {
   R0: "Basal",
@@ -659,13 +659,10 @@ export function buildSpaceAIThreatAssessment(
   };
   const weighted = indices.reduce((total, index) => total + weights[index.id] * index.score * index.persistence * index.confidence, 0)
     / indices.reduce((total, index) => total + weights[index.id], 0);
-  let overallScore = clamp(weighted, 0, 100);
-  let overallLevel = levelFromScore(overallScore);
-  const maxLevel = indices.reduce((current, index) => levelMax(current, index.level), "R0" as SpaceAILevel);
-  if (maxLevel === "R5") overallLevel = "R5";
-  else if (maxLevel === "R4") overallLevel = levelAtLeast(overallLevel, "R4");
-  else if (indices.filter((index) => index.level === "R3").length >= 2) overallLevel = levelAtLeast(overallLevel, "R3");
-  overallScore = Math.max(overallScore, LEVEL_FLOOR[overallLevel]);
+  // The global HTI represents weighted co-exposure. A critical domain keeps its
+  // own alert, but must not pin the aggregate to the exact R4 floor (75).
+  const overallScore = clamp(weighted, 0, 100);
+  const overallLevel = levelFromScore(overallScore);
   const alerts = buildAlerts(indices);
   const pm25Average = average(beforeCurrent(intel.series.pm25, intel.series.currentAirIndex, 24)) ?? intel.atmosphere.pm25;
   const precipitation24 = sum(beforeCurrent(intel.series.precipitation, intel.series.currentWeatherIndex, 24));

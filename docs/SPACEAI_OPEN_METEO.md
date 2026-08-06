@@ -1,7 +1,7 @@
 # Observatorio SpaceAI: telemetría IoT + Open-Meteo + CAMS + GloFAS + FIRMS
 
-Versión de implementación: **SpaceAI 1.0 · Matriz técnica 2026-06-03 · EcoNexo HTI 0.2**  
-Última actualización: **24 de julio de 2026**
+Versión de implementación: **SpaceAI 1.0 · Matriz técnica 2026-06-03 · EcoNexo HTI 0.3**
+Última actualización: **5 de agosto de 2026**
 
 ## 1. Propósito
 
@@ -192,10 +192,10 @@ AQI, UV, calor, caudal, IDLH y otros indicadores no lineales usan sus categoría
 
 ## 6. Health Threat Index (HTI)
 
-Cada dominio produce:
+Cada dominio produce un score de severidad; la persistencia y la confiabilidad se integran después en el compuesto:
 
 ```text
-Score_i = severidad_i × persistencia_i × confiabilidad_i
+Score_i = severidad ambiental normalizada (0-100)
 ```
 
 La implementación agrega pesos por dominio y co-exposición:
@@ -217,6 +217,8 @@ Pesos actuales:
 | UV | 0,07 |
 
 Estos pesos son parámetros de producto, no coeficientes clínicos validados. Deben calibrarse con incidentes reales y análisis retrospectivo.
+
+Desde HTI 0.3, el nivel general se deriva exclusivamente del resultado compuesto. Un dominio R4/R5 conserva su alerta crítica específica, pero ya no fija por sí solo el HTI global en el piso exacto de 75; esto evita que, por ejemplo, radiación UV alta convierta automáticamente toda la situación ambiental en crítica.
 
 ## 7. Persistencia, caché y resiliencia
 
