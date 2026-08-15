@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from .. import db
 from ..deps import CurrentUser, current_user, require_role
 from ..schemas import RuleIn, RuleOut
-from ..subscriptions import enforce_resource_limit
 
 router = APIRouter(prefix="/rules", tags=["rules"])
 
@@ -37,7 +36,6 @@ async def list_rules(user: CurrentUser = Depends(current_user)) -> list[RuleOut]
 async def create_rule(
     body: RuleIn, user: CurrentUser = Depends(require_role("admin", "operador"))
 ) -> RuleOut:
-    await enforce_resource_limit(user.org_id, "max_rules")
     row = await db.pool().fetchrow(
         """
         INSERT INTO rules (org_id, name, alert_type, conditions, condition_logic,

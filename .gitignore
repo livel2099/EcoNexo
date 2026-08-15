@@ -1,15 +1,9 @@
 # Secrets
 .env
-.env.*
-**/.env
-**/.env.*
+*.env
 !.env.example
-!.env.production.example
-!.env.render.example
-!.env.web.render.example
+**/.env
 !**/.env.example
-!**/.env.production.example
-!**/.env.render.example
 
 # Python
 __pycache__/
@@ -24,8 +18,6 @@ venv/
 # Node
 node_modules/
 .next/
-.wrangler/
-out/
 dist/
 build/
 npm-debug.log*
@@ -50,5 +42,5 @@ models/*.pt
 .vscode/
 *.swp
 
-# Local assistants
+# Claude local settings
 .claude/settings.local.json

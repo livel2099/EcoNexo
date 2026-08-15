@@ -29,7 +29,7 @@ async def kpis(user: CurrentUser = Depends(current_user)) -> KpiOut:
             WHERE device_id = a.device_id AND ts <= a.detected_at
             ORDER BY ts DESC LIMIT 1
         ) r ON true
-        WHERE a.org_id=$1 AND a.device_id IS NOT NULL AND econexo_inside_misiones(a.location)
+        WHERE a.org_id=$1 AND a.device_id IS NOT NULL
           AND a.detected_at > now() - interval '7 days'
         """,
         user.org_id,
@@ -41,7 +41,7 @@ async def kpis(user: CurrentUser = Depends(current_user)) -> KpiOut:
         SELECT
           count(*) FILTER (WHERE status='confirmada') AS ok,
           count(*) FILTER (WHERE status IN ('confirmada','descartada')) AS total
-        FROM alerts WHERE org_id=$1 AND econexo_inside_misiones(location)
+        FROM alerts WHERE org_id=$1
         """,
         user.org_id,
     )
@@ -53,7 +53,7 @@ async def kpis(user: CurrentUser = Depends(current_user)) -> KpiOut:
         SELECT
           count(*) FILTER (WHERE status='verificado') AS ok,
           count(*) FILTER (WHERE status IN ('verificado','rechazado')) AS total
-        FROM citizen_reports WHERE org_id=$1 AND econexo_inside_misiones(location)
+        FROM citizen_reports WHERE org_id=$1
         """,
         user.org_id,
     )
@@ -63,7 +63,7 @@ async def kpis(user: CurrentUser = Depends(current_user)) -> KpiOut:
     avg_resp = await p.fetchval(
         """
         SELECT AVG(EXTRACT(EPOCH FROM (acknowledged_at - detected_at)))
-        FROM alerts WHERE org_id=$1 AND econexo_inside_misiones(location) AND acknowledged_at IS NOT NULL
+        FROM alerts WHERE org_id=$1 AND acknowledged_at IS NOT NULL
           AND detected_at > now() - interval '30 days'
         """,
         user.org_id,
@@ -77,7 +77,7 @@ async def kpis(user: CurrentUser = Depends(current_user)) -> KpiOut:
           count(*) FILTER (WHERE status IN ('nueva','escalada','asignada')) AS active,
           count(*) FILTER (WHERE status IN ('nueva','escalada') AND severity='critica') AS crit,
           count(*) FILTER (WHERE status IN ('nueva','escalada') AND severity IN ('alta','media')) AS att
-        FROM alerts WHERE org_id=$1 AND econexo_inside_misiones(location)
+        FROM alerts WHERE org_id=$1
         """,
         user.org_id,
     )

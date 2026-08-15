@@ -1,9 +1,8 @@
-# Desarrollo local: usa el stage `dev`, hot reload y dependencias aisladas.
+# Override de desarrollo: hot-reload de la web sin rebuild.
+# Monta el codigo fuente y preserva node_modules del contenedor.
+# WATCHPACK_POLLING=true -> necesario para detectar cambios en bind mounts Windows.
 services:
   web:
-    build:
-      target: dev
-    command: npm run dev
     volumes:
       - ./apps/web:/app
       - /app/node_modules

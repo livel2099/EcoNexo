@@ -1,235 +1,153 @@
-> EcoNexo 1.0.0-rc.6.2 — Copernicus Process API predeterminado y auditoría integral
+# EcoNexo — MVP
 
-# EcoNexo
+**Inteligencia bioclimatica activa. Un sistema de decision en tiempo real que reduce el impacto ambiental antes de que ocurra.**
 
-**Plataforma de inteligencia ambiental para detectar, correlacionar y documentar incidentes antes de que escalen.**
+> "El mercado ambiental no falla por falta de datos. Falla por falta de decision en tiempo real."
 
-EcoNexo combina sensores IoT, observación satelital, meteorología, reportes ciudadanos y reglas operativas para producir alertas priorizadas, trazabilidad e informes institucionales. Esta edición fue preparada como **candidato de lanzamiento técnico 1.0.0-rc.6.2 para la provincia de Misiones**. La arquitectura y los flujos principales están implementados y territorialmente restringidos; la publicación oficial todavía exige completar identidad societaria, revisión jurídica, infraestructura pública, credenciales productivas y la puerta de aceptación indicada en la documentación.
+EcoNexo convierte flujos masivos de datos (sensores IoT + satelite + reportes ciudadanos) en **alertas automatizadas, prioritarias y accionables**. Cada pantalla responde: *¿que esta pasando AHORA y que accion tomo?*
 
-## Deploy en Render
-
-La API incluye Blueprint, migraciones versionadas y plantilla de variables:
-
-- `render.yaml` — Blueprint beta con PostgreSQL, API y frontend estático.
-- `render.production.yaml` — Blueprint pago con migraciones Pre-Deploy.
-- `.env.render.example` — variables de la API.
-- `.env.web.render.example` — variables del Static Site.
-- `RENDER_DEPLOY.md` — guía paso a paso.
-
-
-## Qué incorpora esta edición
-
-- **Login y registro completo por email y contraseña**; el primer usuario crea la organización y queda como administrador.
-- Google Identity Services permanece como proveedor opcional cuando se configura `GOOGLE_CLIENT_ID`.
-- Centro de comando multiorganización, dispositivos, alertas, reglas, KPI, mapa y feed en tiempo real, limitado a los 17 departamentos y 79 municipios de Misiones.
-- **Alerta IA / Observatorio SpaceAI** con telemetría por dispositivo, contexto Open-Meteo/CAMS/GloFAS, focos NASA FIRMS, gemelo digital, mensajes revisables y Health Threat Index R0-R5.
-- **Copernicus Sentinel-2 predeterminado mediante Process API server-side**: color natural, NDVI, NDMI de humedad y NBR de quema; OAuth privado en la API y WMS por organización como fallback compatible.
-- Módulo licenciable **Focos de incendio forestal y humo**, con lenguaje claro, mapa base nítido, evidencia satelital diferenciada de confirmación oficial y registro de comunicaciones.
-- **Admin Core / ABM** para usuarios, roles, organización, geocercas PostGIS, fuentes ambientales, dispositivos, reglas y auditoría.
-- **Pipeline operativo rc.6** configurable desde Admin Core: nodos MQTT, manuales u Open-Meteo; marcadores círculo/cuadro/triángulo; ejecución desde Command Core; persistencia de lecturas; reglas; FIRMS; alertas; WebSocket e historial de corridas.
-- Bandeja **Mensajes**: cada login correcto por email o Google notifica a los administradores con contexto de acceso e IP anonimizada.
-- Suscripciones limitadas por organización: sandbox, diagnóstico, piloto, municipal, provincia/pro, enterprise y academia; solicitud, aprobación comercial, vencimiento, consumo y módulos habilitados.
-- Canal ciudadano con formulario completo, consentimiento, geolocalización bajo demanda, carga de fotografías, token firmado, límites de uso, validación de imágenes y moderación.
-- Módulo **Informes para organizaciones y PO** con reportes operativos y ambientales extensos, fórmulas, cálculos por dominio, observaciones, fuentes, limitaciones, snapshot SpaceAI, impresión/PDF, CSV, resumen para email y enlace público revocable.
-- Cliente móvil nativo en **Expo + React Native** para Android/iOS con Inicio, Fuego y Humo, Alerta IA, reportes con foto/ubicación y cuenta.
-- Identidad visual tecnológica: logotipo construido por circuitos, fondo de trazas, paquetes de datos y línea IA animada.
-- Términos, privacidad, cookies, seguridad, accesibilidad, metodología pública, estado del sistema, footer legal, robots y sitemap.
-- Protección del endpoint satelital y del servicio de notificaciones mediante credencial interna.
-- Bucket privado, referencias S3 internas, URLs firmadas, encabezados de seguridad y rechazo de secretos de ejemplo en producción.
-- Docker multietapa, usuario no-root, manifiestos Kubernetes, CI y documentación de despliegue/due diligence.
+---
 
 ## Arquitectura
 
-```text
-                              ┌──────────── Next.js ────────────┐
-                              │ acceso email/Google · dashboard · PWA │
-                              │ informes · legales · mapa       │
-                              └──────────────┬──────────────────┘
-                                             │ REST / WebSocket
-                              ┌──────────────▼──────────────────┐
-                              │ FastAPI core                    │
-                              │ auth · RBAC · alertas · reglas  │
-                              │ reportes · informes · auditoría │
-                              └───┬────────┬────────┬───────────┘
-                                  │        │        │
-                         PostgreSQL/   MQTT bus   S3 privado
-                           PostGIS       │       (evidencias)
-                                        │
-                    ┌───────────────────┼────────────────────┐
-                    │                   │                    │
-               ingest Node       anomaly PyTorch     satellite OpenCV/FIRMS
-                    │                                        │
-                 ESP32 /                                  token interno
-                simulador
+```
+                         ┌──────────────── Next.js (apps/web) ────────────────┐
+                         │  Centro de Comando (dashboard)  ·  PWA ciudadana    │
+                         └───────────▲───────────────────────────▲────────────┘
+                                REST │ WebSocket            REST  │ (reportes)
+                         ┌───────────┴───────────────────────────┴────────────┐
+                         │            FastAPI core (apps/api)                  │
+                         │  auth · orgs · devices · alerts · rules · reports   │
+                         │  kpis · satellite · WS feed · pipeline correlacion  │
+                         └── ▲ ──────── ▲ ─────── ▲ ──────── ▲ ─────── ▲ ──────┘
+                             │          │         │          │         │
+              anomaly-service│   ingest │  notify │ satellite│      PostGIS
+              (PyTorch)      │  (Node)  │ (Node)  │ (OpenCV) │   (PostgreSQL+PostGIS)
+                score IA     │          │         │  FIRMS   │
+                             │          ▼         ▼          │
+                             │       ┌──── Mosquitto (MQTT bus) ────┐
+                             │       │ econexo/{org}/{dev}/telemetry│
+                             └───────┤ econexo/internal/{org}/*     │◄── simulator + ESP32
+                                     └──────────────────────────────┘
+                                            MinIO (S3)  ── fotos de reportes
 ```
 
-| Ruta | Responsabilidad | Tecnología |
-|---|---|---|
-| `apps/web` | Acceso, dashboard, PWA ciudadana, informes y marco legal | Next.js 15, React 19, TypeScript, Leaflet |
-| `apps/api` | API, autenticación, separación por organización, correlación, informes | FastAPI, asyncpg, JWT, Google Auth |
-| `apps/mobile` | Cliente móvil, mapa, reportes, licencias y Alerta IA | Expo SDK 56, React Native, TypeScript |
-| `services/ingest` | Consumo MQTT y persistencia de telemetría | Node.js |
-| `services/notify` | Notificaciones internas autenticadas | Node.js |
-| `services/anomaly` | Puntaje de anomalías | PyTorch |
-| `services/satellite` | Detecciones FIRMS y procesamiento raster | Python, OpenCV |
-| `infra/db` | Esquema PostGIS y migraciones | PostgreSQL/PostGIS |
-| `k8s` | Referencia de despliegue | Kubernetes |
+### Monorepo
+| Path | Rol | Stack |
+|------|-----|-------|
+| `apps/api` | API core del sistema | Python + **FastAPI** |
+| `apps/web` | Dashboard + PWA ciudadana | **Next.js** (App Router, TS) + **Leaflet** |
+| `services/ingest` | Consumidor MQTT -> persiste/republica telemetria | **Node.js** |
+| `services/notify` | Despacho de notificaciones (in-app real; email/SMS/WhatsApp stub) | **Node.js** |
+| `services/anomaly` | Deteccion de anomalias (score IA real) | **PyTorch** |
+| `services/satellite` | Vision satelital + ingesta FIRMS | **OpenCV** + NASA FIRMS |
+| `simulator` | Emula nodos ESP32 por MQTT (alimenta la demo) | Node.js |
+| `firmware` | Sketch ESP32 real (DHT11 + MQ-4) | Arduino/C++ |
+| `infra` | DB (PostGIS), Mosquitto | SQL + config |
+| `k8s` | Manifiestos por servicio | Kubernetes |
 
-## Inicio local
+### Stack del dossier — dónde vive cada pieza
+- **FastAPI** → `apps/api` (auth, alertas, dispositivos, reportes, reglas). Swagger auto en `/docs`.
+- **Node microservicios** → `services/ingest` + `services/notify` (2 servicios independientes).
+- **PostgreSQL + PostGIS** → `infra/db` — tipos `GEOGRAPHY(Point/Polygon)`, indices GiST, `ST_DWithin` (correlacion de nodos cercanos), `ST_Contains` (zonas de riesgo).
+- **PyTorch** → `services/anomaly` — autoencoder entrenado sobre las series del seeder; emite score de confianza real (no hardcodeado).
+- **OpenCV + FIRMS** → `services/satellite` — cliente NASA FIRMS real + procesamiento de raster termico (umbralizacion + morfologia).
+- **MQTT + ESP32** → `firmware/esp32_node.ino` + `simulator` + broker Mosquitto.
+- **Docker / K8s** → `docker-compose.yml` + `/k8s`.
+- **S3** → MinIO local (fotos de reportes).
 
-Requisitos: Docker y Docker Compose v2.
+---
+
+## Setup (desarrollo local)
+
+Requisitos: **Docker** + **Docker Compose v2**.
 
 ```bash
-cp .env.example .env
-# Configure JWT_SECRET e INTERNAL_SERVICE_TOKEN con al menos 32 caracteres.
-docker compose up -d --build
-docker compose run --rm api python -m app.seed
+cp .env.example .env            # ajustar secretos (JWT_SECRET, etc.)
+docker compose up -d --build    # levanta TODO el ecosistema
+docker compose run --rm api python -m app.seed    # datos semilla (o: make seed)
 ```
 
 Abrir:
+- **Dashboard (Centro de Comando):** http://localhost:3000  → login `admin@forestandes.econexo.ar` / `econexo123`
+- **PWA ciudadana:** http://localhost:3000/reportar
+- **API + Swagger:** http://localhost:8000/docs
+- **MinIO consola:** http://localhost:9090
 
-- App: `http://localhost:3000`
-- API/Swagger: `http://localhost:8000/docs`
-- Reporte ciudadano: `http://localhost:3000/reportar`
-- MinIO: `http://localhost:9090`
+Usuarios semilla (password `econexo123` en las 3 orgs): `admin@<slug>.econexo.ar`, `operador@<slug>.econexo.ar`
+(slugs: `muni-villa-lago`, `forestandes`, `patagonia-energia`).
 
-Datos demo: `admin@misiones.econexo.ar` / `econexo123`. Estas credenciales son exclusivamente locales y no deben existir en un entorno real.
-
-## Login y registro
-
-El flujo principal funciona sin Google: seleccioná **Crear organización**, completá organización, vertical, administrador, email y contraseña, aceptá los textos legales y la API creará en una transacción la organización y su primer usuario administrador. La ruta es `POST /auth/register`.
-
-Google es opcional. Para habilitarlo en web y, si corresponde, en Android/iOS:
-
-1. Crear un cliente OAuth 2.0 de tipo **Web application** en Google Cloud Console.
-2. Registrar `http://localhost:3000` y el dominio productivo como JavaScript origins.
-3. Asignar el cliente web a `GOOGLE_CLIENT_ID`; Docker lo entrega al backend y a `NEXT_PUBLIC_GOOGLE_CLIENT_ID` durante el build web. Para clientes nativos, agregar sus IDs separados por coma en `GOOGLE_CLIENT_IDS`.
-4. Reiniciar/reconstruir la app.
-
-Para Google, el backend valida firma, audiencia, emisor, vencimiento y `email_verified`; usa `sub` como identificador estable. Si `GOOGLE_CLIENT_ID` queda vacío, la interfaz oculta Google y mantiene disponible el registro por email. Detalle: [docs/EMAIL_AUTH.md](docs/EMAIL_AUTH.md) y [docs/GOOGLE_AUTH.md](docs/GOOGLE_AUTH.md).
-
-## Informes para organizaciones o PO
-
-Dentro del dashboard, la sección **Informes** permite:
-
-1. seleccionar período y destinatario (`organización`, `municipio`, `programa/organismo — PO`, `inversor`, `aseguradora` o `auditoría`);
-2. consolidar dispositivos, alertas, severidad, tiempos y reportes ciudadanos;
-3. agregar resumen y recomendaciones;
-4. imprimir/guardar PDF, exportar CSV o copiar un brief para email;
-5. publicar un enlace de alta entropía, almacenado como hash y revocable.
-
-Los documentos aclaran metodología y límites: no equivalen a una certificación independiente. Incluyen excedencia relativa, `Score_i`, HTI, matriz R0-R5, reglas categóricas, detalle por dominio, observaciones, procedencia, focos térmicos y checklist de validación. Detalle: [docs/IMPACT_REPORTS.md](docs/IMPACT_REPORTS.md) y [docs/REPORTING_METHOD.md](docs/REPORTING_METHOD.md).
-
-## Migraciones
-
-En una base nueva, Docker ejecuta `infra/db/migrations/*.sql`. En una base existente, aplicar en orden y con respaldo:
-
+### Demo end-to-end en vivo
 ```bash
-for migration in infra/db/migrations/*.sql; do
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
-done
+make demo          # o: docker compose run --rm api python -m app.demo
 ```
+Dispara la historia: **satelite detecta foco → nodos ESP32 confirman → ciudadano reporta → correlacion espacial + score IA = alerta critica (~92% confianza) → operador confirma → KPI de respuesta se actualiza.** Se ve en vivo en el dashboard (feed WebSocket).
 
-Las migraciones 02-04 agregan identidad por contraseña/Google, aceptación legal, informes institucionales, snapshots SpaceAI, fuentes ambientales, geocercas y auditoría. La migración 05 agrega licencias modulares y trazabilidad de comunicaciones de Alerta IA. Las migraciones 06-09 incorporan alcance Misiones, exclusión de registros externos, auditoría territorial y límite provincial versionado con sincronización oficial desde GeoRef Argentina. La migración 10 incorpora Copernicus y sanidad forestal; la 11 agrega integridad, planes, suscripciones, límites y mensajes; las migraciones 12-13 crean la consola privada de plataforma; la 14 incorpora telemetría configurable, historial del pipeline y deduplicación FIRMS; la 15 habilita Copernicus de sistema por defecto, registra sus pruebas y evita ejecuciones concurrentes duplicadas del pipeline. En Render, `python -m app.migrate` registra checksums y usa un advisory lock. El plan gratuito ejecuta migraciones al arrancar; el plan pago debe usar Pre-Deploy Command antes de escalar réplicas.
-
-## Validación
-
+Para telemetria continua en tiempo real:
 ```bash
-make validate
-# o por separado
-cd apps/api && pytest -q
-cd apps/web && npm ci && npm run typecheck && npm run build
+make sim           # arranca el simulador de nodos ESP32 (perfil sim)
 ```
 
-Estado de esta entrega:
-
-- API: **70 pruebas aprobadas** (`pytest -q`), incluidos OAuth/Process API de Copernicus, WMS, CORS, GeoJSON, migraciones y concurrencia del pipeline.
-- Python: compilación completa aprobada (`python -m compileall`).
-- FastAPI: 98 objetos de ruta, 82 rutas únicas y 83 operaciones documentadas; `/platform/*` permanece fuera de Swagger y protegido.
-- Web: `npm run typecheck` aprobado con TypeScript 5.7.2.
-- CSS, JSON y YAML: parseo aprobado.
-- El build integral de Next.js debe repetirse en Render: este entorno no pudo descargar el binario Linux de SWC desde su gateway de paquetes, aunque el chequeo de tipos y la sintaxis están aprobados.
-- La app móvil incluye código fuente y perfiles EAS; no incluye APK/IPA porque faltan credenciales de firma y el build externo.
-
-## Aplicación móvil
-
+### Tests
 ```bash
-cd apps/mobile
-cp .env.example .env
-npm install
-npx expo install --fix
-npm run typecheck
-npm run start:clear
+make test          # pipeline de correlacion espacial + motor de reglas
 ```
 
-Para un teléfono físico, `EXPO_PUBLIC_API_URL` debe apuntar a la IP LAN de la computadora o a una API HTTPS pública; `localhost` refiere al propio teléfono. Los perfiles EAS `preview` y `production` están incluidos, pero el `projectId`, credenciales de tienda, URLs públicas y clientes OAuth nativos deben completarse antes de generar binarios. Ver [docs/MOBILE_APP.md](docs/MOBILE_APP.md).
+---
 
-## Producción
+## Mapeo local → AWS (produccion)
 
-No publicar con valores de ejemplo. Como mínimo:
+| Local (compose) | AWS | Notas |
+|-----------------|-----|-------|
+| `postgis` | **RDS PostgreSQL + PostGIS** | mismo esquema `infra/db` |
+| `mosquitto` | **AWS IoT Core** | topics MQTT identicos; certs X.509 por device |
+| `minio` | **S3** | interfaz S3-compatible (boto3), solo cambia endpoint/creds |
+| `api` / `web` / `services/*` | **EKS** (ver `/k8s`) o ECS | imagenes Docker ya listas |
+| `satellite` poll / `simulator` | **Lambda + EventBridge** | cron de ingesta FIRMS como Lambda programada |
+| `.env` | **Secrets Manager / SSM** | cero secretos hardcodeados |
 
-- dominio/TLS, CORS exacto y Google origin productivo;
-- Secrets Manager/External Secrets y rotación;
-- PostgreSQL administrado con PostGIS, backup/PITR y migraciones;
-- S3 privado con cifrado, lifecycle, CORS restringido y análisis de archivos;
-- MQTT autenticado por dispositivo o AWS IoT Core;
-- WAF/API gateway y rate limiting distribuido;
-- observabilidad, alertas, runbooks y prueba de restauración;
-- asesoría legal argentina, contratos, DPA, identidad societaria y registro/obligaciones aplicables;
-- prueba de penetración y auditoría de accesibilidad.
+Deploy a EKS: aplicar los manifiestos de `/k8s` (deployment + service + configmap por servicio).
 
-Puerta de lanzamiento: [docs/OFFICIAL_LAUNCH_MISIONES.md](docs/OFFICIAL_LAUNCH_MISIONES.md). Alcance territorial: [docs/MISIONES_TERRITORIAL_SCOPE.md](docs/MISIONES_TERRITORIAL_SCOPE.md). Guía de infraestructura: [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md). Plantilla productiva: [`.env.production.example`](.env.production.example). Scripts: [`scripts/`](scripts/). Riesgos abiertos: [AUDIT.md](AUDIT.md).
+---
 
-## Documentación clave
+## Qué es real y qué es fixture
 
-- [Preparación para inversión](INVESTOR_READINESS.md)
-- [Seguridad](SECURITY.md)
-- [Due diligence](docs/DUE_DILIGENCE_CHECKLIST.md)
-- [Checklist legal](docs/LEGAL_LAUNCH_CHECKLIST.md)
-- [Fuentes de datos](docs/DATA_SOURCES.md)
-- [SpaceAI y Open-Meteo](docs/SPACEAI_OPEN_METEO.md)
-- [Admin Core / ABM](docs/ADMIN_ABM.md)
-- [Pipeline de telemetría rc.6](docs/TELEMETRY_PIPELINE_RC6.md)
-- [Suscripciones y mensajes administrativos](docs/SUBSCRIPTIONS_AND_ADMIN_MESSAGES.md)
-- [Reportes oficiales](docs/OFFICIAL_REPORTS.md)
-- [Método de informes técnicos](docs/REPORTING_METHOD.md)
-- [Módulo Fuego y Humo](docs/FIRE_SMOKE_MODULE.md)
-- [Marco operativo de incendios en Misiones](docs/MISIONES_FIRE_POLICY.md)
-- [Alcance territorial de Misiones](docs/MISIONES_TERRITORIAL_SCOPE.md)
-- [Migrar una base existente](docs/MIGRATE_EXISTING_MISIONES.md)
-- [Puerta de lanzamiento oficial](docs/OFFICIAL_LAUNCH_MISIONES.md)
-- [Cloudflare productivo](docs/DEPLOY_CLOUDFLARE_PRODUCTION.md)
-- [Aplicación móvil](docs/MOBILE_APP.md)
-- [Sistema de marca](docs/BRAND_SYSTEM.md)
-- [Despliegue Kubernetes](k8s/README.md)
-- [Reporte de validación del ensamblado](VALIDATION_REPORT.md)
-- [Cambios de esta edición](CHANGELOG.md)
+**Real y funcional:**
+- Esquema PostGIS con queries espaciales reales (`ST_DWithin`, `ST_Contains`, indices GiST).
+- FastAPI core completo con OpenAPI, JWT (argon2id), scoping multi-org y roles.
+- Autoencoder PyTorch entrenado sobre las series del seeder → score de anomalia real.
+- Procesamiento OpenCV de raster termico (umbralizacion + morfologia + contornos).
+- Cliente NASA FIRMS real (endpoint CSV). Ingesta programada al pipeline.
+- Bus MQTT (Mosquitto) real; ingest/notify como microservicios Node independientes.
+- Correlacion multi-fuente + motor de reglas (con tests).
+- Simulador de nodos ESP32 + firmware Arduino listo para flashear.
 
-## Licencia y confidencialidad
+**Fixture / stub documentado:**
+- **NASA FIRMS:** si `NASA_FIRMS_KEY` esta vacia, usa `services/satellite/fixtures/firms_sample.json` (respuesta grabada con formato real). Key gratuita: https://firms.modaps.eosdis.nasa.gov/api/
+- **Raster satelital OpenCV:** el MVP sintetiza un raster termico de muestra con focos calientes (misma pipeline que un GeoTIFF real de Copernicus).
+- **Copernicus:** cliente FIRMS implementado; Copernicus queda como extension documentada (mismo patron de ingesta).
+- **email / SMS / WhatsApp** (`services/notify/adapters.js`): stub que loguea la intencion de envio. In-app es real (tabla `notifications`). Prod → SES / SNS / WhatsApp Cloud API.
 
-El repositorio no declara una licencia open source. Ver [LICENSE.md](LICENSE.md). Antes de compartirlo con terceros, confirmar titularidad del código, licencias de dependencias, marcas, datos, modelos y contribuciones.
+---
 
-### Copernicus Sentinel-2 en tiempo de ejecución
+## Los 4 KPIs del producto (en vivo)
+1. **Tiempo de deteccion** de incidentes anomalos — objetivo **< 5 min** (latencia lectura→alerta).
+2. **Precision del motor IA** — objetivo **85%+** (confirmadas / (confirmadas + descartadas)).
+3. **Tasa de reportes ciudadanos validos** — objetivo **70%+** (verificados / moderados).
+4. **Reduccion del tiempo de respuesta institucional** — objetivo **-40%** vs baseline configurable por org.
 
-La configuración recomendada ya no depende de una variable pública de compilación. Un administrador carga la URL de su instancia Sentinel Hub en `Admin Core > Fuentes SpaceAI`, ejecuta GetCapabilities y guarda los nombres de las capas. La variable `NEXT_PUBLIC_COPERNICUS_WMS_URL` se conserva solamente como fallback.
+---
 
-### Sanidad forestal del norte
+## Seguridad (dia 0)
+- Cero secretos hardcodeados. `.env.example` por servicio; `.env` en `.gitignore`.
+- Credenciales MQTT y tokens hasheados con **argon2id** (mostrados una sola vez).
+- Validacion **Pydantic** (FastAPI) y tipado estricto TS. CORS restrictivo.
+- JWT firmado; scoping de datos por organizacion en cada query.
 
-La navegación incluye un módulo licenciable para San Antonio y General Manuel Belgrano. Combina contexto meteorológico, NDVI, humedad, recorridas, trampas, reportes y trazabilidad. El radar de Bernardo de Irigoyen se usa como contexto meteorológico regional y no confirma ni identifica una plaga.
-## Telemetría y Command Pipeline (rc.6)
+---
 
-`Admin Core > Telemetría` permite crear nodos, ubicarlos en geocercas, elegir círculo, cuadro o triángulo, cambiar la fuente y ejecutar el pipeline. Si la organización no tiene nodos, **Crear red inicial y ejecutar** genera dos nodos virtuales Open-Meteo dentro de una zona operativa. El Centro de Comando muestra dispositivos, zonas de riesgo, focos FIRMS y alertas; las capas Humedad y Área quemada permanecen seleccionables aun sin Copernicus mediante fallbacks expresamente rotulados.
-
-Guía técnica: [`docs/TELEMETRY_PIPELINE_RC6.md`](docs/TELEMETRY_PIPELINE_RC6.md).
-
-## Consola privada del administrador general (rc.5)
-
-La edición incluye una consola no enlazada en la navegación pública:
-
-```text
-/plataforma
-```
-
-El correo autorizado es `econexoargentina@gmail.com` mediante `PLATFORM_ADMIN_EMAILS`. La contraseña inicial se configura únicamente en Render con `PLATFORM_ADMIN_INITIAL_PASSWORD`; nunca debe incorporarse al repositorio ni usar el prefijo `NEXT_PUBLIC_`. El primer ingreso exige cambiarla en `/cambiar-contrasena`.
-
-Guía completa: [`ADMIN_GENERAL_OCULTO.md`](ADMIN_GENERAL_OCULTO.md).
+## Roadmap
+- **Fase 1 (este MVP):** ecosistema funcional en entornos de prueba — `docker compose up` levanta todo con datos semilla y demo.
+- **Fase 2:** modelos base productivos (incendios forestales / anomalias hidricas) con reentrenamiento continuo; Copernicus; canales de notificacion reales; app store.
+- **Fase 3:** multi-tenant white-label a escala, marketplace de reglas, federacion de sensores heredados.
+ 

@@ -1,61 +1,78 @@
-# Roadmap EcoNexo Misiones
+# EcoNexo — Tablero de Tareas
 
-## P0 - Candidato de lanzamiento técnico
+> Estado vivo del MVP. `[x]` hecho · `[~]` en progreso · `[ ]` pendiente.
+> Última actualización: 2026-07-06 (sesión 1 — runtime validado)
 
-- [x] Catálogo de 17 departamentos y 79 municipios.
-- [x] Validación territorial en web, API, PostGIS, satélite, informes y móvil.
-- [x] Sincronización y estado del límite oficial GeoRef.
-- [x] Auditoría de datos históricos externos a Misiones.
-- [x] Registro por email y Google OAuth opcional.
-- [x] Centro de comando, Alerta IA y módulo Fuego/Humo.
-- [x] Reporte comunitario completo.
-- [x] Informes extensos con SpaceAI, fuentes, laboratorio y firmas.
-- [x] Admin Core, licencias, reglas, dispositivos y geocercas.
-- [x] App móvil Expo/React Native.
-- [x] Scripts de deploy Cloudflare productivo y pre-flight.
-- [x] 29 pruebas API y validación sintáctica del ensamblado.
-- [ ] Completar identidad societaria y textos legales definitivos.
-- [ ] Ejecutar `npm ci`, typecheck y build productivo en CI limpio.
-- [ ] Aplicar migraciones 01-09 y sincronizar GeoRef en preproducción.
+## Fase 1 — Ecosistema funcional (Sem 0-8)
 
-## P1 - Preproducción
+### Sem 1-2 · Arquitectura de datos y ecosistema
+- [x] Monorepo scaffolded (`apps/`, `services/`, `firmware/`, `simulator/`, `k8s/`, `infra/`)
+- [x] Esquema PostGIS completo (GEOGRAPHY, GiST, ST_DWithin/ST_Contains, `nearby_devices`)
+- [x] `docker-compose.yml` con todos los servicios (validado con `config`)
+- [x] Esquema de topics MQTT + broker Mosquitto
+- [x] `.env.example` por servicio + `.gitignore` (secretos fuera)
+- [x] Makefile (up/seed/demo/sim/test)
 
-- [ ] API y base administrada con HTTPS, backup/PITR y restauración probada.
-- [ ] FIRMS real, WMS propio y atribuciones visibles.
-- [ ] MQTT TLS/mTLS con ACL y rotación por dispositivo.
-- [ ] WAF, Redis, cuotas, rate limiting distribuido y protección antiabuso.
-- [ ] Google OAuth web/móvil y recuperación segura de cuenta.
-- [ ] Observabilidad, SLO, alertas, dashboards, SIEM y runbooks.
-- [ ] Re-encoding, EXIF stripping, antivirus y cuarentena de imágenes.
-- [ ] Pruebas E2E, carga, accesibilidad, navegadores y dispositivos reales.
-- [ ] Pentest y corrección de hallazgos altos/críticos.
-- [ ] Validar que `misiones_external_data_audit` sea cero.
+### Sem 3-4 · Dashboard operativo + APIs del núcleo
+- [x] FastAPI core: config, db pool, security (argon2+JWT)
+- [x] Routers: auth, orgs, devices, alerts, rules, reports, kpis, satellite
+- [x] Pipeline de correlación multi-fuente (score real)
+- [x] Feed WebSocket + puente MQTT
+- [x] Seeder (3 orgs, ~38 nodos, 30 días de historial, anomalías inyectadas)
+- [x] Dashboard "Centro de Comando" (banner, 4 KPIs, mapa Leaflet, alertas priorizadas)
+- [x] OpenAPI/Swagger (auto FastAPI)
 
-## P2 - Aceptación institucional
+### Sem 5-6 · Redes y flujos satelitales
+- [x] Cliente NASA FIRMS (real + fixture grabado)
+- [x] Procesamiento OpenCV (raster térmico, umbralización + morfología)
+- [x] Ingesta programada satélite -> pipeline de alertas
+- [ ] Copernicus (documentado como extensión; mismo patrón)
 
-- [ ] Calibrar SpaceAI con estaciones, antecedentes y protocolos de Misiones.
-- [ ] Definir responsables y aprobación humana para R3-R5.
-- [ ] Validar documentos, cadena de custodia y firma con laboratorios/organismos.
-- [ ] Contratos, DPA, retención, subencargados y uso de logos.
-- [ ] Ejecutar piloto con criterios de éxito, baseline y falsos positivos.
-- [ ] Probar comunicaciones WhatsApp/Telegram en canales autorizados.
-- [ ] Firmar acta de aceptación y plan de respuesta a incidentes.
+### Sem 7-8 · App ciudadana + motor de alertas
+- [x] Motor de reglas (CRUD + evaluación AND/OR + require_satellite)
+- [x] Reglas precargadas (incendio forestal / anomalía hídrica / aire)
+- [x] anomaly-service PyTorch (autoencoder, score real)
+- [x] PWA ciudadana mobile-first (`/reportar`)
+- [x] Filtro inteligente de reportes (correlación IA + reputación dinámica)
+- [x] Microservicios Node (ingest + notify con adapters stub)
+- [x] Simulador de nodos ESP32 + firmware Arduino real
+- [x] Tests: correlación espacial + motor de reglas
 
-## P3 - Lanzamiento y escala
+### Infra / entrega
+- [x] Manifiestos K8s (namespace, config, api, web, servicios, cronjob satélite)
+- [x] README maestro (arquitectura, setup, mapeo local->AWS, real vs fixture, roadmap)
 
-- [ ] Publicar dominio oficial y ficha de estado/metodología.
-- [ ] Alta por invitación y onboarding contractual.
-- [ ] App Store/Play Store con revisión de privacidad.
-- [ ] Multi-región, DR y simulacros periódicos.
-- [ ] Model registry, monitoreo de drift y evaluación independiente.
-- [ ] Firma digital, sellado de tiempo e interoperabilidad institucional.
+## Runtime — VALIDACIÓN EN VIVO (✅ COMPLETA)
+- [x] Arrancar Docker Desktop daemon
+- [x] `docker compose up -d --build` — todo el ecosistema levanta (8 servicios)
+- [x] `make seed` — 3 orgs, 38 nodos, 82k lecturas, reglas, KPIs
+- [x] Verificar `/health` de api, anomaly, notify — OK
+- [x] `make test` — 11/11 tests pasan dentro del contenedor
+- [x] `make demo` — historia end-to-end: alerta crítica 92% multi-fuente
+- [x] Dashboard HTTP 200; API responde login/KPIs/devices/alerts/rules
+- [x] Pipeline satélite: FIRMS fixture -> OpenCV (3 zonas) -> ingesta -> 2 alertas
+- [x] anomaly-service PyTorch entrenado (6 variables), score real anómalo>normal
+- [x] Bugs de runtime arreglados: email-validator, 204 body, SRID mixto, fechas fixture
+- [ ] PWA `/reportar` envía reporte real y se correlaciona (validar en navegador)
+- [ ] `make sim` — telemetría en tiempo real por WebSocket (validar en navegador)
 
-## Suscripciones y operación comercial
 
-- [x] Catálogo de planes y límites por organización.
-- [x] Sandbox calificado para nuevas altas.
-- [x] Solicitudes de cambio y aprobación por administrador comercial.
-- [x] Mensajes de login en Admin Core.
-- [ ] Definir términos contractuales definitivos de cada plan y add-on.
-- [ ] Integrar facturación/conciliación solo cuando la estructura fiscal y el medio de cobro estén aprobados.
-- [ ] Definir política de gracia, mora, suspensión, reactivación y soporte.
+## UI — Pulido (✅ hecho esta sesión)
+- [x] Navegación entre vistas: Centro de Comando · Dispositivos · Reglas · Reportes
+- [x] Detalle de nodo: drawer con series temporales (sparkline SVG), batería, RSSI, ubicación
+- [x] CRUD visual de reglas (crear/pausar/borrar sin tocar código, modal con condiciones)
+- [x] Backoffice de moderación de reportes (scores correlación IA + reputación visibles, verificar/rechazar)
+- [x] KPIs con barras de progreso vs objetivo
+- [x] Alertas: barra de confianza, tiempo relativo, pills coloreadas por fuente
+- [x] Leyenda del mapa + barra de feed "EN VIVO"
+- [x] Override de dev (bind-mount + polling) para hot-reload sin rebuild
+- [ ] Selector de organización / white-label (color primario por org)
+- [ ] Notificaciones in-app en el header (campana)
+- [ ] Capas del mapa conmutables con checkboxes
+
+
+## Backlog / Fase 2+
+- [ ] Copernicus real
+- [ ] Canales de notificación reales (SES/SNS/WhatsApp)
+- [ ] Reentrenamiento continuo del modelo
+- [ ] mypy estricto en CI + lint front

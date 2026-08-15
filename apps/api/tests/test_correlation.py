@@ -7,7 +7,7 @@ from app.correlation import (
     update_reputation,
 )
 
-# Coordenadas de referencia (Misiones, AR)
+# Coordenadas de referencia (Cordoba, AR)
 LAT, LON = -31.42, -64.18
 
 

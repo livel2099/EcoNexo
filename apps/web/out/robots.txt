@@ -1,0 +1,13 @@
+User-Agent: *
+Allow: /
+Allow: /reportar
+Allow: /terminos
+Allow: /privacidad
+Allow: /cookies
+Allow: /seguridad
+Allow: /accesibilidad
+Disallow: /dashboard
+Disallow: /informe
+Disallow: /plataforma
+Disallow: /cambiar-contrasena
+

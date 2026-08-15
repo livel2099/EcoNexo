@@ -1,26 +1,18 @@
 // notify-service — escucha alertas del bus y despacha notificaciones.
-const crypto = require("crypto");
 const http = require("http");
 const mqtt = require("mqtt");
 const { Pool } = require("pg");
 const { dispatchInApp } = require("./adapters");
 
-const pool = new Pool(
-  process.env.DATABASE_URL
-    ? { connectionString: process.env.DATABASE_URL }
-    : {
-        host: process.env.POSTGRES_HOST || "localhost",
-        port: +(process.env.POSTGRES_PORT || 5432),
-        database: process.env.POSTGRES_DB || "econexo",
-        user: process.env.POSTGRES_USER || "econexo",
-        password: process.env.POSTGRES_PASSWORD || "econexo_dev_pw",
-      }
-);
+const pool = new Pool({
+  host: process.env.POSTGRES_HOST || "localhost",
+  port: +(process.env.POSTGRES_PORT || 5432),
+  database: process.env.POSTGRES_DB || "econexo",
+  user: process.env.POSTGRES_USER || "econexo",
+  password: process.env.POSTGRES_PASSWORD || "econexo_dev_pw",
+});
 
-const serviceToken = process.env.INTERNAL_SERVICE_TOKEN || "";
-const allowedOrigin = process.env.CORS_ORIGIN || "http://localhost:3000";
-const url = process.env.MQTT_URL ||
-  `mqtt://${process.env.MQTT_HOST || "localhost"}:${process.env.MQTT_PORT || 1883}`;
+const url = `mqtt://${process.env.MQTT_HOST || "localhost"}:${process.env.MQTT_PORT || 1883}`;
 const client = mqtt.connect(url, { reconnectPeriod: 3000 });
 
 client.on("connect", () => {
@@ -43,41 +35,24 @@ client.on("message", async (topic, payload) => {
   }
 });
 
-function authorized(req) {
-  const provided = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-  if (!serviceToken || provided.length !== serviceToken.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(serviceToken));
-}
-
-// HTTP interno: health publico para orquestador; datos protegidos por token.
+// HTTP: lista de notificaciones in-app por org + health.
 const server = http.createServer(async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-  res.setHeader("Vary", "Origin");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-    res.writeHead(204); return res.end();
-  }
+  res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ status: "ok" }));
   }
-  if (!authorized(req)) {
-    res.writeHead(401, { "Content-Type": "application/json" });
-    return res.end(JSON.stringify({ detail: "Credencial interna invalida" }));
-  }
-  const match = req.url.match(/^\/notifications\/([0-9a-f-]+)$/i);
-  if (match) {
+  const m = req.url.match(/^\/notifications\/([0-9a-f-]+)/i);
+  if (m) {
     try {
-      const result = await pool.query(
+      const r = await pool.query(
         "SELECT id, alert_id, title, body, read, created_at FROM notifications WHERE org_id=$1 ORDER BY created_at DESC LIMIT 50",
-        [match[1]]
+        [m[1]]
       );
-      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
-      return res.end(JSON.stringify(result.rows));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify(r.rows));
     } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ detail: "Error interno" }));
+      res.writeHead(500); return res.end(e.message);
     }
   }
   res.writeHead(404); res.end();

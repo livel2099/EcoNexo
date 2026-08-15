@@ -1,25 +1,28 @@
-# EcoNexo — comandos de desarrollo y validación.
+# EcoNexo — comandos de desarrollo.
+# Requiere: Docker + Docker Compose v2.
+
 SHELL := /bin/bash
 
-.PHONY: help up down build logs seed demo sim test test-api test-web test-mobile validate ps clean
+.PHONY: help up down build logs seed demo sim test ps clean
 
 help:
 	@echo "EcoNexo — targets:"
-	@echo "  make up         Levanta el ecosistema local"
-	@echo "  make build      Reconstruye las imágenes"
-	@echo "  make seed       Carga datos semilla"
-	@echo "  make demo       Ejecuta la historia end-to-end"
-	@echo "  make sim        Inicia el simulador ESP32"
-	@echo "  make validate   Tests API + chequeos TypeScript web/móvil"
-	@echo "  make logs       Sigue logs"
-	@echo "  make down       Detiene servicios"
-	@echo "  make clean      Detiene y elimina volúmenes"
+	@echo "  make up      Levanta todo el ecosistema (docker compose up -d)"
+	@echo "  make build   Rebuild de todas las imagenes"
+	@echo "  make seed    Carga datos semilla (3 orgs, nodos, 30 dias de historial)"
+	@echo "  make demo    Dispara la historia end-to-end en vivo"
+	@echo "  make sim     Arranca el simulador de nodos ESP32 (perfil sim)"
+	@echo "  make logs    Sigue los logs de todos los servicios"
+	@echo "  make test    Corre los tests (correlacion espacial + motor de reglas)"
+	@echo "  make down    Detiene el ecosistema"
+	@echo "  make clean   Detiene y borra volumenes (datos!)"
 
 up:
 	docker compose up -d --build
-	@echo "App:         http://localhost:3000"
+	@echo "Esperando a la API..."
+	@echo "Dashboard:  http://localhost:3000"
 	@echo "API/Swagger: http://localhost:8000/docs"
-	@echo "MinIO:       http://localhost:9090"
+	@echo "MinIO:      http://localhost:9090"
 
 build:
 	docker compose build
@@ -33,24 +36,14 @@ demo:
 sim:
 	docker compose --profile sim up -d --build simulator
 
-test: validate
-
-test-api:
-	docker compose run --rm api pytest -q
-
-test-web:
-	docker compose run --rm --no-deps web npm run typecheck
-
-test-mobile:
-	cd apps/mobile && npm run typecheck
-
-validate: test-api test-web test-mobile
-
 logs:
 	docker compose logs -f
 
 ps:
 	docker compose ps
+
+test:
+	docker compose run --rm api pytest -q
 
 down:
 	docker compose down

@@ -1,8 +1,9 @@
 {
-  "_comment": "Fixture demostrativo VIIRS limitado a Misiones. No representa un incendio confirmado ni debe usarse como alerta oficial.",
+  "_comment": "Respuesta FIRMS grabada (VIIRS_SNPP_NRT, area Argentina). Usada cuando NASA_FIRMS_KEY no esta seteada. Formato replica columnas reales de la API CSV de FIRMS.",
   "detections": [
-    {"latitude": -26.83, "longitude": -54.44, "bright_ti4": 342.5, "confidence": "h", "frp": 45.2, "acq_date": "2026-01-15", "acq_time": "0412"},
-    {"latitude": -26.79, "longitude": -54.48, "bright_ti4": 335.1, "confidence": "n", "frp": 22.8, "acq_date": "2026-01-15", "acq_time": "0412"},
-    {"latitude": -27.36, "longitude": -55.58, "bright_ti4": 329.8, "confidence": "n", "frp": 16.4, "acq_date": "2026-01-15", "acq_time": "0430"}
+    {"latitude": -26.83, "longitude": -54.44, "bright_ti4": 342.5, "confidence": "h", "frp": 45.2, "acq_date": "2024-01-15", "acq_time": "0412"},
+    {"latitude": -26.79, "longitude": -54.48, "bright_ti4": 335.1, "confidence": "n", "frp": 22.8, "acq_date": "2024-01-15", "acq_time": "0412"},
+    {"latitude": -31.40, "longitude": -64.49, "bright_ti4": 328.0, "confidence": "n", "frp": 18.0, "acq_date": "2024-01-15", "acq_time": "0350"},
+    {"latitude": -38.96, "longitude": -68.05, "bright_ti4": 351.7, "confidence": "h", "frp": 61.4, "acq_date": "2024-01-15", "acq_time": "0430"}
   ]
 }

@@ -1,4 +1,4 @@
-# Microservicios internos. PostgreSQL, MQTT y S3 se consideran servicios gestionados.
+# Microservicios IA/IoT: anomaly (svc), ingest (worker), notify (svc), satellite (worker/cron).
 apiVersion: apps/v1
 kind: Deployment
 metadata: { name: anomaly, namespace: econexo }
@@ -11,20 +11,17 @@ spec:
       containers:
         - name: anomaly
           image: econexo/anomaly:latest
-          ports: [{ name: http, containerPort: 8100 }]
+          ports: [{ containerPort: 8100 }]
           envFrom:
             - configMapRef: { name: econexo-config }
             - secretRef: { name: econexo-secrets }
-          resources:
-            requests: { cpu: "250m", memory: "512Mi" }
-            limits: { cpu: "2", memory: "2Gi" }
 ---
 apiVersion: v1
 kind: Service
 metadata: { name: anomaly, namespace: econexo }
 spec:
   selector: { app: anomaly }
-  ports: [{ name: http, port: 8100, targetPort: http }]
+  ports: [{ port: 8100, targetPort: 8100 }]
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -41,9 +38,6 @@ spec:
           envFrom:
             - configMapRef: { name: econexo-config }
             - secretRef: { name: econexo-secrets }
-          resources:
-            requests: { cpu: "100m", memory: "128Mi" }
-            limits: { cpu: "750m", memory: "512Mi" }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -57,35 +51,27 @@ spec:
       containers:
         - name: notify
           image: econexo/notify:latest
-          ports: [{ name: http, containerPort: 8200 }]
+          ports: [{ containerPort: 8200 }]
           envFrom:
             - configMapRef: { name: econexo-config }
             - secretRef: { name: econexo-secrets }
-          resources:
-            requests: { cpu: "100m", memory: "128Mi" }
-            limits: { cpu: "500m", memory: "512Mi" }
 ---
 apiVersion: v1
 kind: Service
 metadata: { name: notify, namespace: econexo }
 spec:
-  type: ClusterIP
   selector: { app: notify }
-  ports: [{ name: http, port: 8200, targetPort: http }]
+  ports: [{ port: 8200, targetPort: 8200 }]
 ---
+# Ingesta satelital programada (equivale a Lambda + EventBridge).
 apiVersion: batch/v1
 kind: CronJob
 metadata: { name: satellite, namespace: econexo }
 spec:
   schedule: "*/15 * * * *"
-  concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 2
-  failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 2
       template:
-        metadata: { labels: { app: satellite } }
         spec:
           restartPolicy: OnFailure
           containers:
@@ -95,6 +81,3 @@ spec:
               envFrom:
                 - configMapRef: { name: econexo-config }
                 - secretRef: { name: econexo-secrets }
-              resources:
-                requests: { cpu: "250m", memory: "256Mi" }
-                limits: { cpu: "1", memory: "1Gi" }

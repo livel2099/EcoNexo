@@ -1,7 +1,7 @@
 """Datos semilla de EcoNexo.
 
-Crea 3 organizaciones de Misiones (municipio, forestal y energética),
-usuarios (argon2), tipos de dispositivo, zonas de riesgo
+Crea 3 organizaciones (municipio, forestal, energetica) con geografias
+argentinas reales, usuarios (argon2), tipos de dispositivo, zonas de riesgo
 (poligonos PostGIS), ~38 nodos, 30 dias de historial con ciclos diurnos y
 anomalias inyectadas, reglas precargadas y alertas historicas para KPIs.
 
@@ -24,9 +24,9 @@ random.seed(42)
 NOW = datetime.now(timezone.utc)
 
 ORGS = [
-    ("Municipalidad de Posadas - Demo", "municipalidad-posadas-demo", "municipio", "#2E7D5B", -27.3621, -55.9007, "POS", "Capital", "Posadas", "municipal"),
-    ("Corredor Verde Yabotí - Demo", "corredor-yaboti-demo", "forestal", "#1F6F43", -26.82, -54.45, "YAB", "San Pedro", "San Pedro", "area_operativa"),
-    ("Red Energética Oberá - Demo", "red-energetica-obera-demo", "energetica", "#0F766E", -27.4871, -55.1199, "OBE", "Oberá", "Oberá", "departamental"),
+    ("Municipio de Villa del Lago", "muni-villa-lago", "municipio", "#2E7D5B", -31.42, -64.50, "MUN"),
+    ("ForestAndes S.A.", "forestandes", "forestal", "#1F6F43", -26.82, -54.45, "FOR"),
+    ("Patagonia Energia", "patagonia-energia", "energetica", "#0F766E", -38.95, -68.06, "ENE"),
 ]
 
 VARS = {
@@ -65,24 +65,20 @@ async def _reset(conn: asyncpg.Connection) -> None:
     await conn.execute(
         "TRUNCATE organizations, users, device_types, devices, readings, risk_zones, "
         "citizens, citizen_reports, satellite_detections, rules, alerts, alert_sources, "
-        "alert_events, notifications, impact_reports, audit_events RESTART IDENTITY CASCADE"
+        "alert_events, notifications RESTART IDENTITY CASCADE"
     )
 
 
-async def _seed_org(
-    conn, name, slug, vertical, color, lat, lon, prefix, department, municipality, territory_scope
-) -> None:
+async def _seed_org(conn, name, slug, vertical, color, lat, lon, prefix) -> None:
     org_id = await conn.fetchval(
-        "INSERT INTO organizations "
-        "(name, slug, vertical, primary_color, baseline_response_s, province, department, municipality, territory_scope) "
-        "VALUES ($1,$2,$3,$4,3600,'Misiones',$5,$6,$7) RETURNING id",
-        name, slug, vertical, color, department, municipality, territory_scope,
+        "INSERT INTO organizations (name, slug, vertical, primary_color, baseline_response_s) "
+        "VALUES ($1,$2,$3,$4,3600) RETURNING id",
+        name, slug, vertical, color,
     )
-    email_domain = "misiones.econexo.ar" if slug == "municipalidad-posadas-demo" else f"{slug}.econexo.ar"
     for email_role, role in [("admin", "admin"), ("operador", "operador")]:
         await conn.execute(
             "INSERT INTO users (org_id, email, name, role, password_hash) VALUES ($1,$2,$3,$4,$5)",
-            org_id, f"{email_role}@{email_domain}", f"{email_role.title()} {name}",
+            org_id, f"{email_role}@{slug}.econexo.ar", f"{email_role.title()} {name}",
             role, hash_secret("econexo123"),
         )
 
@@ -96,7 +92,7 @@ async def _seed_org(
     await conn.execute(
         "INSERT INTO risk_zones (org_id, name, kind, area) VALUES "
         "($1,$2,$3, ST_MakePolygon(ST_GeomFromText($4, 4326))::geography)",
-        org_id, f"Zona prioritaria Misiones · {name}", kind, _square_wkt(lat, lon, 0.06),
+        org_id, f"Zona critica {name}", kind, _square_wkt(lat, lon, 0.06),
     )
 
     n = NODES_PER_ORG[vertical]

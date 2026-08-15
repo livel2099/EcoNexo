@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { apiDelete, apiGet, apiPatch, apiPost } from "../app/lib/api";
+import { apiGet, apiPost, API } from "../app/lib/api";
 import type { Rule } from "../app/lib/types";
 
 // CRUD visual del motor de reglas — crear una regla sin tocar codigo.
@@ -32,11 +32,11 @@ export default function RulesPanel({ token }: { token: string }) {
   }
 
   async function toggle(id: string) {
-    await apiPatch(`/rules/${id}/toggle`, token);
+    await fetch(`${API}/rules/${id}/toggle`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } });
     load();
   }
   async function del(id: string) {
-    await apiDelete(`/rules/${id}`, token);
+    await fetch(`${API}/rules/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     load();
   }
 

@@ -1,7 +1,7 @@
 """satellite-service — ingesta programada de FIRMS + procesamiento OpenCV.
 
 Cada FIRMS_POLL_SECONDS:
-  1. Trae focos de calor de NASA FIRMS para Misiones; el fixture es exclusivamente demostrativo y opt-in.
+  1. Trae focos de calor de NASA FIRMS (o fixture) para Argentina.
   2. Procesa un raster satelital con OpenCV (deteccion de zonas de calor).
   3. Envia las detecciones al API core (/satellite/ingest) para correlacion.
 """
@@ -21,7 +21,6 @@ log = logging.getLogger("econexo.satellite")
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 POLL = int(os.getenv("FIRMS_POLL_SECONDS", "900"))
-SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "")
 
 
 async def cycle() -> None:
@@ -33,11 +32,7 @@ async def cycle() -> None:
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as c:
-            r = await c.post(
-                f"{API_URL}/satellite/ingest",
-                json={"detections": detections},
-                headers={"X-Service-Token": SERVICE_TOKEN},
-            )
+            r = await c.post(f"{API_URL}/satellite/ingest", json={"detections": detections})
             r.raise_for_status()
             log.info("Ingesta al API: %s", r.json())
     except Exception as exc:

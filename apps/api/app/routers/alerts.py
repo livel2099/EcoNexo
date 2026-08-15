@@ -25,8 +25,7 @@ async def list_alerts(
                ST_X(location::geometry) AS lon, confidence, title,
                detected_at, acknowledged_at, resolved_at
         FROM alerts
-        WHERE org_id=$1 AND econexo_inside_misiones(location)
-          AND ($2::text IS NULL OR status = $2::alert_status)
+        WHERE org_id=$1 AND ($2::text IS NULL OR status = $2::alert_status)
         ORDER BY {_SEVERITY_RANK} DESC, detected_at DESC
         """,
         user.org_id, status,
@@ -65,7 +64,7 @@ async def act_on_alert(
             assigned_to = COALESCE($4, assigned_to),
             acknowledged_at = COALESCE(acknowledged_at, now()),
             resolved_at = CASE WHEN $3 IN ('confirmada','descartada') THEN now() ELSE resolved_at END
-        WHERE id=$1 AND org_id=$2 AND econexo_inside_misiones(location)
+        WHERE id=$1 AND org_id=$2
         RETURNING id, type, severity, status, ST_Y(location::geometry) AS lat,
                   ST_X(location::geometry) AS lon, confidence, title,
                   detected_at, acknowledged_at, resolved_at
