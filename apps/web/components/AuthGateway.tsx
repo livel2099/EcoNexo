@@ -10,6 +10,7 @@ import {
   getSession,
   login,
   loginWithGoogle,
+  registerCommunity,
   registerWithEmail,
   saveSession,
 } from "../app/lib/api";
@@ -32,7 +33,7 @@ declare global {
   }
 }
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "community";
 type Vertical = "municipio" | "forestal" | "energetica";
 type ApiStatus = "checking" | "online" | "offline" | "demo";
 
@@ -41,6 +42,7 @@ const LEGAL_VERSION = "2026-07-27";
 function destinationForSession(session: Session): string {
   if (session.must_change_password) return "/cambiar-contrasena";
   if (session.platform_admin) return "/plataforma";
+  if (session.account_type === "community") return "/red-investigacion";
   return "/dashboard";
 }
 
@@ -52,6 +54,8 @@ export default function AuthGateway() {
   const [confirmPassword, setConfirmPassword] = useState(IS_DEMO ? "econexo123" : "");
   const [fullName, setFullName] = useState(IS_DEMO ? "Administración EcoNexo" : "");
   const [organizationName, setOrganizationName] = useState(IS_DEMO ? "EcoNexo Misiones · Red Provincial" : "");
+  const [discipline, setDiscipline] = useState("");
+  const [institution, setInstitution] = useState("");
   const [vertical, setVertical] = useState<Vertical>("forestal");
   const [municipality, setMunicipality] = useState("Posadas");
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -62,7 +66,7 @@ export default function AuthGateway() {
   const googleButton = useRef<HTMLDivElement>(null);
   const formRef = useRef({ mode, organizationName, vertical, municipality, termsAccepted });
   const selectedDepartment = municipalityDepartment(municipality) || "Capital";
-  const googleRegistrationReady = mode === "login" || Boolean(organizationName.trim() && termsAccepted);
+  const googleRegistrationReady = mode === "login" || (mode === "register" && Boolean(organizationName.trim() && termsAccepted));
 
   useEffect(() => {
     formRef.current = { mode, organizationName, vertical, municipality, termsAccepted };
@@ -88,6 +92,7 @@ export default function AuthGateway() {
 
   async function finishGoogle(credential: string) {
     const current = formRef.current;
+    if (current.mode === "community") return;
     setError("");
     setBusy(true);
     try {
@@ -158,9 +163,13 @@ export default function AuthGateway() {
     event.preventDefault();
     setError("");
 
-    if (mode === "register") {
-      if (!organizationName.trim() || !fullName.trim()) {
-        setError("Completá el nombre de la organización y tu nombre.");
+    if (mode !== "login") {
+      if (!fullName.trim()) {
+        setError("Completá tu nombre y apellido.");
+        return;
+      }
+      if (mode === "register" && !organizationName.trim()) {
+        setError("Completá el nombre de la organización.");
         return;
       }
       if (password.length < 8 || !/[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(password) || !/\d/.test(password)) {
@@ -191,11 +200,21 @@ export default function AuthGateway() {
             terms_accepted: termsAccepted,
             legal_version: LEGAL_VERSION,
           })
-        : await login(email, password);
+        : mode === "community"
+          ? await registerCommunity({
+              name: fullName.trim(),
+              email,
+              password,
+              discipline: discipline.trim() || undefined,
+              institution: institution.trim() || undefined,
+              terms_accepted: termsAccepted,
+              legal_version: LEGAL_VERSION,
+            })
+          : await login(email, password);
       saveSession(session);
       router.replace(destinationForSession(session));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : mode === "register" ? "No se pudo crear la organización" : "Credenciales inválidas");
+      setError(cause instanceof Error ? cause.message : mode === "community" ? "No se pudo crear la cuenta gratuita" : mode === "register" ? "No se pudo crear la organización" : "Credenciales inválidas");
       void checkConnection();
     } finally {
       setBusy(false);
@@ -236,59 +255,72 @@ export default function AuthGateway() {
             {apiStatus === "offline" && <button type="button" onClick={() => void checkConnection()}>Reintentar</button>}
           </div>
 
-          <div className="auth-tabs" role="tablist" aria-label="Acceso a EcoNexo">
+          <div className="auth-tabs auth-tabs-three" role="tablist" aria-label="Acceso a EcoNexo">
             <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => changeMode("login")}>Ingresar</button>
-            <button type="button" role="tab" aria-selected={mode === "register"} className={mode === "register" ? "active" : ""} onClick={() => changeMode("register")}>Crear organización</button>
+            <button type="button" role="tab" aria-selected={mode === "register"} className={mode === "register" ? "active" : ""} onClick={() => changeMode("register")}>Organización</button>
+            <button type="button" role="tab" aria-selected={mode === "community"} className={mode === "community" ? "active foi-tab" : "foi-tab"} onClick={() => changeMode("community")}>EcoNexoFoI gratis</button>
           </div>
 
-          <div className="auth-panel-heading">
-            <span className="eyebrow">ACCESO SEGURO</span>
-            <h2>{mode === "login" ? "Bienvenido de nuevo" : "Activá tu espacio institucional"}</h2>
-            <p>{mode === "login" ? "Ingresá al centro de comando y a tus informes." : "Registrate con email. El primer usuario quedará como administrador; Google es opcional."}</p>
+          <div className={`auth-panel-heading ${mode === "community" ? "foi-auth-heading" : ""}`}>
+            <span className="eyebrow">{mode === "community" ? "COMUNIDAD CIENTÍFICA ABIERTA" : "ACCESO SEGURO"}</span>
+            <h2>{mode === "login" ? "Bienvenido de nuevo" : mode === "community" ? "Creá tu perfil gratuito" : "Activá tu espacio institucional"}</h2>
+            <p>{mode === "login" ? "Una sola cuenta para el centro de comando y EcoNexoFoI." : mode === "community" ? "Publicá investigaciones, proponé áreas de estudio y colaborá con profesionales sin costo." : "Registrate con email. El primer usuario quedará como administrador; Google es opcional."}</p>
           </div>
 
-          <form onSubmit={emailSubmit} className={`email-login ${mode === "register" ? "email-registration" : ""}`}>
+          <form onSubmit={emailSubmit} className={`email-login ${mode !== "login" ? "email-registration" : ""}`}>
             {mode === "register" && (
-              <>
-                <div className="registration-fields">
-                  <label>Nombre de la organización
-                    <input required value={organizationName} maxLength={120} onChange={(event) => setOrganizationName(event.target.value)} placeholder="Municipalidad, empresa o programa" />
-                  </label>
-                  <label>Localidad base en Misiones
-                    <select value={municipality} onChange={(event) => setMunicipality(event.target.value)}>
-                      {MISIONES_MUNICIPALITIES.map((item) => <option key={`${item.department}-${item.name}`} value={item.name}>{item.name} · Dpto. {item.department}</option>)}
-                    </select>
-                  </label>
-                  <label>Tipo de operación
-                    <select value={vertical} onChange={(event) => setVertical(event.target.value as Vertical)}>
-                      <option value="forestal">Forestal y biodiversidad</option>
-                      <option value="municipio">Municipio y gestión territorial</option>
-                      <option value="energetica">Energía e infraestructura crítica</option>
-                    </select>
-                  </label>
-                </div>
-                <label>Nombre y apellido del administrador
-                  <input required value={fullName} maxLength={100} autoComplete="name" onChange={(event) => setFullName(event.target.value)} placeholder="Miguel Elías Ibachuta" />
+              <div className="registration-fields">
+                <label>Nombre de la organización
+                  <input required value={organizationName} maxLength={120} onChange={(event) => setOrganizationName(event.target.value)} placeholder="Municipalidad, empresa o programa" />
                 </label>
-              </>
+                <label>Localidad base en Misiones
+                  <select value={municipality} onChange={(event) => setMunicipality(event.target.value)}>
+                    {MISIONES_MUNICIPALITIES.map((item) => <option key={`${item.department}-${item.name}`} value={item.name}>{item.name} · Dpto. {item.department}</option>)}
+                  </select>
+                </label>
+                <label>Tipo de operación
+                  <select value={vertical} onChange={(event) => setVertical(event.target.value as Vertical)}>
+                    <option value="forestal">Forestal y biodiversidad</option>
+                    <option value="municipio">Municipio y gestión territorial</option>
+                    <option value="energetica">Energía e infraestructura crítica</option>
+                  </select>
+                </label>
+              </div>
+            )}
+
+            {mode !== "login" && (
+              <label>{mode === "register" ? "Nombre y apellido del administrador" : "Nombre y apellido"}
+                <input required value={fullName} maxLength={100} autoComplete="name" onChange={(event) => setFullName(event.target.value)} placeholder="Tu nombre profesional" />
+              </label>
+            )}
+
+            {mode === "community" && (
+              <div className="foi-registration-fields">
+                <label>Disciplina o especialidad
+                  <input value={discipline} maxLength={120} onChange={(event) => setDiscipline(event.target.value)} placeholder="Ej. Ecología urbana" />
+                </label>
+                <label>Institución <small>opcional</small>
+                  <input value={institution} maxLength={160} onChange={(event) => setInstitution(event.target.value)} placeholder="Universidad, instituto o independiente" />
+                </label>
+              </div>
             )}
 
             <label>Email
               <input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@organizacion.org" />
             </label>
 
-            <div className={mode === "register" ? "password-grid" : ""}>
+            <div className={mode !== "login" ? "password-grid" : ""}>
               <label>Contraseña
-                <input type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} required minLength={mode === "register" ? 8 : 6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" />
+                <input type="password" autoComplete={mode !== "login" ? "new-password" : "current-password"} required minLength={mode !== "login" ? 8 : 6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" />
               </label>
-              {mode === "register" && (
+              {mode !== "login" && (
                 <label>Repetir contraseña
                   <input type="password" autoComplete="new-password" required minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="••••••••" />
                 </label>
               )}
             </div>
 
-            {mode === "register" && (
+            {mode !== "login" && (
               <>
                 <small className="password-help">Mínimo 8 caracteres, al menos una letra y un número.</small>
                 <label className="legal-check">
@@ -299,11 +331,11 @@ export default function AuthGateway() {
             )}
 
             <button className="primary auth-submit" disabled={busy || apiStatus === "checking"}>
-              {busy ? "Procesando…" : mode === "register" ? "Crear organización y entrar" : "Ingresar al centro de comando"}
+              {busy ? "Procesando…" : mode === "community" ? "Crear cuenta gratuita y entrar" : mode === "register" ? "Crear organización y entrar" : "Ingresar"}
             </button>
           </form>
 
-          {(GOOGLE_CLIENT_ID || IS_DEMO) && (
+          {mode !== "community" && (GOOGLE_CLIENT_ID || IS_DEMO) && (
             <>
               <div className="auth-separator"><span>o continuar con Google</span></div>
               <div className="google-auth-area">

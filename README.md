@@ -36,7 +36,7 @@ EcoNexo convierte flujos masivos de datos (sensores IoT + satelite + reportes ci
 | Path | Rol | Stack |
 |------|-----|-------|
 | `apps/api` | API core del sistema | Python + **FastAPI** |
-| `apps/web` | Dashboard + PWA ciudadana | **Next.js** (App Router, TS) + **Leaflet** |
+| `apps/web` | Dashboard + PWA ciudadana + **EcoNexoFoI** | **Next.js** (App Router, TS) + **Leaflet** |
 | `services/ingest` | Consumidor MQTT -> persiste/republica telemetria | **Node.js** |
 | `services/notify` | Despacho de notificaciones (in-app real; email/SMS/WhatsApp stub) | **Node.js** |
 | `services/anomaly` | Deteccion de anomalias (score IA real) | **PyTorch** |
@@ -71,8 +71,11 @@ docker compose run --rm api python -m app.seed    # datos semilla (o: make seed)
 Abrir:
 - **Dashboard (Centro de Comando):** http://localhost:3000  → login `admin@forestandes.econexo.ar` / `econexo123`
 - **PWA ciudadana:** http://localhost:3000/reportar
+- **EcoNexoFoI (red gratuita de investigación):** http://localhost:3000/red-investigacion
 - **API + Swagger:** http://localhost:8000/docs
 - **MinIO consola:** http://localhost:9090
+
+La opción **EcoNexoFoI gratis** está disponible desde el login. Permite crear usuarios comunitarios sin organización paga. Detalles técnicos y despliegue: [`docs/ECONEXOFOI.md`](docs/ECONEXOFOI.md).
 
 Usuarios semilla (password `econexo123` en las 3 orgs): `admin@<slug>.econexo.ar`, `operador@<slug>.econexo.ar`
 (slugs: `muni-villa-lago`, `forestandes`, `patagonia-energia`).

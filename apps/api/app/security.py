@@ -1,7 +1,10 @@
 """Hashing (argon2id) y JWT."""
 from __future__ import annotations
 
+import hashlib
+import re
 import secrets
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -32,13 +35,19 @@ def new_token(nbytes: int = 24) -> str:
     return secrets.token_urlsafe(nbytes)
 
 
-def create_access_token(subject: str, org_id: str, role: str) -> str:
+def create_access_token(
+    subject: str, org_id: str, role: str, *, account_type: str = "institutional",
+    email: str = "", platform_admin: bool = False,
+) -> str:
     s = get_settings()
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "sub": subject,
         "org_id": org_id,
         "role": role,
+        "account_type": account_type,
+        "email": email,
+        "platform_admin": platform_admin,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=s.jwt_expire_minutes)).timestamp()),
     }
@@ -51,3 +60,35 @@ def decode_token(token: str) -> dict[str, Any] | None:
         return jwt.decode(token, s.jwt_secret, algorithms=[s.jwt_algorithm])
     except JWTError:
         return None
+
+def slugify(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
+
+
+def token_digest(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def create_citizen_token() -> str:
+    settings = get_settings()
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": secrets.token_urlsafe(24),
+        "typ": "citizen",
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(days=365)).timestamp()),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def decode_citizen_token(token: str) -> str | None:
+    settings = get_settings()
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except JWTError:
+        return None
+    if payload.get("typ") != "citizen":
+        return None
+    subject = payload.get("sub")
+    return str(subject) if subject else None

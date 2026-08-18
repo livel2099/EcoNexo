@@ -168,6 +168,35 @@ export async function registerWithEmail(input: EmailRegisterInput): Promise<Sess
   }), "No se pudo crear la organización", false);
 }
 
+export interface CommunityRegisterInput {
+  name: string;
+  email: string;
+  password: string;
+  discipline?: string;
+  institution?: string;
+  terms_accepted: boolean;
+  legal_version?: string;
+}
+
+export async function registerCommunity(input: CommunityRegisterInput): Promise<Session> {
+  if (IS_DEMO) {
+    const session = await demoRegisterEmail({
+      organization_name: "EcoNexoFoI · Comunidad abierta",
+      vertical: "forestal",
+      name: input.name,
+      email: input.email,
+      password: input.password,
+      terms_accepted: input.terms_accepted,
+      legal_version: input.legal_version,
+    });
+    return { ...session, account_type: "community" };
+  }
+  return checked<Session>(await request(`${API}/auth/community/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }), "No se pudo crear la cuenta gratuita", false);
+}
 export interface GoogleAuthInput {
   credential: string;
   mode: "login" | "register";

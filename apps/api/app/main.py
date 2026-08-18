@@ -11,12 +11,34 @@ import contextlib
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
 from .config import get_settings
-from .routers import alerts, auth, devices, kpis, orgs, reports, rules, satellite
+from .routers import (
+    admin,
+    alerts,
+    auth,
+    copernicus,
+    devices,
+    environment,
+    foi,
+    impact_reports,
+    kpis,
+    modules,
+    notifications,
+    orgs,
+    pipeline,
+    platform,
+    reports,
+    rules,
+    satellite,
+    subscriptions,
+    territory,
+    zones,
+)
 from .security import decode_token
 from .ws import manager, mqtt_bridge
 
@@ -53,6 +75,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(foi.router)
 app.include_router(orgs.router)
 app.include_router(devices.router)
 app.include_router(alerts.router)
@@ -60,6 +83,25 @@ app.include_router(rules.router)
 app.include_router(reports.router)
 app.include_router(kpis.router)
 app.include_router(satellite.router)
+app.include_router(copernicus.router)
+app.include_router(environment.router)
+app.include_router(zones.router)
+app.include_router(pipeline.router)
+app.include_router(territory.router)
+app.include_router(impact_reports.router)
+app.include_router(modules.router)
+app.include_router(subscriptions.router)
+app.include_router(admin.router)
+app.include_router(notifications.router)
+app.include_router(platform.router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+    logging.getLogger("econexo.api").exception(
+        "Error no controlado en %s %s", request.method, request.url.path, exc_info=exc
+    )
+    return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
 
 
 @app.get("/health", tags=["meta"])

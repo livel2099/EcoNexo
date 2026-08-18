@@ -9,6 +9,7 @@ export interface Session {
   is_new_user?: boolean;
   platform_admin?: boolean;
   must_change_password?: boolean;
+  account_type?: "institutional" | "community";
 }
 export interface Org { id: string; name: string; slug: string; vertical: string; primary_color: string; baseline_response_s: number; province: string; department: string | null; municipality: string | null; territory_scope: "provincial" | "departamental" | "municipal" | "area_operativa"; }
 export type DeviceMarkerShape = "circle" | "square" | "triangle";

@@ -1,7 +1,7 @@
 """Cliente NASA FIRMS (focos de calor). API real gratuita (key por email):
 https://firms.modaps.eosdis.nasa.gov/api/  ->  MAP_KEY
 
-Si NASA_FIRMS_KEY no esta seteada, usa el fixture grabado (fixtures/firms_sample.json).
+Sin NASA_FIRMS_KEY devuelve una lista vacia. El fixture solo se usa cuando ALLOW_DEMO_SATELLITE_FIXTURES=true en desarrollo o demo.
 """
 from __future__ import annotations
 
@@ -17,11 +17,38 @@ import httpx
 
 log = logging.getLogger("econexo.firms")
 
-# BBox aproximado de Argentina: min_lon,min_lat,max_lon,max_lat
-ARGENTINA_BBOX = "-73.6,-55.1,-53.6,-21.8"
+# BBox operacional de Misiones: min_lon,min_lat,max_lon,max_lat
+MISIONES_BBOX = "-56.10,-28.20,-53.55,-25.45"
+MISIONES_LIMITS = (-28.20, -56.10, -25.45, -53.55)
 FIRMS_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/{key}/VIIRS_SNPP_NRT/{bbox}/{days}"
 FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "firms_sample.json"
 
+
+MISIONES_POLYGON = [
+    (-25.50, -54.64), (-25.70, -54.24), (-25.95, -53.92),
+    (-26.25, -53.63), (-26.62, -53.70), (-27.02, -53.88),
+    (-27.36, -54.20), (-27.62, -54.64), (-27.93, -55.12),
+    (-28.18, -55.66), (-27.84, -55.86), (-27.37, -55.96),
+    (-27.06, -55.72), (-26.70, -55.42), (-26.35, -55.08),
+    (-25.98, -54.82), (-25.66, -54.68), (-25.50, -54.64),
+]
+
+
+def _inside_misiones(lat: float, lon: float) -> bool:
+    south, west, north, east = MISIONES_LIMITS
+    if not (south <= lat <= north and west <= lon <= east):
+        return False
+    inside = False
+    j = len(MISIONES_POLYGON) - 1
+    for i, (lat_i, lon_i) in enumerate(MISIONES_POLYGON):
+        lat_j, lon_j = MISIONES_POLYGON[j]
+        intersects = ((lon_i > lon) != (lon_j > lon)) and (
+            lat < (lat_j - lat_i) * (lon - lon_i) / ((lon_j - lon_i) or 1e-12) + lat_i
+        )
+        if intersects:
+            inside = not inside
+        j = i
+    return inside
 
 def _conf_to_float(raw: str) -> float:
     raw = (raw or "").strip().lower()
@@ -63,22 +90,35 @@ def _load_fixture_recent() -> list[dict]:
     for i, d in enumerate(data["detections"]):
         n = _normalize(d)
         n["acquired_at"] = (now - timedelta(minutes=5 + i * 7)).isoformat()
-        out.append(n)
+        if _inside_misiones(n["lat"], n["lon"]):
+            out.append(n)
     return out
 
 async def fetch_detections(days: int = 1) -> list[dict]:
     key = os.getenv("NASA_FIRMS_KEY", "").strip()
+    environment = os.getenv("ENVIRONMENT", "development").strip().lower()
+    fixtures_enabled = os.getenv(
+        "ALLOW_DEMO_SATELLITE_FIXTURES",
+        "false" if environment in {"production", "prod"} else "true",
+    ).strip().lower() in {"1", "true", "yes", "on"}
     if not key:
-        log.info("Sin NASA_FIRMS_KEY: usando fixture grabado")
-        return _load_fixture_recent()
+        if fixtures_enabled:
+            log.warning("Sin NASA_FIRMS_KEY: usando fixture DEMO limitado a Misiones")
+            return _load_fixture_recent()
+        log.error("Sin NASA_FIRMS_KEY en producción: no se publican detecciones simuladas")
+        return []
 
-    url = FIRMS_URL.format(key=key, bbox=ARGENTINA_BBOX, days=days)
+    url = FIRMS_URL.format(key=key, bbox=MISIONES_BBOX, days=days)
     try:
         async with httpx.AsyncClient(timeout=20.0) as c:
             r = await c.get(url)
             r.raise_for_status()
         reader = csv.DictReader(io.StringIO(r.text))
-        return [_normalize(row) for row in reader]
+        detections = [_normalize(row) for row in reader]
+        return [item for item in detections if _inside_misiones(item["lat"], item["lon"])]
     except Exception as exc:
-        log.warning("FIRMS API fallo (%s), usando fixture", exc)
-        return _load_fixture_recent()
+        if fixtures_enabled:
+            log.warning("FIRMS API falló (%s); se usa fixture DEMO", exc)
+            return _load_fixture_recent()
+        log.error("FIRMS API falló (%s); producción queda sin detecciones hasta recuperar la fuente", exc)
+        return []

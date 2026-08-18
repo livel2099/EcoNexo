@@ -14,6 +14,8 @@
     "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy",
     "start": "next start -H 0.0.0.0",
     "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "validate": "npm run typecheck && npm run build",
     "build:cloudflare:production": "cross-env NEXT_PUBLIC_DEMO_MODE=false NEXT_PUBLIC_STATIC_EXPORT=true next build",
     "preview:cloudflare:production": "npm run build:cloudflare:production && wrangler --config wrangler.production.jsonc dev",
@@ -27,6 +29,7 @@
     "react-dom": "19.0.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@types/leaflet": "1.9.15",
     "@types/node": "22.10.2",
     "@types/react": "19.0.2",

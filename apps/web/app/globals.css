@@ -1,23 +1,18 @@
 /* EcoNexo · centro de comando bioclimático */
 :root {
-  --org-color: #2E7D5B;
-  --org-accent: #65b995;
-  --org-secondary: #4fc2b2;
-  --org-contrast: #ffffff;
   --bg: #020608;
   --bg-2: #061115;
   --panel: rgba(8, 20, 25, .84);
   --panel-solid: #081419;
   --panel-2: rgba(10, 28, 33, .92);
-  --border: color-mix(in srgb, var(--org-accent) 24%, transparent);
-  --border-soft: color-mix(in srgb, var(--org-accent) 12%, transparent);
+  --border: rgba(118, 255, 214, .20);
+  --border-soft: rgba(118, 255, 214, .10);
   --text: #e9f7f3;
   --muted: #8ba39f;
   --muted-2: #5c7470;
-  --green: var(--org-color);
-  --green-bright: var(--org-accent);
-  --cyan: var(--org-secondary);
-  --success: #8ff06a;
+  --green: #50c978;
+  --green-bright: #8ff06a;
+  --cyan: #33daff;
   --amber: #ffd166;
   --orange: #ff9f45;
   --red: #ff5d52;
@@ -57,14 +52,6 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
   isolation: isolate;
 }
-.tech-shell {
-  background:
-    radial-gradient(circle at 10% -15%, color-mix(in srgb, var(--org-secondary) 14%, transparent), transparent 34%),
-    radial-gradient(circle at 90% 4%, color-mix(in srgb, var(--org-color) 13%, transparent), transparent 31%),
-    linear-gradient(color-mix(in srgb, var(--org-secondary) 2.5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--org-secondary) 2.5%, transparent) 1px, transparent 1px);
-  background-size: auto, auto, 36px 36px, 36px 36px;
-}
 
 .topbar {
   grid-column: 1 / -1;
@@ -96,7 +83,13 @@ a { color: inherit; text-decoration: none; }
   text-transform: uppercase;
 }
 .orbital-status i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 12px currentColor; animation: dataBlink 1.8s ease-in-out infinite; }
-.nav { display: flex; gap: 3px; }
+/* min-width:0 va sin condicion de ancho: `.nav` es un flex item y su valor por
+   defecto (`auto`) le impide encogerse, asi que se montaba sobre el bloque de
+   cuenta en cuanto los modulos no entraban (a 1280 se solapaba 203px). Donde
+   sobra ancho la barra no desplaza y la regla no se nota. */
+.nav { min-width: 0; display: flex; gap: 3px; overflow-x: auto; scrollbar-width: thin; }
+.nav button { flex: none; }
+.account-area { flex: none; }
 .nav button {
   padding: 7px 12px;
   border-color: transparent;
@@ -105,7 +98,7 @@ a { color: inherit; text-decoration: none; }
   white-space: nowrap;
 }
 .nav button:hover { color: var(--text); border-color: var(--border); background: rgba(51, 218, 255, .04); }
-.nav button.active { color: var(--org-accent); border-color: color-mix(in srgb, var(--org-color) 42%, transparent); background: color-mix(in srgb, var(--org-color) 12%, transparent); }
+.nav button.active { color: var(--green-bright); border-color: rgba(143, 240, 106, .25); background: rgba(143, 240, 106, .08); }
 .logout { flex: none; }
 
 .kpirow, .earthbar { grid-column: 1 / -1; }
@@ -121,7 +114,7 @@ a { color: inherit; text-decoration: none; }
   text-transform: uppercase;
   border-bottom: 1px solid var(--border-soft);
 }
-.banner.normal { color: var(--success); background: linear-gradient(90deg, color-mix(in srgb, var(--success) 15%, transparent), transparent 55%); }
+.banner.normal { color: var(--green-bright); background: linear-gradient(90deg, rgba(44, 151, 83, .19), transparent 55%); }
 .banner.atencion { color: var(--amber); background: linear-gradient(90deg, rgba(255, 209, 102, .16), transparent 55%); }
 .banner.critico { color: #ff8c84; background: linear-gradient(90deg, rgba(255, 93, 82, .20), transparent 55%); }
 .dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
@@ -151,7 +144,7 @@ a { color: inherit; text-decoration: none; }
 .kpi h4 { margin: 0 0 7px; color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: .7px; text-transform: uppercase; }
 .kpi .val { font-family: var(--mono); font-size: 24px; font-weight: 750; line-height: 1; }
 .kpi .tgt { margin-top: 5px; color: var(--muted-2); font-size: 10px; }
-.kpi .ok { color: var(--success); }
+.kpi .ok { color: var(--green-bright); }
 .kpi .bad { color: var(--amber); }
 .kpi .bar, .confbar { height: 3px; overflow: hidden; border-radius: 4px; background: rgba(128, 170, 157, .11); }
 .kpi .bar { margin-top: 8px; }
@@ -174,18 +167,38 @@ a { color: inherit; text-decoration: none; }
 .earth-source { position: relative; display: flex; align-items: center; gap: 10px; }
 .earth-source strong, .earth-source small, .earth-metric span, .earth-metric small { display: block; }
 .earth-source strong { color: var(--cyan); font-family: var(--mono); font-size: 9.5px; letter-spacing: .75px; }
-.earth-source small { margin-top: 3px; color: var(--muted); font-size: 9.5px; white-space: nowrap; }
+.earth-source small { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; }
+/* El bloque de texto es un flex item y su min-width por defecto es `auto`: no
+   se encogia y su contenido invadia la primera metrica, arrastrando tambien la
+   insignia de estado. `overflow:hidden` es la red de seguridad de la celda. */
+.earth-source { overflow: hidden; }
+.earth-source > span:not(.orbit-glyph):not(.source-state) { min-width: 0; }
+.earth-source .source-state { flex: none; }
 .orbit-glyph { width: 27px; color: var(--green-bright); font-size: 19px; text-align: center; text-shadow: 0 0 18px currentColor; animation: orbitPulse 3s ease-in-out infinite; }
 .source-state { margin-left: auto; padding: 3px 6px; border: 1px solid currentColor; border-radius: 12px; font-family: var(--mono); font-size: 8px; letter-spacing: .5px; text-transform: uppercase; }
-.source-state.live { color: var(--success); }
+.source-state.live { color: var(--green-bright); }
 .source-state.stale { color: var(--amber); }
 .source-state.offline { color: var(--red); }
-.earth-metric { position: relative; min-height: 68px; }
-.earth-metric > span { color: var(--muted); font-size: 8.5px; font-weight: 750; letter-spacing: .65px; text-transform: uppercase; }
-.earth-metric > strong { display: block; margin-top: 3px; font-family: var(--mono); font-size: 16px; white-space: nowrap; }
-.earth-metric > small { max-width: calc(100% - 82px); overflow: hidden; color: var(--muted-2); font-size: 8.5px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
-.earth-metric .spark { position: absolute; right: 7px; bottom: 8px; width: 76px; height: 24px; overflow: visible; background: transparent; border: 0; border-radius: 0; }
-.spark-empty { position: absolute; right: 9px; bottom: 9px; color: var(--muted-2); font-family: var(--mono); font-size: 8px; }
+/* El sparkline estaba en position:absolute sobre la celda, y solo `small` se
+   protegia con un max-width. El numero no, asi que su caja corria por debajo
+   del grafico y a ciertos anchos las cifras quedaban tapadas. Con una grilla de
+   dos columnas el texto y el grafico no pueden solaparse a ningun ancho. */
+.earth-metric {
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  column-gap: 10px;
+  /* Sin esto la cifra de 16px y el subtitulo de 8.5px se tocan exactamente y
+     los trazos descendentes se leen encimados. */
+  row-gap: 2px;
+}
+.earth-metric > span { grid-area: 1 / 1; color: var(--muted); font-size: 8.5px; font-weight: 750; letter-spacing: .65px; text-transform: uppercase; }
+.earth-metric > strong { grid-area: 2 / 1; margin-top: 3px; min-width: 0; overflow: hidden; font-family: var(--mono); font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.earth-metric > small { grid-area: 3 / 1; min-width: 0; overflow: hidden; color: var(--muted-2); font-size: 8.5px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.earth-metric .spark { grid-area: 1 / 2 / 4 / 3; align-self: center; width: 76px; height: 24px; overflow: visible; background: transparent; border: 0; border-radius: 0; }
+.spark-empty { grid-area: 1 / 2 / 4 / 3; align-self: center; justify-self: end; color: var(--muted-2); font-family: var(--mono); font-size: 8px; }
 .earth-refresh { align-self: center; width: 26px; height: 26px; padding: 0; border-radius: 50%; color: var(--cyan); }
 .earth-loading { min-height: 70px; }
 .earth-skeleton { align-self: center; height: 34px; margin: 10px; border-radius: 7px; background: linear-gradient(100deg, rgba(255, 255, 255, .025) 20%, rgba(51, 218, 255, .10) 45%, rgba(255, 255, 255, .025) 70%); background-size: 220% 100%; animation: skeleton 1.6s linear infinite; }
@@ -244,7 +257,7 @@ a { color: inherit; text-decoration: none; }
   background: rgba(3, 13, 17, .88);
   backdrop-filter: blur(12px);
 }
-.satellite-status { top: 68px; left: 14px; color: var(--success); }
+.satellite-status { top: 68px; left: 14px; color: var(--green-bright); }
 .satellite-status.zoom, .satellite-status.loading { color: var(--amber); }
 .satellite-status.degraded { color: var(--red); }
 .satellite-status.off { color: var(--muted); }
@@ -274,7 +287,7 @@ a { color: inherit; text-decoration: none; }
 .sev.critica { color: #fff; background: var(--red); }
 .sev.alta { color: #180b00; background: var(--orange); }
 .sev.media { color: #171100; background: var(--amber); }
-.sev.baja { color: #031308; background: var(--success); }
+.sev.baja { color: #031308; background: var(--green-bright); }
 .conf { font-family: var(--mono); font-size: 14px; font-weight: 750; }
 .confbar { margin-top: 8px; }
 .pills, .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
@@ -287,8 +300,8 @@ a { color: inherit; text-decoration: none; }
 button { padding: 6px 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: rgba(11, 30, 34, .88); font: inherit; font-size: 11px; cursor: pointer; transition: color .18s ease, background .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
 button:hover { transform: translateY(-1px); border-color: rgba(143, 240, 106, .5); }
 button:disabled { cursor: wait; opacity: .55; transform: none; }
-button.primary { color: var(--org-contrast); border-color: var(--org-color); background: var(--org-color); font-weight: 750; }
-button.primary:hover { border-color: var(--org-accent); box-shadow: 0 0 18px color-mix(in srgb, var(--org-color) 28%, transparent); }
+button.primary { color: #031208; border-color: var(--green-bright); background: var(--green-bright); font-weight: 750; }
+button.primary:hover { box-shadow: 0 0 18px rgba(143, 240, 106, .18); }
 button.sm { padding: 4px 8px; font-size: 9.5px; }
 button.danger:hover { color: #ffaaa4; border-color: var(--red); }
 
@@ -301,7 +314,7 @@ button.danger:hover { color: #ffaaa4; border-color: var(--red); }
 .dcard .dh { display: flex; align-items: center; justify-content: space-between; }
 .dcard .nm { font-family: var(--mono); font-weight: 700; }
 .stat { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; }
-.stat.online { color: var(--success); }
+.stat.online { color: var(--green-bright); }
 .stat.offline { color: var(--muted-2); }
 .stat.alerta { color: var(--red); }
 .metrics { display: flex; gap: 14px; margin-top: 10px; color: var(--muted); font-size: 10px; }
@@ -343,6 +356,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
   .shell { grid-template-columns: minmax(0, 1fr) 330px; }
   .orbital-status { display: none; }
   .earthbar { grid-template-columns: minmax(190px, .85fr) repeat(5, minmax(120px, 1fr)) 32px; overflow-x: auto; }
+  /* Debajo de este ancho el sparkline le roba 76px al texto y las cifras se
+     recortan. El valor pesa mas que el grafico decorativo, asi que se oculta. */
+  .earth-metric { grid-template-columns: minmax(0, 1fr); }
+  .earth-metric .spark, .earth-metric .spark-empty { display: none; }
   .map-toolbar { align-items: flex-start; }
   .toolbar-title, .base-switch { display: none; }
 }
@@ -667,13 +684,13 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
   body * { visibility: hidden; }
   .impact-document, .impact-document * { visibility: visible; }
   .impact-document { position: absolute; inset: 0; width: 100%; margin: 0; box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-  .no-print, .site-footer, .topbar, .banner, .kpis, .earthbar, .feedbar, .command-livebar, .report-actions { display: none !important; }
+  .no-print, .site-footer, .topbar, .banner, .kpis, .earthbar, .feedbar, .report-actions { display: none !important; }
   .impact-cover { min-height: 255mm; page-break-after: always; }
   .impact-section, .impact-methodology { break-inside: avoid; }
   .impact-metric-grid { grid-template-columns: repeat(3,1fr); }
 }
 
-/* ==========================================================================
+/* ========================================================================== 
    EcoNexo Earth Intelligence · SpaceAI observatory, animated brand & Admin Core
    ========================================================================== */
 
@@ -757,7 +774,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
 .observatory-controls { min-width: min(100%, 370px); display: grid; grid-template-columns: minmax(210px, 1fr) auto; gap: 8px; align-items: end; }
 .observatory-controls label { margin: 0; }
 .observatory-controls select { margin-top: 5px; }
-.observatory-sync { height: 31px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 10px; border: 1px solid currentColor; border-radius: 9px; color: var(--success); background: color-mix(in srgb, var(--success) 5%, transparent); font-family: var(--mono); font-size: 8px; letter-spacing: .65px; text-transform: uppercase; white-space: nowrap; }
+.observatory-sync { height: 31px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 10px; border: 1px solid currentColor; border-radius: 9px; color: var(--green-bright); background: rgba(143, 240, 106, .05); font-family: var(--mono); font-size: 8px; letter-spacing: .65px; text-transform: uppercase; white-space: nowrap; }
 .observatory-sync i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; }
 .observatory-sync.loading { color: var(--amber); }
 .observatory-sync.loading i { animation: dataBlink .7s linear infinite; }
@@ -1069,6 +1086,14 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
 .auth-api-status.checking i { animation: dataBlink .7s linear infinite; }
 .auth-api-status.offline { color: #ff9c94; border-color: rgba(255,93,82,.3); background: rgba(255,93,82,.055); }
 .email-registration { display: grid; }
+.auth-tabs-three { grid-template-columns: .72fr .92fr 1.36fr; }
+.auth-tabs-three button { min-width: 0; padding-inline: 7px; font-size: 10px; white-space: nowrap; }
+.auth-tabs-three .foi-tab { color: #67d8e5; }
+.auth-tabs-three .foi-tab.active { color: #081b21; background: #f4b942; box-shadow: inset 0 0 0 1px #f4b942; font-weight: 850; }
+.foi-auth-heading { padding: 13px 14px; border: 1px solid rgba(103,216,229,.2); border-radius: 11px; background: linear-gradient(120deg,rgba(5,150,105,.09),rgba(22,78,99,.12)); }
+.foi-auth-heading .eyebrow { color: #67d8e5; }
+.foi-registration-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.foi-registration-fields label small { color: var(--muted-2); font-size: 8px; font-weight: 500; }
 .password-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .password-help { display: block; margin: -6px 2px 9px; color: var(--muted-2); font-size: 8.5px; }
 .auth-config-ok { margin-top: 11px; padding: 8px 10px; border: 1px solid rgba(51,218,255,.2); border-radius: 8px; color: #92cbd3; background: rgba(51,218,255,.035); font-family: var(--mono); font-size: 8px; text-align: center; }
@@ -1083,7 +1108,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
   .auth-panel-brand { margin-top: 0; }
 }
 @media (max-width: 620px) {
-  .password-grid { grid-template-columns: 1fr; gap: 0; }
+  .password-grid, .foi-registration-fields { grid-template-columns: 1fr; gap: 0; }
+  .auth-tabs-three button { padding-inline: 5px; font-size: 8.5px; }
   .auth-panel { padding: 20px; border-radius: 16px; }
   .auth-panel-brand .tech-logo-mark { width: 48px; height: 48px; }
   .auth-panel-brand .tech-logo-word { font-size: 18px; }
@@ -1442,13 +1468,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
 .layer-buttons button:disabled { cursor: not-allowed; opacity: .38; }
 .leaflet-container { background: #071518 !important; font-family: inherit; }
 .leaflet-pane, .leaflet-tile-pane, .leaflet-tile-container { image-rendering: auto !important; transform-style: flat; }
-.topbar-org { min-width: 164px; display: flex; align-items: center; gap: 9px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 11px; background: color-mix(in srgb, var(--org-color) 9%, rgba(2, 12, 15, .88)); box-shadow: inset 3px 0 0 var(--org-color); }
-.topbar-org > i { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--org-color); box-shadow: 0 0 13px var(--org-color); }
-.topbar-org > div { min-width: 0; display: grid; gap: 1px; }
-.topbar-org small { color: var(--cyan); font-family: var(--mono); font-size: 7px; font-weight: 750; letter-spacing: .65px; }
-.topbar-org strong { max-width: 210px; overflow: hidden; color: var(--text); font-size: 10px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
-.topbar-org span { color: var(--muted); font-size: 8px; }
-.topbar-org:hover { border-color: color-mix(in srgb, var(--org-accent) 52%, transparent); }
+.topbar-org small { display: block; margin-top: 2px; color: var(--cyan); font-size: 8px; font-weight: 500; letter-spacing: .35px; }
 .banner small { margin-left: auto; color: rgba(235,255,247,.68); font-size: 9px; font-weight: 500; }
 @media (max-width: 760px) {
   .map-territory-hud { right: 10px; bottom: 72px; }
@@ -1762,40 +1782,23 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
 .satellite-status.fallback { border-color: rgba(255,209,102,.48); }
 .satellite-status.fallback .dot { background: #ffd166; box-shadow: 0 0 12px #ffd166; }
 
-.command-livebar {
+.command-pipeline-bar {
   display: grid;
-  grid-template-columns: minmax(190px,.72fr) minmax(260px,1.25fr) minmax(220px,.9fr) auto;
+  grid-template-columns: auto minmax(220px,1fr) auto auto;
+  gap: 12px;
   align-items: center;
-  min-height: 62px;
-  margin: 0 14px 9px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: linear-gradient(120deg, color-mix(in srgb, var(--org-color) 11%, rgba(4, 17, 20, .94)), rgba(3, 12, 15, .94));
-  box-shadow: 0 12px 34px rgba(0,0,0,.22), inset 3px 0 0 var(--org-color);
 }
-.command-live-identity { min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-right: 1px solid var(--border-soft); }
-.command-live-identity .live { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--success); font: 800 8px/1 var(--mono); letter-spacing: .8px; }
-.command-live-identity .dot { width: 7px; height: 7px; }
-.command-live-identity > div { min-width: 0; display: grid; gap: 3px; }
-.command-live-identity small, .command-live-detail small { color: var(--cyan); font: 750 7px/1 var(--mono); letter-spacing: .7px; }
-.command-live-identity strong { overflow: hidden; color: var(--text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.command-live-detail { min-width: 0; display: grid; gap: 5px; padding: 10px 16px; }
-.command-live-detail + .command-live-detail { border-left: 1px solid var(--border-soft); }
-.command-live-detail strong { overflow: hidden; color: #b9cbc6; font: 550 10px/1.35 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.command-live-detail.pipeline strong { color: var(--muted); }
+.pipeline-last-run { color: #7f9e96; font-size: .72rem; max-width: 360px; }
 .pipeline-run-button {
-  margin: 10px 12px;
-  padding: 10px 15px;
-  border: 1px solid var(--org-color);
-  border-radius: 10px;
-  background: var(--org-color);
-  color: var(--org-contrast);
+  padding: 9px 14px;
+  border-radius: 9px;
+  border: 1px solid rgba(131,239,103,.55);
+  background: linear-gradient(135deg, rgba(131,239,103,.22), rgba(30,159,127,.18));
+  color: #eafff2;
   font-weight: 800;
   cursor: pointer;
   white-space: nowrap;
 }
-.pipeline-run-button:hover { border-color: var(--org-accent); box-shadow: 0 0 18px color-mix(in srgb, var(--org-color) 30%, transparent); }
 .pipeline-run-button:disabled { opacity: .55; cursor: wait; }
 
 .telemetry-admin { display: grid; gap: 16px; }
@@ -1885,10 +1888,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
 .device-detail-meta b { color:#dfffee; font-size:.65rem; text-transform:uppercase; letter-spacing:.06em; }
 
 @media (max-width: 1180px) {
-  .command-livebar { grid-template-columns: minmax(180px,.72fr) minmax(260px,1.28fr) auto; }
-  .command-live-identity { grid-row: 1/3; }
-  .command-live-detail.pipeline { grid-column: 2/3; border-top: 1px solid var(--border-soft); border-left: 0; }
-  .command-livebar .pipeline-run-button { grid-column: 3; grid-row: 1/3; }
+  .command-pipeline-bar { grid-template-columns: auto 1fr auto; }
+  .pipeline-last-run { grid-column: 2/3; }
   .telemetry-admin-hero { grid-template-columns: 1fr 1fr; }
   .telemetry-pipeline-actions { grid-column: 1/-1; grid-template-columns: repeat(2,minmax(0,1fr)); }
   .telemetry-pipeline-actions small { grid-column: 1/-1; }
@@ -1896,14 +1897,236 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
   .telemetry-node-form { position: static; }
 }
 @media (max-width: 720px) {
-  .command-livebar { grid-template-columns: 1fr; margin-inline: 10px; }
-  .command-live-identity, .command-live-detail, .command-live-detail.pipeline { grid-column: auto; grid-row: auto; border: 0; border-bottom: 1px solid var(--border-soft); }
-  .command-livebar .pipeline-run-button { grid-column: auto; grid-row: auto; margin: 10px; }
-  .topbar-org { min-width: 0; }
-  .topbar-org strong { max-width: 150px; }
+  .command-pipeline-bar { grid-template-columns: 1fr; }
+  .pipeline-last-run { grid-column: auto; }
   .telemetry-admin-hero { grid-template-columns: 1fr; }
   .telemetry-pipeline-actions { grid-template-columns: 1fr; }
   .telemetry-admin-stats { grid-template-columns: 1fr 1fr; }
   .device-empty-state { grid-template-columns: 1fr; }
   .device-detail-meta { grid-template-columns: 1fr; }
 }
+
+/* ===================== EcoBot · asistente flotante ===================== */
+.ecobot { position: fixed; right: 20px; bottom: 20px; z-index: 990; font-size: 14px; }
+.ecobot-fab {
+  position: relative; display: flex; align-items: center; gap: 9px;
+  height: 56px; min-width: 56px; padding: 0 17px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(143, 240, 106, .4); color: #06140d;
+  background: linear-gradient(135deg, var(--green-bright), var(--green));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .45), 0 0 0 6px rgba(143, 240, 106, .12);
+  transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+}
+.ecobot-fab:hover { transform: translateY(-2px); filter: brightness(1.05); }
+.ecobot-fab.is-open { background: var(--panel-solid); color: var(--green-bright); border-color: rgba(143, 240, 106, .35); padding: 0; justify-content: center; }
+.ecobot-fab svg { width: 24px; height: 24px; flex: none; }
+.ecobot-fab-label { font-weight: 800; letter-spacing: .2px; white-space: nowrap; }
+.ecobot-fab::after {
+  content: ""; position: absolute; top: 9px; right: 12px; width: 9px; height: 9px; border-radius: 50%;
+  background: #ff5d52; border: 2px solid #0a3; box-shadow: 0 0 0 rgba(255, 93, 82, .6);
+  animation: ecobotPulse 2.4s ease-out infinite;
+}
+.ecobot-fab.is-open::after { display: none; }
+@keyframes ecobotPulse { 0% { box-shadow: 0 0 0 0 rgba(255, 93, 82, .55); } 70% { box-shadow: 0 0 0 8px rgba(255, 93, 82, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 93, 82, 0); } }
+
+.ecobot-panel {
+  position: absolute; right: 0; bottom: 72px; width: min(376px, calc(100vw - 32px));
+  height: min(560px, calc(100vh - 120px)); display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 20px; border: 1px solid rgba(143, 240, 106, .22);
+  background: linear-gradient(180deg, rgba(6, 20, 17, .98), rgba(3, 12, 12, .98));
+  box-shadow: 0 26px 70px rgba(0, 0, 0, .55); backdrop-filter: blur(10px);
+  animation: ecobotIn .22s cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes ecobotIn { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+
+.ecobot-head { display: flex; align-items: center; gap: 11px; padding: 14px 16px; border-bottom: 1px solid rgba(143, 240, 106, .14); background: rgba(143, 240, 106, .04); }
+.ecobot-avatar { width: 38px; height: 38px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 12px; color: #06140d; background: linear-gradient(135deg, var(--green-bright), var(--green)); }
+.ecobot-avatar svg { width: 22px; height: 22px; }
+.ecobot-head-text { flex: 1; line-height: 1.2; }
+.ecobot-head-text strong { display: block; font-size: 15px; color: #eafff5; }
+.ecobot-head-text small { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.ecobot-head-text small i { width: 7px; height: 7px; border-radius: 50%; background: var(--green-bright); box-shadow: 0 0 8px var(--green-bright); }
+.ecobot-close { width: 30px; height: 30px; border: none; border-radius: 9px; cursor: pointer; color: var(--muted); background: transparent; font-size: 15px; transition: background .15s, color .15s; }
+.ecobot-close:hover { background: rgba(255, 255, 255, .06); color: #eafff5; }
+
+.ecobot-log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; }
+.ecobot-msg { max-width: 84%; padding: 10px 13px; border-radius: 14px; line-height: 1.5; font-size: 13.5px; white-space: pre-wrap; word-wrap: break-word; }
+.ecobot-msg.bot { align-self: flex-start; color: #d9ede6; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .07); border-bottom-left-radius: 5px; }
+.ecobot-msg.user { align-self: flex-end; color: #06140d; background: linear-gradient(135deg, var(--green-bright), var(--green)); border-bottom-right-radius: 5px; font-weight: 500; }
+.ecobot-typing { display: flex; gap: 4px; align-items: center; padding: 13px 14px; }
+.ecobot-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: ecobotBlink 1.2s infinite ease-in-out; }
+.ecobot-typing span:nth-child(2) { animation-delay: .18s; } .ecobot-typing span:nth-child(3) { animation-delay: .36s; }
+@keyframes ecobotBlink { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+.ecobot-chips { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 16px 4px; }
+.ecobot-chip { cursor: pointer; padding: 7px 12px; border-radius: 999px; font-size: 12px; color: var(--green-bright); background: rgba(143, 240, 106, .08); border: 1px solid rgba(143, 240, 106, .25); transition: background .15s, transform .12s; }
+.ecobot-chip:hover { background: rgba(143, 240, 106, .16); transform: translateY(-1px); }
+
+.ecobot-input { display: flex; gap: 8px; padding: 12px 14px 6px; }
+.ecobot-input input { flex: 1; min-width: 0; padding: 11px 14px; border-radius: 12px; color: #eafff5; font-size: 13.5px; background: rgba(0, 0, 0, .28); border: 1px solid rgba(255, 255, 255, .1); outline: none; transition: border-color .15s; }
+.ecobot-input input:focus { border-color: rgba(143, 240, 106, .5); }
+.ecobot-input input::placeholder { color: var(--muted-2); }
+.ecobot-send { width: 42px; height: 42px; flex: none; display: flex; align-items: center; justify-content: center; border: none; border-radius: 12px; cursor: pointer; color: #06140d; background: linear-gradient(135deg, var(--green-bright), var(--green)); transition: filter .15s, opacity .15s; }
+.ecobot-send:hover:not(:disabled) { filter: brightness(1.06); }
+.ecobot-send:disabled { opacity: .4; cursor: not-allowed; }
+.ecobot-send svg { width: 19px; height: 19px; }
+.ecobot-disclaimer { margin: 0; padding: 2px 16px 12px; font-size: 10.5px; line-height: 1.4; color: var(--muted-2); text-align: center; }
+
+@media (max-width: 560px) { .ecobot { right: 14px; bottom: 14px; } .ecobot-panel { bottom: 68px; } }
+@media print { .ecobot { display: none !important; } }
+
+/* ===================== Límite de error (error.tsx) ===================== */
+.error-boundary { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+.error-card { max-width: 440px; text-align: center; padding: 34px 30px; border-radius: 22px; border: 1px solid rgba(143, 240, 106, .2); background: linear-gradient(180deg, rgba(6, 20, 17, .96), rgba(3, 12, 12, .96)); box-shadow: 0 26px 70px rgba(0, 0, 0, .5); }
+.error-glyph { display: inline-flex; width: 54px; height: 54px; align-items: center; justify-content: center; margin-bottom: 14px; border-radius: 15px; color: var(--amber); background: rgba(255, 209, 102, .1); border: 1px solid rgba(255, 209, 102, .28); }
+.error-glyph svg { width: 30px; height: 30px; }
+.error-card h1 { font-size: 21px; margin: 0 0 8px; color: #eafff5; }
+.error-card p { margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: var(--muted); }
+.error-digest { display: inline-block; margin-bottom: 18px; padding: 4px 11px; border-radius: 8px; font-size: 12px; color: var(--green-bright); background: rgba(0, 0, 0, .3); }
+.error-actions { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.error-link { color: var(--muted); font-size: 13px; text-decoration: underline; }
+.error-link:hover { color: #eafff5; }
+
+/* ===================== Accesibilidad (WCAG 2.2 AA) ===================== */
+/* 2.4.7 Foco visible: contorno claro para navegación por teclado, sin afectar
+   al puntero (solo :focus-visible). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--green-bright);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+
+/* El boton flotante de EcoBot es fijo y quedaba encima de los ultimos
+   controles del panel de alertas y de los enlaces legales del pie.
+   Se reserva el alto del boton (56px) mas su margen inferior. */
+/* Zona que ocupa el boton flotante de EcoBot desde la esquina inferior
+   derecha, medida sobre el render real: 134x76 px mas un margen de respiro.
+   Todo lo que se ancle a esa esquina se aparta usando estas dos medidas. */
+:root { --ecobot-safe-x: 150px; --ecobot-safe-y: 92px; }
+
+.side { padding-bottom: var(--ecobot-safe-y); }
+.site-footer { padding-right: var(--ecobot-safe-x); }
+
+/* La ficha del territorio y los controles de Leaflet se anclan a la esquina
+   inferior derecha del mapa. Solo chocan con el boton cuando el mapa llega al
+   borde de la ventana: con el panel de alertas plegado, o en los modulos que
+   ocupan el ancho completo. Fuera de esos casos no se mueven. */
+.shell.alerts-collapsed .map-territory-hud,
+.view .map-territory-hud {
+  right: calc(14px + var(--ecobot-safe-x));
+}
+.shell.alerts-collapsed .leaflet-bottom.leaflet-right,
+.view .leaflet-bottom.leaflet-right {
+  margin-right: var(--ecobot-safe-x);
+}
+
+@media (max-width: 560px) {
+  :root { --ecobot-safe-x: 0px; --ecobot-safe-y: 76px; }
+  .site-footer { padding-right: 0; padding-bottom: var(--ecobot-safe-y); }
+  /* A este ancho el boton se encoge y la ficha ya sube por su propia regla. */
+  .shell.alerts-collapsed .map-territory-hud,
+  .view .map-territory-hud { right: 10px; }
+}
+
+/* ============ Paneles plegables del centro de comando ============ */
+
+/* El atributo `hidden` lo pisa cualquier `display` explicito, y .kpis es grid.
+   Sin esto los paneles marcados como ocultos se seguirian viendo. */
+[hidden] { display: none !important; }
+
+/* Texto solo para lectores de pantalla: los botones de plegado usan iconos. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+.panel-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex: none; padding: 0;
+  border: 1px solid var(--border); border-radius: 7px; cursor: pointer;
+  color: var(--muted); background: rgba(0, 0, 0, .25);
+  font-size: 11px; line-height: 1; transition: color .15s, border-color .15s;
+}
+.panel-toggle:hover { color: var(--green-bright); border-color: rgba(143, 240, 106, .45); }
+
+.panel-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer;
+  color: var(--muted); background: rgba(0, 0, 0, .3);
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .7px; text-transform: uppercase;
+  transition: color .15s, border-color .15s;
+}
+.panel-pill:hover { color: var(--green-bright); border-color: rgba(143, 240, 106, .45); }
+
+/* La pildora de indicadores viaja en la banda de estado, a la derecha. */
+.banner { position: relative; }
+.banner-pill { margin-left: auto; }
+
+/* Barra ambiental plegada: queda la identificacion, el estado y el boton. */
+.earthbar.is-collapsed { grid-template-columns: 1fr auto; }
+.earthbar.is-collapsed .earth-metric { display: none; }
+.earthbar.is-collapsed .earth-source { border-right: 0; }
+
+/* Sin panel de alertas, el mapa toma las dos columnas. */
+.shell.alerts-collapsed .mapwrap { grid-column: 1 / -1; padding-right: 14px; }
+.side h3 .panel-toggle { margin-left: 8px; }
+/* Comparte celda con el mapa en vez de usar position:absolute, que la anclaba
+   al viewport y la dejaba tapada por la barra superior. */
+.side-reopen {
+  grid-column: 1 / -1; grid-row: 6;
+  justify-self: end; align-self: start;
+  margin: 20px 24px 0 0; z-index: 420;
+  background: var(--panel-solid);
+}
+.side-reopen .count {
+  padding: 1px 6px; border-radius: 999px;
+  color: #06140d; background: var(--green-bright); font-size: 9px;
+}
+
+/* A una columna el mapa ya ocupa todo el ancho: la pildora vuelve al flujo. */
+@media (max-width: 900px) {
+  .shell.alerts-collapsed .mapwrap { grid-column: 1; }
+  .side-reopen { position: static; margin: 0 14px 12px; align-self: flex-start; }
+}
+
+/* ============ Pantallas anchas pero bajas: Nest Hub y similares ============ */
+
+/* .nav es un flex item y su min-width por defecto es `auto`, asi que no se
+   encoge: a 1024px terminaba en x=1156, fuera del viewport y encima del bloque
+   de cuenta. Con min-width:0 se encoge y desplaza en su propio eje. */
+@media (max-width: 1180px) {
+  .nav { min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+  .nav button { flex: none; }
+  .account-area { flex: none; }
+}
+
+/* Nest Hub (1024x600) y Nest Hub Max (1280x800): con `height:100vh` y filas
+   `auto` la grilla no entraba y aplastaba una fila entera a 0px — primero la
+   barra ambiental, despues la de pipeline. Aca el contenedor pasa a scroll
+   vertical y cada fila conserva su alto real. */
+@media (max-height: 820px) and (min-width: 901px) {
+  .shell {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+    grid-template-rows: auto auto auto auto auto minmax(360px, 1fr);
+  }
+  .mapwrap, .side, .view { min-height: 360px; }
+  .side { max-height: 70vh; }
+}
+
+/* Alto muy reducido: se recupera espacio achicando cabecera e indicadores. */
+@media (max-height: 640px) and (min-width: 901px) {
+  .topbar { min-height: 48px; padding-block: 5px; }
+  .kpi { padding: 9px 11px; }
+  .kpi .val { font-size: 19px; }
+  .mapwrap, .side, .view { min-height: 320px; }
+}
+
+.nav button.foi-nav-link { color: #07252c; border-color: #f4b942; background: #f4b942; font-weight: 850; }
+.nav button.foi-nav-link:hover { color: #03181d; border-color: #ffd36f; background: #ffd36f; }

@@ -8,6 +8,9 @@ interface Props {
   lat: number;
   lon: number;
   onUpdate?: (value: EarthIntel | null) => void;
+  /** Opcionales: sin ellas la barra se comporta como antes, siempre desplegada. */
+  collapsed?: boolean;
+  onToggle?: () => void;
 }
 
 function fmt(value: number | null, unit = "", digits = 0): string {
@@ -54,7 +57,7 @@ function Sparkline({ values, color }: { values: Array<number | null>; color: str
   );
 }
 
-export default function EarthIntelBar({ lat, lon, onUpdate }: Props) {
+export default function EarthIntelBar({ lat, lon, onUpdate, collapsed = false, onToggle }: Props) {
   const [intel, setIntel] = useState<EarthIntel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,8 +101,21 @@ export default function EarthIntelBar({ lat, lon, onUpdate }: Props) {
   }
 
   return (
-    <section className="earthbar" aria-label="Condiciones meteorológicas y atmosféricas">
+    <section className={`earthbar ${collapsed ? "is-collapsed" : ""}`} aria-label="Condiciones meteorológicas y atmosféricas">
       <div className="earth-source">
+        {onToggle && (
+          <button
+            type="button"
+            className="panel-toggle"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            aria-controls="earthbar-metrics"
+            title={collapsed ? "Desplegar inteligencia terrestre" : "Plegar inteligencia terrestre"}
+          >
+            <span aria-hidden="true">{collapsed ? "▸" : "▾"}</span>
+            <span className="sr-only">{collapsed ? "Desplegar inteligencia terrestre" : "Plegar inteligencia terrestre"}</span>
+          </button>
+        )}
         <span className="orbit-glyph">◉</span>
         <span>
           <strong>INTELIGENCIA TERRESTRE</strong>
@@ -110,7 +126,7 @@ export default function EarthIntelBar({ lat, lon, onUpdate }: Props) {
         </span>
       </div>
 
-      <div className="earth-metric">
+      <div className="earth-metric" id="earthbar-metrics">
         <span>Tiempo</span>
         <strong>{fmt(intel?.weather.temperature ?? null, "°", 1)}</strong>
         <small>{weatherLabel(intel?.weather.weatherCode ?? null)} · ST {fmt(intel?.weather.apparentTemperature ?? null, "°")}</small>

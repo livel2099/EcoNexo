@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ImageOverlay, LayerGroup, Map as LeafletMap, TileLayer, WMSOptions } from "leaflet";
 import type { EarthIntel } from "../app/lib/earth-intel";
 import type {
@@ -31,6 +31,12 @@ interface Props {
   initialSatelliteMode?: SatelliteMode;
   sourceSettings?: EnvironmentalSourceSettings | null;
   showForestryAssets?: boolean;
+  /**
+   * Capas ofrecidas en la barra del mapa. Cada modulo expone solo las suyas:
+   * Fuego y humo el area quemada, Plagas forestales NDVI y humedad. Sin esta
+   * prop se ofrecen todas, que es lo que corresponde al Centro de Comando.
+   */
+  availableLayers?: SatelliteMode[];
 }
 
 type BaseMap = "dark" | "street";
@@ -110,6 +116,7 @@ export default function MapView({
   initialSatelliteMode = "NONE",
   sourceSettings,
   showForestryAssets = false,
+  availableLayers,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -192,6 +199,41 @@ export default function MapView({
       dataLayerRef.current = null;
     };
   }, [centerLat, centerLon]);
+
+  // "Sin capa" siempre esta: es como se apaga la capa satelital.
+  const layerChoices = useMemo<SatelliteMode[]>(() => {
+    const all = Object.keys(SATELLITE_LABEL) as SatelliteMode[];
+    if (!availableLayers?.length) return all;
+    const allowed = new Set<SatelliteMode>(["NONE", ...availableLayers]);
+    return all.filter((mode) => allowed.has(mode));
+  }, [availableLayers]);
+
+  // Al cambiar de modulo la capa activa puede dejar de existir en la barra; sin
+  // esto quedaria dibujada sin ningun boton que permita apagarla.
+  useEffect(() => {
+    if (!layerChoices.includes(satelliteMode)) setSatelliteMode("NONE");
+  }, [layerChoices, satelliteMode]);
+
+  // Leaflet solo escucha `resize` de la ventana (trackResize), asi que no se
+  // entera cuando cambia el tamaño del contenedor: al plegar un panel vecino
+  // el mapa queda con teselas grises y el encuadre corrido. El observador
+  // cubre plegado, cambio de modulo y rotacion con el mismo mecanismo.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!ready || !container || typeof ResizeObserver === "undefined") return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      // Se difiere un cuadro: durante la transicion CSS el contenedor todavia
+      // esta cambiando y recalcular en cada paso es trabajo inutil.
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => mapRef.current?.invalidateSize({ animate: false }));
+    });
+    observer.observe(container);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [ready]);
 
   useEffect(() => {
     if (!ready || !mapRef.current) return;
@@ -626,7 +668,7 @@ export default function MapView({
       <div className="map-toolbar" role="group" aria-label="Capas del mapa">
         <div className="toolbar-title"><span>◫</span> MAPA MISIONES</div>
         <div className="layer-buttons">
-          {(Object.keys(SATELLITE_LABEL) as SatelliteMode[]).map((mode) => (
+          {layerChoices.map((mode) => (
             <button
               key={mode}
               title={mode !== "NONE" && !copernicusEnabled

@@ -2,13 +2,13 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { IS_DEMO, WS, apiGet, apiPost, clearSession, getSession } from "../lib/api";
 import type { EarthIntel } from "../lib/earth-intel";
 import type { Alert, Detection, Device, EnvironmentalSourceSettings, Kpi, Org, PipelineRun, Report, RiskZone, Session } from "../lib/types";
 import { buildSpaceAIThreatAssessment } from "../lib/spaceai";
 import { MISIONES_CENTER, isInMisiones, misionesLocationLabel } from "../lib/misiones";
+import { useCollapsible } from "../lib/use-collapsible";
 import DevicesPanel from "../../components/DevicesPanel";
 import EarthIntelBar from "../../components/EarthIntelBar";
 import ReportsPanel from "../../components/ReportsPanel";
@@ -77,30 +77,6 @@ function confidenceColor(confidence: number) {
   return confidence >= 0.85 ? "#8ff06a" : confidence >= 0.6 ? "#ffd166" : "#7f948f";
 }
 
-function mixHex(base: string, target: string, targetWeight: number): string {
-  const parse = (value: string) => [1, 3, 5].map((start) => Number.parseInt(value.slice(start, start + 2), 16));
-  const [baseRed, baseGreen, baseBlue] = parse(base);
-  const [targetRed, targetGreen, targetBlue] = parse(target);
-  return `#${[baseRed, baseGreen, baseBlue].map((channel, index) => {
-    const targetChannel = [targetRed, targetGreen, targetBlue][index];
-    return Math.round(channel * (1 - targetWeight) + targetChannel * targetWeight).toString(16).padStart(2, "0");
-  }).join("")}`;
-}
-
-function organizationTheme(primaryColor: string | null | undefined): CSSProperties {
-  const color = primaryColor && /^#[0-9a-f]{6}$/i.test(primaryColor) ? primaryColor : "#2E7D5B";
-  const [red, green, blue] = [1, 3, 5].map((start) => Number.parseInt(color.slice(start, start + 2), 16) / 255);
-  const linear = [red, green, blue].map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
-  const luminance = linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
-  const accent = luminance < 0.18 ? mixHex(color, "#ffffff", 0.48) : luminance > 0.72 ? mixHex(color, "#00110d", 0.28) : color;
-  return {
-    "--org-color": color,
-    "--org-accent": accent,
-    "--org-secondary": mixHex(accent, "#33daff", 0.28),
-    "--org-contrast": luminance > 0.42 ? "#03110d" : "#ffffff",
-  } as CSSProperties;
-}
-
 export default function Dashboard() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -119,6 +95,11 @@ export default function Dashboard() {
   const [feed, setFeed] = useState<string[]>([]);
   const [earthIntel, setEarthIntel] = useState<EarthIntel | null>(null);
   const [sourceSettings, setSourceSettings] = useState<EnvironmentalSourceSettings>(DEFAULT_SOURCE_SETTINGS);
+  // Paneles plegables. El mapa recupera el espacio liberado por si solo: su
+  // ResizeObserver detecta el cambio de contenedor y reencuadra.
+  const [kpisOpen, toggleKpis] = useCollapsible("kpis");
+  const [earthOpen, toggleEarth] = useCollapsible("earth");
+  const [alertsOpen, toggleAlerts] = useCollapsible("alerts");
 
   const refresh = useCallback(async (accessToken: string) => {
     const [nextKpi, nextAlerts, nextDevices, nextDetections, nextReports, nextZones, pipelineRuns] = await Promise.all([
@@ -147,6 +128,10 @@ export default function Dashboard() {
     }
     if (session.must_change_password) {
       router.replace("/cambiar-contrasena");
+      return;
+    }
+    if (session.account_type === "community") {
+      router.replace("/red-investigacion");
       return;
     }
     setSession(session);
@@ -234,21 +219,17 @@ export default function Dashboard() {
   const ignoredExternalSignals = (devices.length - localDevices.length) + (alerts.length - localAlerts.length)
     + (detections.length - localDetections.length) + (reports.length - localReports.length);
   const commandAssessment = useMemo(() => buildSpaceAIThreatAssessment(earthIntel, localDetections, { fireRadiusKm: sourceSettings.fire_radius_km, firmsEnabled: sourceSettings.firms_enabled }), [earthIntel, localDetections, sourceSettings.fire_radius_km, sourceSettings.firms_enabled]);
-  const orgTheme = useMemo(() => organizationTheme(org?.primary_color), [org?.primary_color]);
   const navItem = (target: View, label: string) => (
     <button className={view === target ? "active" : ""} onClick={() => setView(target)}>{label}</button>
   );
 
   return (
-    <main className="shell tech-shell" style={orgTheme} data-organization={org?.slug || undefined}>
+    <main className={`shell tech-shell${kpisOpen ? "" : " kpis-collapsed"}${earthOpen ? "" : " earth-collapsed"}${alertsOpen ? "" : " alerts-collapsed"}`}>
       <CircuitBackdrop dense />
       <header className="topbar">
         <div className="topbar-main">
           <img className="topbar-official-logo" src="/brand/econexo-lockup.jpg" alt="EcoNexo" />
-          <div className="topbar-org">
-            <i aria-hidden="true" />
-            <div><small>ORGANIZACIÓN ACTIVA</small><strong>{org?.name || "conectando…"}</strong><span>{org?.municipality ? `${org.municipality} · ` : ""}Misiones</span></div>
-          </div>
+          <span className="topbar-org">{org?.name || "conectando…"}<small>{org?.municipality ? `${org.municipality} · ` : ""}Misiones</small></span>
           <span className="orbital-status"><i /> órbita activa</span>
           <nav className="nav" aria-label="Navegación principal">
             {navItem("comando", "Centro de Comando")}
@@ -259,6 +240,7 @@ export default function Dashboard() {
             {navItem("reglas", "Reglas")}
             {navItem("reportes", "Reportes ciudadanos")}
             {navItem("informes", "Informes")}
+            <button className="foi-nav-link" onClick={() => router.push("/red-investigacion")}>EcoNexoFoI</button>
             {session?.role === "admin" && navItem("admin", "Admin Core")}
           </nav>
         </div>
@@ -274,9 +256,18 @@ export default function Dashboard() {
       <div className={`banner ${globalStatus} kpirow`}>
         <span className="dot" /> {BANNER[globalStatus]} · {localAlerts.filter((item) => !["descartada", "resuelta"].includes(item.status)).length} alertas activas en Misiones
         <small>{misionesLocationLabel(commandCenter[0], commandCenter[1])} · 17 departamentos · 79 municipios{ignoredExternalSignals ? ` · ${ignoredExternalSignals} señales externas excluidas` : ""}</small>
+        <button
+          type="button"
+          className="panel-pill banner-pill"
+          onClick={toggleKpis}
+          aria-expanded={kpisOpen}
+          aria-controls="kpi-row"
+        >
+          <span aria-hidden="true">{kpisOpen ? "▾" : "▸"}</span> Indicadores
+        </button>
       </div>
 
-      <section className="kpis kpirow" aria-label="Indicadores principales">
+      <section className="kpis kpirow" id="kpi-row" aria-label="Indicadores principales" hidden={!kpisOpen}>
         <KpiCard title="Tiempo de detección" val={kpi?.detection_time_s != null ? `${kpi.detection_time_s}s` : "—"}
           target="< 5 min" good={(kpi?.detection_time_s ?? 1e9) < 300} ratio={kpi?.detection_time_s != null ? Math.min(1, 300 / Math.max(kpi.detection_time_s, 1)) : 0} />
         <KpiCard title="Precisión motor IA" val={pct(kpi?.model_precision ?? null)}
@@ -287,23 +278,14 @@ export default function Dashboard() {
           target="-40%" good={(kpi?.response_time_reduction ?? 0) >= 0.4} ratio={kpi?.response_time_reduction ?? 0} />
       </section>
 
-      <EarthIntelBar lat={commandCenter[0]} lon={commandCenter[1]} onUpdate={setEarthIntel} />
+      <EarthIntelBar lat={commandCenter[0]} lon={commandCenter[1]} onUpdate={setEarthIntel} collapsed={!earthOpen} onToggle={toggleEarth} />
 
-      {view === "comando" && <section className="command-livebar kpirow" aria-label="Estado en vivo de Command Core">
-        <div className="command-live-identity">
-          <span className="live"><span className="dot" /> EN VIVO</span>
-          <div><small>COMMAND CORE</small><strong>{org?.name || "Organización"}</strong></div>
-        </div>
-        <div className="command-live-detail">
-          <small>ÚLTIMO EVENTO</small>
-          <strong>{feed[0] || "Esperando telemetría, reglas y focos"}</strong>
-        </div>
-        <div className="command-live-detail pipeline">
-          <small>PIPELINE OPERATIVO</small>
-          <strong>{pipelineNotice || (lastPipeline ? `${lastPipeline.status} · ${lastPipeline.readings_inserted} lecturas` : "Sin corridas registradas")}</strong>
-        </div>
+      <div className="feedbar kpirow command-pipeline-bar">
+        <span className="live"><span className="dot" /> EN VIVO</span>
+        <span className="mono muted">{feed[0] || "Pipeline listo para sincronizar telemetría, reglas y focos"}</span>
+        <span className="pipeline-last-run">{pipelineNotice || (lastPipeline ? `Última corrida: ${lastPipeline.status} · ${lastPipeline.readings_inserted} lecturas` : "Sin corridas")}</span>
         <button type="button" className="pipeline-run-button" disabled={pipelineBusy || !token} onClick={() => void runCommandPipeline()}>{pipelineBusy ? "Actualizando…" : devices.length ? "Ejecutar pipeline" : session?.role === "admin" ? "Crear red y ejecutar" : "Ejecutar pipeline"}</button>
-      </section>}
+      </div>
 
       {view === "comando" ? (
         <>
@@ -316,8 +298,32 @@ export default function Dashboard() {
               <div className="li"><span className="sw" style={{ background: "#33daff" }} /> Reporte ciudadano</div>
             </div>
           </section>
-          <aside className="side">
-            <h3>Alertas priorizadas en Misiones <span className="count">{localAlerts.length}</span></h3>
+          {!alertsOpen && (
+            <button
+              type="button"
+              className="panel-pill side-reopen"
+              onClick={toggleAlerts}
+              aria-expanded={false}
+              aria-controls="alerts-rail"
+            >
+              <span aria-hidden="true">◂</span> Alertas <span className="count">{localAlerts.length}</span>
+            </button>
+          )}
+          <aside className="side" id="alerts-rail" hidden={!alertsOpen}>
+            <h3>
+              Alertas priorizadas en Misiones <span className="count">{localAlerts.length}</span>
+              <button
+                type="button"
+                className="panel-toggle side-toggle"
+                onClick={toggleAlerts}
+                aria-expanded
+                aria-controls="alerts-rail"
+                title="Plegar alertas"
+              >
+                <span aria-hidden="true">▸</span>
+                <span className="sr-only">Plegar alertas</span>
+              </button>
+            </h3>
             {localAlerts.length === 0 && <div className="empty">Sin alertas activas.</div>}
             {localAlerts.map((alert) => (
               <article className="alert" key={alert.id}>

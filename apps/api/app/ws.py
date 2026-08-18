@@ -53,6 +53,10 @@ manager = ConnectionManager()
 async def mqtt_bridge(stop: asyncio.Event) -> None:
     """Puente MQTT -> WebSocket. Reconecta si el broker no esta listo."""
     s = get_settings()
+    if not s.mqtt_enabled:
+        log.info("MQTT bridge deshabilitado por configuración")
+        await stop.wait()
+        return
     while not stop.is_set():
         try:
             async with aiomqtt.Client(hostname=s.mqtt_host, port=s.mqtt_port) as client:
@@ -82,6 +86,8 @@ async def _dispatch(topic: str, payload: bytes) -> None:
 async def publish(topic: str, data: dict) -> None:
     """Publica en el bus MQTT (best-effort)."""
     s = get_settings()
+    if not s.mqtt_enabled:
+        return
     try:
         async with aiomqtt.Client(hostname=s.mqtt_host, port=s.mqtt_port) as client:
             await client.publish(topic, json.dumps(data, default=str))

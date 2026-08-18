@@ -14,6 +14,9 @@ class CurrentUser:
     id: UUID
     org_id: UUID
     role: str
+    email: str = ""
+    account_type: str = "institutional"
+    platform_admin: bool = False
 
 
 async def current_user(authorization: str = Header(default="")) -> CurrentUser:
@@ -26,6 +29,9 @@ async def current_user(authorization: str = Header(default="")) -> CurrentUser:
         id=UUID(payload["sub"]),
         org_id=UUID(payload["org_id"]),
         role=payload["role"],
+        email=payload.get("email", ""),
+        account_type=payload.get("account_type", "institutional"),
+        platform_admin=bool(payload.get("platform_admin", False)),
     )
 
 
@@ -36,3 +42,9 @@ def require_role(*roles: str):
         return user
 
     return _guard
+
+
+def require_platform_admin(user: CurrentUser = Depends(current_user)) -> CurrentUser:
+    if not user.platform_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso reservado al administrador general")
+    return user

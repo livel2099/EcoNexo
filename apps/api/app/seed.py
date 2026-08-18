@@ -24,9 +24,9 @@ random.seed(42)
 NOW = datetime.now(timezone.utc)
 
 ORGS = [
-    ("Municipio de Villa del Lago", "muni-villa-lago", "municipio", "#2E7D5B", -31.42, -64.50, "MUN"),
-    ("ForestAndes S.A.", "forestandes", "forestal", "#1F6F43", -26.82, -54.45, "FOR"),
-    ("Patagonia Energia", "patagonia-energia", "energetica", "#0F766E", -38.95, -68.06, "ENE"),
+    ("Municipio de Villa del Lago", "muni-villa-lago", "municipio", "#2E7D5B", -27.21, -55.55, "MUN"),
+    ("ForestAndes S.A.", "forestandes", "forestal", "#1F6F43", -26.82, -54.75, "FOR"),
+    ("Patagonia Energia", "patagonia-energia", "energetica", "#0F766E", -27.05, -54.95, "ENE"),
 ]
 
 VARS = {
@@ -90,9 +90,10 @@ async def _seed_org(conn, name, slug, vertical, color, lat, lon, prefix) -> None
 
     kind = "incendio" if vertical == "forestal" else ("hidrica" if vertical == "energetica" else "general")
     await conn.execute(
-        "INSERT INTO risk_zones (org_id, name, kind, area) VALUES "
-        "($1,$2,$3, ST_MakePolygon(ST_GeomFromText($4, 4326))::geography)",
-        org_id, f"Zona critica {name}", kind, _square_wkt(lat, lon, 0.06),
+        "INSERT INTO risk_zones (org_id, name, kind, area, center, radius_m) VALUES "
+        "($1,$2,$3, ST_MakePolygon(ST_GeomFromText($4, 4326))::geography, "
+        "ST_MakePoint($6,$5)::geography, 6000)",
+        org_id, f"Zona critica {name}", kind, _square_wkt(lat, lon, 0.06), lat, lon,
     )
 
     n = NODES_PER_ORG[vertical]

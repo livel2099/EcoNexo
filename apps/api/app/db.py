@@ -11,8 +11,12 @@ _pool: asyncpg.Pool | None = None
 async def connect() -> asyncpg.Pool:
     global _pool
     if _pool is None:
+        settings = get_settings()
         _pool = await asyncpg.create_pool(
-            dsn=get_settings().dsn, min_size=2, max_size=10
+            dsn=settings.dsn,
+            min_size=settings.db_pool_min_size,
+            max_size=settings.db_pool_max_size,
+            command_timeout=settings.db_command_timeout_seconds,
         )
     return _pool
 

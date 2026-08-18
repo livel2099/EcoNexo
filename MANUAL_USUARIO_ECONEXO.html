@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EcoNexo · Manual de Usuario</title>
+<style>
+  :root{
+    --ink:#0d1512; --ink-soft:#3a4a44; --muted:#647a72;
+    --line:#d7e2dc; --line-soft:#e8efeb;
+    --brand:#0f8a5f; --brand-deep:#0b5f43; --brand-soft:#e7f5ee;
+    --accent:#12b886; --warn:#c9791f; --crit:#d84a3f;
+    --bg:#ffffff; --panel:#f6faf8;
+    --r3:#c9791f; --r5:#d84a3f;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  body{
+    margin:0; color:var(--ink); background:var(--bg);
+    font:15px/1.62 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  .doc{max-width:900px; margin:0 auto; padding:32px 40px 80px}
+
+  /* ---------- COVER ---------- */
+  .cover{
+    min-height:100vh; display:flex; flex-direction:column; justify-content:center;
+    padding:64px; color:#eafff5;
+    background:
+      radial-gradient(1100px 700px at 78% -10%, rgba(18,184,134,.35), transparent 60%),
+      radial-gradient(800px 600px at 0% 110%, rgba(15,138,95,.30), transparent 55%),
+      linear-gradient(155deg,#06120d 0%,#0a2019 48%,#0b3327 100%);
+  }
+  .cover-mark{display:flex; align-items:center; gap:14px; margin-bottom:44px}
+  .cover-mark .glyph{
+    width:52px;height:52px;border-radius:13px;flex:0 0 auto;
+    background:linear-gradient(135deg,#12b886,#0b5f43);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 0 4px rgba(18,184,134,.18);
+  }
+  .cover-mark .glyph svg{width:30px;height:30px}
+  .cover-mark b{font-size:26px;letter-spacing:.5px}
+  .cover-mark b span{color:#7ef2c1;font-weight:600}
+  .cover-eyebrow{
+    font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#7ef2c1;
+    margin-bottom:18px;font-weight:700;
+  }
+  .cover h1{font-size:52px;line-height:1.04;margin:0 0 14px;font-weight:800;letter-spacing:-1px}
+  .cover h1 span{color:#7ef2c1}
+  .cover .lede{font-size:18px;max-width:560px;color:#cdeadd;margin:0 0 40px}
+  .cover-flow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:12.5px;letter-spacing:1.5px;color:#bfe9d6;margin-bottom:52px}
+  .cover-flow span{background:rgba(255,255,255,.07);border:1px solid rgba(126,242,193,.28);padding:7px 13px;border-radius:999px}
+  .cover-flow b{color:#7ef2c1}
+  .cover-meta{display:flex;gap:40px;flex-wrap:wrap;border-top:1px solid rgba(126,242,193,.25);padding-top:22px;font-size:13px;color:#a9d8c5}
+  .cover-meta div strong{display:block;color:#eafff5;font-size:15px;margin-bottom:2px}
+
+  /* ---------- TYPOGRAPHY ---------- */
+  h2.section{
+    font-size:13px;letter-spacing:2.5px;text-transform:uppercase;color:var(--brand);
+    margin:0 0 4px;font-weight:800;
+  }
+  h1.chapter{font-size:30px;line-height:1.15;margin:0 0 10px;font-weight:800;letter-spacing:-.5px;color:var(--ink)}
+  h3{font-size:19px;margin:30px 0 8px;font-weight:700;color:var(--brand-deep)}
+  h4{font-size:15.5px;margin:20px 0 4px;font-weight:700;color:var(--ink)}
+  p{margin:0 0 12px}
+  a{color:var(--brand);text-decoration:none}
+  .lead{font-size:16.5px;color:var(--ink-soft);margin-bottom:20px}
+  ul,ol{margin:0 0 14px;padding-left:22px}
+  li{margin:0 0 7px}
+  strong{color:var(--ink)}
+  code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font:13px/1.4 "Cascadia Code",Consolas,monospace;color:var(--brand-deep)}
+
+  /* ---------- COMPONENTS ---------- */
+  .toc{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .toc a{display:flex;justify-content:space-between;gap:16px;padding:11px 18px;border-bottom:1px solid var(--line-soft);color:var(--ink)}
+  .toc a:last-child{border-bottom:none}
+  .toc a:hover{background:var(--panel)}
+  .toc .n{color:var(--brand);font-weight:700;font-variant-numeric:tabular-nums;min-width:26px}
+  .toc .t{flex:1}
+  .toc .pg{color:var(--muted);font-size:13px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin:16px 0}
+  .note{border-left:4px solid var(--brand);background:var(--brand-soft);border-radius:0 10px 10px 0;padding:12px 18px;margin:16px 0}
+  .warn{border-left:4px solid var(--warn);background:#fbf1e4;border-radius:0 10px 10px 0;padding:12px 18px;margin:16px 0}
+  .warn strong{color:#8a4d10}
+  .crit{border-left:4px solid var(--crit);background:#fbe8e6;border-radius:0 10px 10px 0;padding:12px 18px;margin:16px 0}
+  .crit strong{color:#9c2f26}
+
+  .steps{counter-reset:step;list-style:none;padding:0;margin:16px 0}
+  .steps>li{position:relative;padding:2px 0 14px 46px;margin:0;border-left:2px solid var(--line);margin-left:16px}
+  .steps>li:last-child{border-left-color:transparent}
+  .steps>li::before{
+    counter-increment:step;content:counter(step);
+    position:absolute;left:-16px;top:-2px;width:30px;height:30px;border-radius:50%;
+    background:var(--brand);color:#fff;font-weight:700;font-size:14px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .steps>li b{display:block;color:var(--ink);margin-bottom:1px}
+
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  th{background:var(--brand-deep);color:#eafff5;text-align:left;padding:9px 12px;font-weight:600;font-size:13px}
+  td{border-bottom:1px solid var(--line-soft);padding:9px 12px;vertical-align:top}
+  tr:nth-child(even) td{background:var(--panel)}
+
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.3px}
+  .pill.g{background:#dff5e8;color:#0b6b45}
+  .pill.y{background:#fbf0d8;color:#8a5a10}
+  .pill.r{background:#fbe0dc;color:#9c2f26}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+  .mini{border:1px solid var(--line);border-radius:11px;padding:14px 16px;background:#fff}
+  .mini h4{margin:0 0 5px;color:var(--brand-deep)}
+  .mini p{margin:0;font-size:13.5px;color:var(--ink-soft)}
+
+  .kbd{display:inline-block;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:#fff;padding:1px 7px;font:12.5px/1.4 "Segoe UI",sans-serif;font-weight:600;color:var(--ink)}
+
+  .foot{margin-top:14px;padding-top:10px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;display:flex;justify-content:space-between}
+
+  /* ---------- PRINT ---------- */
+  @media print{
+    .doc{max-width:none;padding:0 8mm}
+    .no-print{display:none !important}
+    .page-break{page-break-before:always}
+    .cover{min-height:0;height:271mm;padding:34mm 26mm}
+    h1.chapter,h3,h4{page-break-after:avoid}
+    table,.card,.note,.warn,.crit,.mini,.steps>li{page-break-inside:avoid}
+    a{color:var(--ink)}
+    @page{margin:14mm 0}
+  }
+  @media(max-width:640px){
+    .doc{padding:20px}
+    .grid2{grid-template-columns:1fr}
+    .cover{padding:34px}
+    .cover h1{font-size:38px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="cover">
+  <div class="cover-mark">
+    <span class="glyph">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#eafff5" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="2.4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5 19 19M19 5l-2.5 2.5M7.5 16.5 5 19"/>
+      </svg>
+    </span>
+    <b>ECO<span>NEXO</span></b>
+  </div>
+
+  <div class="cover-eyebrow">Manual de Usuario · Edición Misiones</div>
+  <h1>Detectar antes.<br><span>Decidir mejor.</span></h1>
+  <p class="lede">Guía completa de la plataforma de inteligencia ambiental que integra sensores IoT, observación satelital y reportes ciudadanos para producir alertas verificables, acciones trazables e informes institucionales.</p>
+
+  <div class="cover-flow">
+    <span>OBSERVAR</span><b>→</b><span>CORRELACIONAR</span><b>→</b><span>PRIORIZAR</span><b>→</b><span>ACTUAR</span>
+  </div>
+
+  <div class="cover-meta">
+    <div><strong>Versión</strong>1.0.0-rc.3</div>
+    <div><strong>Alcance</strong>17 departamentos · 79 municipios</div>
+    <div><strong>Plataformas</strong>Web · Móvil (Android/iOS)</div>
+    <div><strong>Documento</strong>Manual de usuario final</div>
+  </div>
+</section>
+
+<div class="doc">
+
+<!-- ============ TOC ============ -->
+<div class="page-break"></div>
+<h2 class="section">Contenido</h2>
+<h1 class="chapter">Índice</h1>
+<nav class="toc">
+  <a href="#intro"><span class="n">1</span><span class="t">¿Qué es EcoNexo?</span><span class="pg">Introducción</span></a>
+  <a href="#conceptos"><span class="n">2</span><span class="t">Conceptos clave y glosario</span><span class="pg">Fundamentos</span></a>
+  <a href="#acceso"><span class="n">3</span><span class="t">Acceso: crear organización e iniciar sesión</span><span class="pg">Onboarding</span></a>
+  <a href="#interfaz"><span class="n">4</span><span class="t">Recorrido por la interfaz</span><span class="pg">Orientación</span></a>
+  <a href="#comando"><span class="n">5</span><span class="t">Centro de Comando</span><span class="pg">Módulo</span></a>
+  <a href="#fuego"><span class="n">6</span><span class="t">Fuego y humo</span><span class="pg">Módulo</span></a>
+  <a href="#plagas"><span class="n">7</span><span class="t">Plagas forestales</span><span class="pg">Módulo</span></a>
+  <a href="#alerta-ia"><span class="n">8</span><span class="t">Alerta IA · Observatorio SpaceAI</span><span class="pg">Módulo</span></a>
+  <a href="#dispositivos"><span class="n">9</span><span class="t">Dispositivos</span><span class="pg">Módulo</span></a>
+  <a href="#reglas"><span class="n">10</span><span class="t">Reglas</span><span class="pg">Módulo</span></a>
+  <a href="#reportes"><span class="n">11</span><span class="t">Reportes ciudadanos (gestión)</span><span class="pg">Módulo</span></a>
+  <a href="#canal"><span class="n">12</span><span class="t">Canal ciudadano público</span><span class="pg">Uso externo</span></a>
+  <a href="#informes"><span class="n">13</span><span class="t">Informes institucionales</span><span class="pg">Módulo</span></a>
+  <a href="#admin"><span class="n">14</span><span class="t">Admin Core / ABM</span><span class="pg">Administración</span></a>
+  <a href="#suscripciones"><span class="n">15</span><span class="t">Suscripciones y módulos</span><span class="pg">Administración</span></a>
+  <a href="#indicadores"><span class="n">16</span><span class="t">Indicadores (KPIs) y severidad</span><span class="pg">Referencia</span></a>
+  <a href="#movil"><span class="n">17</span><span class="t">Aplicación móvil</span><span class="pg">Plataforma</span></a>
+  <a href="#limites"><span class="n">18</span><span class="t">Buenas prácticas y límites</span><span class="pg">Importante</span></a>
+  <a href="#faq"><span class="n">19</span><span class="t">Preguntas frecuentes</span><span class="pg">Ayuda</span></a>
+</nav>
+
+<!-- ============ 1. INTRO ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="intro">Capítulo 1</h2>
+<h1 class="chapter">¿Qué es EcoNexo?</h1>
+<p class="lead">EcoNexo es una plataforma de inteligencia ambiental que detecta, correlaciona y documenta incidentes ambientales <strong>antes de que escalen</strong>.</p>
+
+<p>La plataforma reúne cinco fuentes de información y las combina en una sola vista operativa:</p>
+<div class="grid2">
+  <div class="mini"><h4>Sensores IoT</h4><p>Nodos ESP32 en territorio que envían telemetría (temperatura, humo, calidad de aire, etc.) por el bus MQTT.</p></div>
+  <div class="mini"><h4>Observación satelital</h4><p>Focos térmicos NASA FIRMS y mosaicos Copernicus Sentinel-2 (color real, NDVI, humedad, área quemada).</p></div>
+  <div class="mini"><h4>Meteorología</h4><p>Contexto de Open-Meteo, aerosoles CAMS y riesgo de crecidas GloFAS.</p></div>
+  <div class="mini"><h4>Reportes ciudadanos</h4><p>Evidencia de campo enviada por vecinos con foto y ubicación, sujeta a validación.</p></div>
+</div>
+<p>Sobre esas fuentes, un motor de reglas e IA produce <strong>alertas priorizadas</strong>, mantiene <strong>trazabilidad</strong> de cada acción e genera <strong>informes institucionales</strong> exportables.</p>
+
+<div class="note"><strong>Alcance territorial.</strong> Esta edición está restringida a la provincia de Misiones (Argentina): 17 departamentos y 79 municipios. Las señales fuera de ese límite se excluyen automáticamente del centro de comando.</div>
+
+<h3>¿Para quién es este manual?</h3>
+<ul>
+  <li><strong>Operadores y analistas</strong> que trabajan en el centro de comando día a día.</li>
+  <li><strong>Administradores</strong> que gestionan usuarios, dispositivos, reglas y suscripciones.</li>
+  <li><strong>Responsables institucionales</strong> que generan y comparten informes.</li>
+  <li><strong>Ciudadanos</strong> que envían reportes desde el canal público (capítulo 12).</li>
+</ul>
+
+<!-- ============ 2. CONCEPTOS ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="conceptos">Capítulo 2</h2>
+<h1 class="chapter">Conceptos clave y glosario</h1>
+<p class="lead">Estos términos aparecen en toda la plataforma. Conviene tenerlos claros antes de operar.</p>
+
+<table>
+  <thead><tr><th style="width:170px">Término</th><th>Significado</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Organización</strong></td><td>Espacio de trabajo aislado (municipio, empresa o programa). Cada organización ve solo sus datos.</td></tr>
+    <tr><td><strong>Dispositivo / Nodo</strong></td><td>Sensor físico instalado en territorio que emite telemetría en tiempo real.</td></tr>
+    <tr><td><strong>Alerta</strong></td><td>Señal priorizada generada al correlacionar fuentes. Tiene severidad, confianza y estado.</td></tr>
+    <tr><td><strong>Detección satelital</strong></td><td>Foco térmico detectado por NASA FIRMS. Es <em>evidencia</em>, no confirmación oficial.</td></tr>
+    <tr><td><strong>Reporte ciudadano</strong></td><td>Evidencia enviada por un vecino. Requiere validación antes de accionarse.</td></tr>
+    <tr><td><strong>Regla</strong></td><td>Condición configurable que dispara o eleva una alerta automáticamente.</td></tr>
+    <tr><td><strong>Geocerca</strong></td><td>Área geográfica (PostGIS) que delimita zonas de interés o de responsabilidad.</td></tr>
+    <tr><td><strong>HTI (R0–R5)</strong></td><td>Health Threat Index: escala de amenaza de 6 niveles usada por Alerta IA.</td></tr>
+    <tr><td><strong>KPI</strong></td><td>Indicador de desempeño (tiempo de detección, precisión, etc.) mostrado en la barra superior.</td></tr>
+    <tr><td><strong>Confianza</strong></td><td>Porcentaje (0–100%) que estima cuán probable es que una alerta sea real.</td></tr>
+  </tbody>
+</table>
+
+<h3>Estados de una alerta</h3>
+<p>Cada alerta avanza por estos estados según las acciones del operador:</p>
+<ul>
+  <li><span class="pill g">activa</span> recién generada, esperando revisión.</li>
+  <li><span class="pill y">confirmada</span> el operador validó que es real y accionable.</li>
+  <li><span class="pill r">escalada</span> se elevó a una instancia superior de respuesta.</li>
+  <li><span class="pill">descartada</span> falso positivo o sin relevancia; sale de la lista activa.</li>
+  <li><span class="pill">resuelta</span> el incidente fue atendido y cerrado.</li>
+</ul>
+
+<!-- ============ 3. ACCESO ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="acceso">Capítulo 3</h2>
+<h1 class="chapter">Acceso: crear organización e iniciar sesión</h1>
+<p class="lead">El primer paso es entrar a la plataforma web. Hay dos caminos: <strong>crear una organización nueva</strong> o <strong>ingresar</strong> con una cuenta existente.</p>
+
+<h3>3.1 · Crear una organización (primer uso)</h3>
+<p>Quien crea la organización queda automáticamente como <strong>administrador</strong>. En la pantalla de acceso, elegí la pestaña <strong>«Crear organización»</strong> y completá:</p>
+<ol class="steps">
+  <li><b>Nombre de la organización</b>Municipalidad, empresa o programa (hasta 120 caracteres).</li>
+  <li><b>Localidad base en Misiones</b>Elegí el municipio; el departamento se asigna solo.</li>
+  <li><b>Tipo de operación</b>Forestal y biodiversidad · Municipio y gestión territorial · Energía e infraestructura crítica.</li>
+  <li><b>Nombre y apellido del administrador</b>Tu nombre completo.</li>
+  <li><b>Email y contraseña</b>La contraseña necesita mínimo 8 caracteres, al menos una letra y un número; se repite para confirmar.</li>
+  <li><b>Aceptar Términos y Política de Privacidad</b>Casilla obligatoria para continuar.</li>
+  <li><b>Presioná «Crear organización y entrar»</b>La plataforma crea la organización y tu usuario en una sola operación y te lleva al centro de comando.</li>
+</ol>
+
+<div class="note"><strong>Seguridad.</strong> Las contraseñas se procesan en el servidor y se almacenan con hash <strong>Argon2</strong>. EcoNexo nunca guarda contraseñas en texto plano.</div>
+
+<h3>3.2 · Ingresar (cuenta existente)</h3>
+<p>En la pestaña <strong>«Ingresar»</strong> escribí tu email y contraseña y presioná <strong>«Ingresar al centro de comando»</strong>. Cada acceso correcto notifica a los administradores de la organización con contexto de acceso e IP anonimizada (ver bandeja <em>Mensajes</em> en Admin Core).</p>
+
+<h3>3.3 · Acceso con Google (opcional)</h3>
+<p>Si el administrador configuró Google, aparece el botón <strong>«Continuar con Google»</strong>. En modo registro, primero completá el nombre de la organización y aceptá los textos legales para habilitarlo. Si Google no está configurado, el registro por email sigue disponible con normalidad.</p>
+
+<div class="card">
+  <strong>Indicador de conexión.</strong> Arriba del formulario, un semáforo muestra el estado del sistema:
+  <ul style="margin:8px 0 0">
+    <li><span class="pill g">API y base conectadas</span> todo operativo.</li>
+    <li><span class="pill y">Verificando conexión…</span> comprobando el servidor.</li>
+    <li><span class="pill r">API sin conexión</span> usá «Reintentar» o avisá al administrador.</li>
+  </ul>
+</div>
+
+<!-- ============ 4. INTERFAZ ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="interfaz">Capítulo 4</h2>
+<h1 class="chapter">Recorrido por la interfaz</h1>
+<p class="lead">Una vez dentro, el panel principal (dashboard) organiza todo en zonas fijas. Conocerlas te permite moverte rápido.</p>
+
+<h3>Barra superior (topbar)</h3>
+<ul>
+  <li><strong>Logo y organización:</strong> a la izquierda, con el municipio y la etiqueta «Misiones».</li>
+  <li><strong>«órbita activa»:</strong> indicador de que las fuentes en línea están operando.</li>
+  <li><strong>Navegación:</strong> los módulos (Centro de Comando, Fuego y humo, Plagas forestales, Alerta IA, Dispositivos, Reglas, Reportes ciudadanos, Informes y —solo administradores— Admin Core).</li>
+  <li><strong>Cuenta:</strong> a la derecha, tu nombre, rol y el botón <strong>«Salir»</strong>.</li>
+</ul>
+
+<h3>Banner de estado</h3>
+<p>Debajo de la barra, una franja de color resume la situación provincial: <span class="pill g">Estado normal</span>, <span class="pill y">Atención</span> o <span class="pill r">Estado crítico</span>, junto al número de <strong>alertas activas en Misiones</strong> y cuántas señales externas se excluyeron.</p>
+
+<h3>Indicadores (KPIs)</h3>
+<p>Cuatro tarjetas muestran el desempeño en vivo. Se pueden ocultar con el botón <strong>«Indicadores»</strong>. Su significado está en el capítulo 16.</p>
+
+<h3>Barra ambiental y feed «EN VIVO»</h3>
+<p>Una barra sintetiza el contexto ambiental del punto central. Debajo, el feed <strong>EN VIVO</strong> transmite eventos a medida que ocurren: telemetría recibida, mosaicos satelitales actualizados, reportes validados, etc.</p>
+
+<div class="note"><strong>Actualización automática.</strong> El panel se refresca solo cada 15 segundos y, además, reacciona en tiempo real a los eventos del servidor. No hace falta recargar la página.</div>
+
+<!-- ============ 5. COMANDO ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="comando">Capítulo 5</h2>
+<h1 class="chapter">Centro de Comando</h1>
+<p class="lead">Es la vista principal: un mapa operacional de Misiones con todas las señales y, a la derecha, el panel de alertas priorizadas.</p>
+
+<h3>El mapa</h3>
+<p>Concentra las cuatro capas de información. La leyenda inferior indica qué representa cada color:</p>
+<table>
+  <thead><tr><th style="width:150px">Marcador</th><th>Significa</th></tr></thead>
+  <tbody>
+    <tr><td>🟢 Verde</td><td>Nodo (sensor) en línea y reportando.</td></tr>
+    <tr><td>🟠 Naranja</td><td>Foco satelital (detección térmica FIRMS).</td></tr>
+    <tr><td>🔴 Rojo</td><td>Alerta crítica.</td></tr>
+    <tr><td>🔵 Celeste</td><td>Reporte ciudadano.</td></tr>
+  </tbody>
+</table>
+
+<h3>Panel de alertas priorizadas</h3>
+<p>A la derecha se listan las alertas activas de Misiones, ordenadas por prioridad. Cada tarjeta muestra severidad, porcentaje de <strong>confianza</strong>, título, tipo, estado, antigüedad y las <strong>fuentes</strong> que la sustentan (IoT, satélite, ciudadanía…).</p>
+
+<h4>Acciones sobre una alerta</h4>
+<p>Cada alerta ofrece tres botones. La acción queda registrada para trazabilidad:</p>
+<ul>
+  <li><strong>Confirmar:</strong> validás que la alerta es real y accionable.</li>
+  <li><strong>Descartar:</strong> la marcás como falso positivo o irrelevante y sale de la lista.</li>
+  <li><strong>Escalar:</strong> la elevás a una instancia superior de respuesta.</li>
+</ul>
+
+<div class="card"><strong>Tip.</strong> El panel de alertas se puede retraer con el botón <span class="kbd">▸</span> para dar más espacio al mapa, y reabrir con el botón <strong>«◂ Alertas»</strong>.</div>
+
+<!-- ============ 6. FUEGO ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="fuego">Capítulo 6</h2>
+<h1 class="chapter">Fuego y humo</h1>
+<p class="lead">Módulo licenciable especializado en incendios forestales y humo, con lenguaje claro y evidencia satelital diferenciada de la confirmación oficial.</p>
+
+<p>Combina en una sola pantalla:</p>
+<ul>
+  <li><strong>Mapa base nítido</strong> con los focos térmicos activos y su antigüedad.</li>
+  <li><strong>Contexto meteorológico</strong> (viento, temperatura, humedad) relevante para la propagación.</li>
+  <li><strong>Evidencia satelital</strong> claramente marcada como tal — no equivale a una confirmación de bomberos u organismo oficial.</li>
+  <li><strong>Registro de comunicaciones</strong> para trazar avisos y coordinación.</li>
+</ul>
+
+<div class="warn"><strong>Importante.</strong> Una detección satelital es un <strong>indicio</strong>. La confirmación de un incendio corresponde siempre a los organismos oficiales. El radio de análisis de focos es configurable por el administrador (por defecto 50 km).</div>
+
+<!-- ============ 7. PLAGAS ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="plagas">Capítulo 7</h2>
+<h1 class="chapter">Plagas forestales</h1>
+<p class="lead">Módulo licenciable de sanidad forestal del norte, orientado a San Antonio y General Manuel Belgrano.</p>
+
+<p>Integra múltiples señales para el seguimiento fitosanitario:</p>
+<ul>
+  <li>Contexto meteorológico regional (el radar de Bernardo de Irigoyen se usa como referencia climática).</li>
+  <li>Índices satelitales: <strong>NDVI</strong> (vigor vegetal) y humedad.</li>
+  <li>Recorridas de campo, trampas y reportes.</li>
+  <li>Trazabilidad de las observaciones.</li>
+</ul>
+
+<div class="warn"><strong>Alcance.</strong> El módulo aporta contexto y trazabilidad; <strong>no confirma ni identifica una plaga</strong> por sí mismo. La determinación fitosanitaria requiere criterio técnico especializado.</div>
+
+<!-- ============ 8. ALERTA IA ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="alerta-ia">Capítulo 8</h2>
+<h1 class="chapter">Alerta IA · Observatorio SpaceAI</h1>
+<p class="lead">El observatorio reúne el análisis asistido por IA sobre el estado ambiental y de amenaza.</p>
+
+<p>Reúne, por dispositivo y por zona:</p>
+<ul>
+  <li><strong>Telemetría</strong> de cada nodo.</li>
+  <li><strong>Contexto ambiental</strong> de Open-Meteo (meteorología), CAMS (aerosoles/material particulado) y GloFAS (crecidas).</li>
+  <li><strong>Focos NASA FIRMS</strong> georreferenciados.</li>
+  <li><strong>Gemelo digital</strong> del territorio y <strong>mensajes revisables</strong> generados por el sistema.</li>
+  <li><strong>Health Threat Index (HTI)</strong> en escala R0–R5.</li>
+</ul>
+
+<h3>Escala de amenaza R0–R5</h3>
+<table>
+  <thead><tr><th style="width:90px">Nivel</th><th>Interpretación general</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill g">R0</span></td><td>Sin amenaza detectable.</td></tr>
+    <tr><td><span class="pill g">R1</span></td><td>Amenaza baja; monitoreo de rutina.</td></tr>
+    <tr><td><span class="pill y">R2</span></td><td>Amenaza moderada; atención recomendada.</td></tr>
+    <tr><td><span class="pill y">R3</span></td><td>Amenaza elevada; umbral típico de alerta operativa.</td></tr>
+    <tr><td><span class="pill r">R4</span></td><td>Amenaza alta; respuesta prioritaria.</td></tr>
+    <tr><td><span class="pill r">R5</span></td><td>Amenaza crítica; máxima prioridad.</td></tr>
+  </tbody>
+</table>
+<div class="note">El administrador define a partir de qué nivel (por defecto <strong>R3</strong>) se activan alertas operativas automáticas.</div>
+
+<!-- ============ 9. DISPOSITIVOS ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="dispositivos">Capítulo 9</h2>
+<h1 class="chapter">Dispositivos</h1>
+<p class="lead">Inventario y estado de todos los sensores de la organización.</p>
+
+<p>Desde este módulo podés:</p>
+<ul>
+  <li>Ver la lista de nodos con su identificador, ubicación y última telemetría.</li>
+  <li>Distinguir cuáles están <strong>en línea</strong> y cuáles sin reportar.</li>
+  <li>Consultar la posición de cada dispositivo dentro de Misiones.</li>
+</ul>
+<div class="card"><strong>Nota técnica.</strong> Los nodos ESP32 (o el simulador incluido) publican su telemetría en el bus MQTT; el servicio de ingesta la persiste y la deja disponible en tiempo real en este panel y en el mapa.</div>
+
+<!-- ============ 10. REGLAS ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="reglas">Capítulo 10</h2>
+<h1 class="chapter">Reglas</h1>
+<p class="lead">Las reglas automatizan la generación y elevación de alertas según condiciones que vos definís.</p>
+
+<p>Una regla evalúa la telemetría y el contexto y, cuando se cumple una condición, dispara o eleva una alerta sin intervención manual. Ejemplos típicos:</p>
+<ul>
+  <li>Nivel de humo por encima de un umbral en un nodo.</li>
+  <li>Combinación de foco satelital cercano + reporte ciudadano en la misma zona.</li>
+  <li>Índice de amenaza que supera R3.</li>
+</ul>
+<div class="note">Las reglas son la forma de traducir el conocimiento operativo del equipo en automatización, reduciendo el tiempo de detección.</div>
+
+<!-- ============ 11. REPORTES ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="reportes">Capítulo 11</h2>
+<h1 class="chapter">Reportes ciudadanos (gestión interna)</h1>
+<p class="lead">Aquí el equipo revisa y valida la evidencia enviada por la ciudadanía desde el canal público.</p>
+
+<p>Cada reporte incluye tipo de incidente, descripción, ubicación, fecha y —si se adjuntó— una fotografía. El flujo de trabajo del operador es:</p>
+<ol class="steps">
+  <li><b>Revisar</b>Leer la descripción y observar la foto y la ubicación en el mapa.</li>
+  <li><b>Correlacionar</b>Ver si coincide con sensores, focos satelitales o alertas activas.</li>
+  <li><b>Validar o descartar</b>Decidir si la evidencia es confiable y accionable.</li>
+</ol>
+<div class="note">Los reportes pasan por validación de imágenes, límites de uso y moderación antes de llegar al panel, para reducir spam y contenido inválido.</div>
+
+<!-- ============ 12. CANAL ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="canal">Capítulo 12</h2>
+<h1 class="chapter">Canal ciudadano público</h1>
+<p class="lead">Cualquier vecino puede aportar evidencia sin tener cuenta, desde la página pública <code>/reportar</code>. Esta sección sirve para explicárselo a la comunidad.</p>
+
+<h3>Cómo se envía un reporte</h3>
+<ol class="steps">
+  <li><b>Elegir territorio u organización</b>Selecciona a quién llega el reporte.</li>
+  <li><b>Elegir el tipo de incidente</b>Humo, incendio, inundación, vertido/contaminación u otro.</li>
+  <li><b>Describir</b>Qué observa, desde cuándo y qué referencias cercanas hay (hasta 1000 caracteres).</li>
+  <li><b>Adjuntar foto (opcional)</b>JPG, PNG o WebP, máximo 8 MB. Se puede tomar en el momento con la cámara.</li>
+  <li><b>Compartir ubicación</b>Con «Usar mi ubicación» o ingresando latitud y longitud manualmente. Debe estar dentro de Misiones.</li>
+  <li><b>Aceptar el tratamiento de datos</b>Casilla de consentimiento obligatoria.</li>
+  <li><b>Enviar para validación</b>El reporte queda en revisión y se cruza con las demás fuentes.</li>
+</ol>
+
+<div class="crit"><strong>No es un canal de emergencias.</strong> Ante fuego, humo o riesgo inmediato para personas o bienes en Misiones, hay que alejarse del peligro y llamar al <strong>911</strong>.</div>
+
+<div class="card"><strong>Privacidad.</strong> La ubicación se solicita solo cuando el ciudadano la autoriza y se usa exclusivamente para ubicar y correlacionar ese reporte. El envío usa un token firmado con límites de uso.</div>
+
+<!-- ============ 13. INFORMES ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="informes">Capítulo 13</h2>
+<h1 class="chapter">Informes institucionales</h1>
+<p class="lead">El módulo «Informes» consolida la actividad en documentos formales para organizaciones, municipios, programas, inversores, aseguradoras o auditoría.</p>
+
+<h3>Generar un informe</h3>
+<ol class="steps">
+  <li><b>Seleccionar período y destinatario</b>Organización, municipio, programa/organismo (PO), inversor, aseguradora o auditoría.</li>
+  <li><b>Consolidar datos</b>Se agregan dispositivos, alertas, severidad, tiempos de respuesta y reportes ciudadanos.</li>
+  <li><b>Agregar resumen y recomendaciones</b>Observaciones del responsable.</li>
+  <li><b>Exportar</b>Imprimir/guardar en PDF, exportar CSV o copiar un resumen listo para email.</li>
+  <li><b>Compartir enlace público</b>Genera un enlace de alta entropía, guardado como hash y <strong>revocable</strong>.</li>
+</ol>
+
+<h3>Qué contiene un informe</h3>
+<p>Excedencia relativa, <code>Score_i</code>, HTI, matriz R0–R5, reglas categóricas, detalle por dominio, observaciones, procedencia de los datos, focos térmicos y checklist de validación.</p>
+
+<div class="warn"><strong>Límite metodológico.</strong> Los informes documentan la evidencia disponible pero <strong>no equivalen a una certificación independiente</strong>. Cada documento aclara su metodología y sus limitaciones.</div>
+
+<h4>Exportar a PDF desde EcoNexo</h4>
+<p>En el informe, usá la opción de <strong>imprimir/guardar PDF</strong>. En el diálogo de impresión del navegador, elegí destino <strong>«Guardar como PDF»</strong>. (Es el mismo procedimiento que este manual describe al final para cualquier página.)</p>
+
+<!-- ============ 14. ADMIN ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="admin">Capítulo 14</h2>
+<h1 class="chapter">Admin Core / ABM</h1>
+<p class="lead">Sección exclusiva de administradores para gestionar (Alta, Baja, Modificación) toda la configuración de la organización.</p>
+
+<div class="grid2">
+  <div class="mini"><h4>Usuarios y roles</h4><p>Crear, editar y desactivar usuarios; asignar permisos.</p></div>
+  <div class="mini"><h4>Organización</h4><p>Datos institucionales, localidad base y verticales.</p></div>
+  <div class="mini"><h4>Geocercas (PostGIS)</h4><p>Definir áreas de interés y responsabilidad.</p></div>
+  <div class="mini"><h4>Fuentes ambientales / SpaceAI</h4><p>Activar Open-Meteo, calidad de aire, crecidas, FIRMS y Copernicus; radio de focos, minutos de refresco y nivel mínimo de alerta.</p></div>
+  <div class="mini"><h4>Dispositivos y reglas</h4><p>Administrar el inventario de nodos y las reglas de alerta.</p></div>
+  <div class="mini"><h4>Auditoría</h4><p>Registro de acciones para trazabilidad y control.</p></div>
+</div>
+
+<h3>Bandeja «Mensajes»</h3>
+<p>Cada inicio de sesión correcto (por email o Google) notifica a los administradores con el contexto del acceso y la IP anonimizada. Es una herramienta de control de accesos.</p>
+
+<h3>Copernicus Sentinel-2 en tiempo de ejecución</h3>
+<p>El administrador carga la URL de su instancia Sentinel Hub en <strong>Admin Core → Fuentes SpaceAI</strong>, ejecuta <em>GetCapabilities</em> y guarda los nombres de las capas (color real, NDVI, humedad, área quemada). No requiere reconstruir la aplicación.</p>
+
+<!-- ============ 15. SUSCRIPCIONES ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="suscripciones">Capítulo 15</h2>
+<h1 class="chapter">Suscripciones y módulos</h1>
+<p class="lead">El acceso a ciertos módulos depende del plan de la organización.</p>
+
+<p>Planes disponibles, de menor a mayor alcance:</p>
+<table>
+  <thead><tr><th>Plan</th><th>Uso típico</th></tr></thead>
+  <tbody>
+    <tr><td>Sandbox</td><td>Pruebas iniciales.</td></tr>
+    <tr><td>Diagnóstico</td><td>Evaluación acotada.</td></tr>
+    <tr><td>Piloto</td><td>Prueba operativa limitada.</td></tr>
+    <tr><td>Municipal</td><td>Un municipio.</td></tr>
+    <tr><td>Provincia / Pro</td><td>Alcance provincial ampliado.</td></tr>
+    <tr><td>Enterprise</td><td>Despliegue institucional completo.</td></tr>
+    <tr><td>Academia</td><td>Uso académico y de investigación.</td></tr>
+  </tbody>
+</table>
+<p>Cada suscripción gestiona <strong>solicitud, aprobación comercial, vencimiento, consumo y módulos habilitados</strong>. Módulos como <em>Fuego y humo</em> y <em>Plagas forestales</em> son licenciables y pueden estar o no activos según el plan.</p>
+
+<!-- ============ 16. INDICADORES ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="indicadores">Capítulo 16</h2>
+<h1 class="chapter">Indicadores (KPIs) y severidad</h1>
+<p class="lead">Las cuatro tarjetas de la barra superior miden el desempeño del sistema contra objetivos claros.</p>
+
+<table>
+  <thead><tr><th style="width:200px">Indicador</th><th>Qué mide</th><th style="width:90px">Objetivo</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Tiempo de detección</strong></td><td>Segundos desde que ocurre una señal hasta que se detecta.</td><td>&lt; 5 min</td></tr>
+    <tr><td><strong>Precisión motor IA</strong></td><td>Proporción de detecciones del modelo que son correctas.</td><td>85%+</td></tr>
+    <tr><td><strong>Reportes válidos</strong></td><td>Porcentaje de reportes ciudadanos que resultan válidos.</td><td>70%+</td></tr>
+    <tr><td><strong>Reducción respuesta</strong></td><td>Mejora en el tiempo de respuesta respecto de la línea base.</td><td>-40%</td></tr>
+  </tbody>
+</table>
+<p>Cada tarjeta se pinta en <span class="pill g">verde</span> cuando cumple el objetivo y en <span class="pill y">amarillo</span> cuando aún no lo alcanza, con una barra de progreso.</p>
+
+<h3>Severidad y confianza</h3>
+<p>La <strong>severidad</strong> clasifica la gravedad de una alerta; la <strong>confianza</strong> (0–100%) estima cuán probable es que sea real. En las tarjetas de alerta, la confianza se colorea: verde ≥ 85%, amarillo ≥ 60%, gris por debajo.</p>
+
+<!-- ============ 17. MOVIL ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="movil">Capítulo 17</h2>
+<h1 class="chapter">Aplicación móvil</h1>
+<p class="lead">EcoNexo incluye un cliente móvil nativo (Expo + React Native) para Android e iOS.</p>
+
+<p>Desde el teléfono, los usuarios acceden a:</p>
+<div class="grid2">
+  <div class="mini"><h4>Inicio</h4><p>Resumen de estado y contexto del territorio.</p></div>
+  <div class="mini"><h4>Fuego y Humo</h4><p>Focos y contexto de incendios en el celular.</p></div>
+  <div class="mini"><h4>Alerta IA</h4><p>Índice de amenaza y análisis asistido.</p></div>
+  <div class="mini"><h4>Reportes</h4><p>Envío con foto y ubicación desde el campo.</p></div>
+</div>
+<p>La cuenta es la misma que en la web. La app comparte el enfoque territorial y las capacidades principales del centro de comando en un formato pensado para el trabajo en terreno.</p>
+
+<!-- ============ 18. LIMITES ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="limites">Capítulo 18</h2>
+<h1 class="chapter">Buenas prácticas y límites</h1>
+<p class="lead">Usar EcoNexo con criterio significa entender qué aporta y qué no.</p>
+
+<h3>Buenas prácticas</h3>
+<ul>
+  <li>Confirmá o descartá las alertas con prontitud: mantener la lista limpia mejora la respuesta del equipo.</li>
+  <li>Correlacioná siempre reportes ciudadanos con otras fuentes antes de accionar.</li>
+  <li>Ajustá las reglas y el nivel mínimo de alerta (R0–R5) a la realidad del territorio.</li>
+  <li>Documentá con informes periódicos para mantener trazabilidad institucional.</li>
+</ul>
+
+<h3>Límites que hay que tener presentes</h3>
+<div class="crit"><strong>No reemplaza a los servicios de emergencia.</strong> Ante riesgo inmediato, el canal es el <strong>911</strong>. EcoNexo es una herramienta de detección temprana y decisión, no de respuesta de emergencia.</div>
+<div class="warn"><strong>La evidencia satelital no es confirmación oficial.</strong> Los focos FIRMS y los índices Copernicus son indicios que requieren verificación de los organismos competentes.</div>
+<div class="warn"><strong>Los informes no son una certificación independiente.</strong> Documentan la evidencia disponible con su metodología y limitaciones explícitas.</div>
+
+<!-- ============ 19. FAQ ============ -->
+<div class="page-break"></div>
+<h2 class="section" id="faq">Capítulo 19</h2>
+<h1 class="chapter">Preguntas frecuentes</h1>
+
+<h4>¿Necesito instalar algo para usar EcoNexo?</h4>
+<p>No. La plataforma funciona en el navegador. La app móvil es opcional para trabajo en campo.</p>
+
+<h4>Olvidé mi contraseña, ¿qué hago?</h4>
+<p>Contactá al administrador de tu organización para que gestione el restablecimiento desde Admin Core.</p>
+
+<h4>¿Por qué no veo el módulo «Admin Core»?</h4>
+<p>Solo aparece para usuarios con rol de administrador.</p>
+
+<h4>¿Por qué faltan «Fuego y humo» o «Plagas forestales»?</h4>
+<p>Son módulos licenciables. Su disponibilidad depende del plan de la organización (capítulo 15).</p>
+
+<h4>Envié una señal fuera de Misiones y no aparece. ¿Es un error?</h4>
+<p>No. La edición está restringida a Misiones; las señales externas se excluyen del centro de comando de forma intencional.</p>
+
+<h4>¿Los datos de una organización son visibles para otra?</h4>
+<p>No. Cada organización está aislada y ve únicamente su propia información.</p>
+
+<!-- ============ EXPORT ============ -->
+<div class="page-break"></div>
+<h2 class="section">Apéndice</h2>
+<h1 class="chapter">Cómo exportar este manual a PDF</h1>
+<p class="lead">Este documento está diseñado para imprimirse o guardarse como PDF con formato profesional.</p>
+<ol class="steps">
+  <li><b>Abrí este archivo en tu navegador</b>Chrome, Edge o Firefox (doble clic en <code>MANUAL_USUARIO_ECONEXO.html</code>).</li>
+  <li><b>Abrí el diálogo de impresión</b>Presioná <span class="kbd">Ctrl</span> + <span class="kbd">P</span>.</li>
+  <li><b>Elegí destino «Guardar como PDF»</b>En «Destino» o «Impresora», seleccioná <strong>Guardar como PDF</strong> / <em>Microsoft Print to PDF</em>.</li>
+  <li><b>Ajustes recomendados</b>Márgenes «Predeterminados», activá <strong>«Gráficos de fondo»</strong> para conservar los colores, tamaño A4.</li>
+  <li><b>Guardá</b>Presioná «Guardar» y elegí dónde crear el PDF.</li>
+</ol>
+<div class="note">Con «Gráficos de fondo» activado, la portada y los colores se conservan idénticos a la vista en pantalla.</div>
+
+<div class="foot">
+  <span>EcoNexo · Manual de Usuario · Edición Misiones · v1.0.0-rc.3</span>
+  <span>Documento de uso interno</span>
+</div>
+
+</div>
+</body>
+</html>

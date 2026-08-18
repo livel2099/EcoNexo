@@ -2,6 +2,12 @@
 # Monta el codigo fuente y preserva node_modules del contenedor.
 # WATCHPACK_POLLING=true -> necesario para detectar cambios en bind mounts Windows.
 services:
+  postgis:
+    # El puerto interno sigue siendo 5432. Publicamos 5433 para no chocar
+    # con otros PostgreSQL locales; la API se conecta por la red de Compose.
+    ports: !override
+      - "5433:5432"
+
   web:
     volumes:
       - ./apps/web:/app
@@ -9,3 +15,8 @@ services:
       - /app/.next
     environment:
       WATCHPACK_POLLING: "true"
+
+volumes:
+  pgdata:
+    # Volumen local nuevo: conserva intacto el volumen histórico econexo_pgdata.
+    name: econexo_pgdata_foi

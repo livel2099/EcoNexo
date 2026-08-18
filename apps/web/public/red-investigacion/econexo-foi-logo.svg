@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" role="img" aria-labelledby="title desc">
+  <title id="title">EcoNexoFoI</title>
+  <desc id="desc">Hoja, red de conocimiento, matraz y libro abierto</desc>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24 120C24 61 65 25 118 16c4 47-14 91-72 110 17-26 35-46 62-67" stroke="#10B981" stroke-width="10"/>
+    <path d="M82 70l26-20 27 18-3 34-27 18-29-17 6-33Z" stroke="#67D8E5" stroke-width="5" opacity=".92"/>
+    <circle cx="82" cy="70" r="8" fill="#F4B942" stroke="none"/>
+    <circle cx="108" cy="50" r="8" fill="#67D8E5" stroke="none"/>
+    <circle cx="135" cy="68" r="8" fill="#10B981" stroke="none"/>
+    <circle cx="132" cy="102" r="8" fill="#F4B942" stroke="none"/>
+    <circle cx="105" cy="120" r="8" fill="#67D8E5" stroke="none"/>
+    <circle cx="76" cy="103" r="8" fill="#10B981" stroke="none"/>
+    <path d="M87 81v22l-20 35c-4 7 1 15 9 15h55c8 0 13-8 9-15l-20-35V81" stroke="#EAF8F5" stroke-width="7"/>
+    <path d="M82 81h43M79 126h50" stroke="#67D8E5" stroke-width="5"/>
+    <circle cx="105" cy="137" r="6" fill="#F4B942" stroke="none"/>
+    <path d="M18 143c34 0 60 9 87 27 27-18 54-27 88-27l-7 25c-31-2-55 3-81 12-26-9-50-14-81-12l-6-25Z" fill="#164E63" stroke="#67D8E5" stroke-width="5"/>
+    <path d="M105 149v27" stroke="#EAF8F5" stroke-width="4"/>
+  </g>
+  <text x="222" y="117" fill="#10B981" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="72" font-weight="800" letter-spacing="-3">Eco<tspan fill="#FFFFFF">Nexo</tspan><tspan fill="#67D8E5">FoI</tspan></text>
+  <text x="227" y="144" fill="#A9C8CD" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="4">FORO DE INVESTIGACIÓN</text>
+</svg>
