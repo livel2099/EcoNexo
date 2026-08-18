@@ -14,7 +14,6 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import db
 from .config import get_settings
@@ -69,22 +68,49 @@ app = FastAPI(
 s = get_settings()
 
 
-class UnhandledErrorMiddleware(BaseHTTPMiddleware):
+class UnhandledErrorMiddleware:
     """Convierte errores no controlados en 500 JSON *dentro* del stack CORS.
 
     Sin esto el 500 lo emite ``ServerErrorMiddleware``, que corre por fuera de
     ``CORSMiddleware``: la respuesta sale sin ``Access-Control-Allow-Origin`` y
     el navegador reporta un falso error de CORS en vez del error real.
+
+    Es ASGI puro a proposito. ``BaseHTTPMiddleware`` propaga sus propios
+    ``anyio.EndOfStream`` en lugar de la excepcion original, y el traceback
+    que queda en el log no dice nada sobre la causa real.
     """
 
-    async def dispatch(self, request: Request, call_next):
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        response_started = False
+
+        async def send_wrapper(message) -> None:
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
         try:
-            return await call_next(request)
-        except Exception as exc:
+            await self.app(scope, receive, send_wrapper)
+        except Exception:
             logging.getLogger("econexo.api").exception(
-                "Error no controlado en %s %s", request.method, request.url.path, exc_info=exc
+                "Error no controlado en %s %s",
+                scope.get("method", "?"),
+                scope.get("path", "?"),
             )
-            return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
+            if response_started:
+                # Ya se enviaron headers: no se puede reemplazar la respuesta.
+                raise
+            response = JSONResponse(
+                status_code=500, content={"detail": "Error interno del servidor"}
+            )
+            await response(scope, receive, send)
 
 
 # El orden importa: el ultimo middleware agregado es el mas externo, por lo que

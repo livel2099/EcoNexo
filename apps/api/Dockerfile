@@ -6,4 +6,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# render-start.sh valida la configuracion, aplica migraciones pendientes
+# (RUN_MIGRATIONS_ON_START) y recien despues levanta uvicorn en $PORT.
+CMD ["sh", "render-start.sh"]
