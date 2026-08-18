@@ -149,7 +149,12 @@ def main() -> None:
     parser.add_argument(
         "--baseline-existing",
         action="store_true",
-        help="Marca una base existente como migrada sin ejecutar SQL",
+        help=(
+            "Marca una base existente como migrada sin ejecutar SQL. "
+            "Usar SOLO si la base ya tiene TODAS las migraciones del repo: "
+            "cualquier archivo pendiente queda marcado como aplicado y su SQL "
+            "no corre nunca, dejando el esquema atrasado respecto del codigo."
+        ),
     )
     args = parser.parse_args()
     asyncio.run(
