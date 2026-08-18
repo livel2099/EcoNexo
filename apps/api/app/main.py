@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import db
 from .config import get_settings
@@ -66,6 +67,29 @@ app = FastAPI(
 )
 
 s = get_settings()
+
+
+class UnhandledErrorMiddleware(BaseHTTPMiddleware):
+    """Convierte errores no controlados en 500 JSON *dentro* del stack CORS.
+
+    Sin esto el 500 lo emite ``ServerErrorMiddleware``, que corre por fuera de
+    ``CORSMiddleware``: la respuesta sale sin ``Access-Control-Allow-Origin`` y
+    el navegador reporta un falso error de CORS en vez del error real.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            logging.getLogger("econexo.api").exception(
+                "Error no controlado en %s %s", request.method, request.url.path, exc_info=exc
+            )
+            return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
+
+
+# El orden importa: el ultimo middleware agregado es el mas externo, por lo que
+# CORSMiddleware debe registrarse despues para poder anotar los 500 anteriores.
+app.add_middleware(UnhandledErrorMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=s.cors_list,
