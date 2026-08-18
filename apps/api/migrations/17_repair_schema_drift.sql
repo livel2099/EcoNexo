@@ -25,6 +25,24 @@ ALTER TABLE users
 ALTER TABLE organizations
     ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
 
+-- DDL de la migracion 15, que fue editada despues de aplicarse. Segun cuando
+-- corrio cada entorno puede faltarle el DEFAULT o el CHECK, asi que se
+-- redeclaran los dos. Se omiten a proposito los UPDATE de la 15: reactivarian
+-- copernicus_enabled y cerrarian pipeline_runs en curso, pisando datos reales.
+ALTER TABLE environmental_source_settings
+  ALTER COLUMN copernicus_enabled SET DEFAULT true;
+
+ALTER TABLE environmental_source_settings
+  DROP CONSTRAINT IF EXISTS environment_sources_copernicus_config_check;
+
+ALTER TABLE environmental_source_settings
+  ADD CONSTRAINT environment_sources_copernicus_config_check
+  CHECK (
+    NOT copernicus_enabled
+    OR copernicus_use_system_default
+    OR NULLIF(btrim(copernicus_wms_url), '') IS NOT NULL
+  ) NOT VALID;
+
 -- Red EcoNexoFoI (migracion 16), re-declarada de forma idempotente.
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'institutional';

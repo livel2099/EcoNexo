@@ -63,7 +63,12 @@ async def _database_has_core_schema(conn: asyncpg.Connection) -> bool:
     )
 
 
-async def migrate(*, status_only: bool = False, baseline_existing: bool = False) -> None:
+async def migrate(
+    *,
+    status_only: bool = False,
+    baseline_existing: bool = False,
+    strict_checksums: bool = False,
+) -> None:
     settings = get_settings()
     conn = await asyncpg.connect(
         dsn=settings.dsn,
@@ -118,10 +123,25 @@ async def migrate(*, status_only: bool = False, baseline_existing: bool = False)
             row = applied.get(path.name)
             if row:
                 if row["checksum"] != checksum:
-                    raise RuntimeError(
-                        f"La migracion aplicada {path.name} cambio de contenido. "
-                        "Cree una migracion nueva en vez de editarla."
+                    if strict_checksums:
+                        raise RuntimeError(
+                            f"La migracion aplicada {path.name} cambio de contenido. "
+                            "Cree una migracion nueva en vez de editarla."
+                        )
+                    # Abortar aca deja el deploy muerto sin forma de recuperarlo
+                    # en entornos sin shell (Render). Se re-sincroniza el
+                    # checksum y se sigue, pero el SQL editado NO se re-ejecuta.
+                    print(f"resync    {path.name}")
+                    print("          ATENCION: cambio despues de aplicarse. Se")
+                    print("          actualiza el checksum pero su SQL no se")
+                    print("          re-ejecuta. Si la edicion agrega esquema,")
+                    print("          replicala en una migracion nueva.")
+                    await conn.execute(
+                        "UPDATE schema_migrations SET checksum=$2 WHERE filename=$1",
+                        path.name,
+                        checksum,
                     )
+                    continue
                 print(f"skip      {path.name}")
                 continue
 
@@ -156,11 +176,20 @@ def main() -> None:
             "no corre nunca, dejando el esquema atrasado respecto del codigo."
         ),
     )
+    parser.add_argument(
+        "--strict-checksums",
+        action="store_true",
+        help=(
+            "Aborta si una migracion aplicada cambio de contenido, en vez de "
+            "re-sincronizar el checksum. Pensado para CI y entornos locales."
+        ),
+    )
     args = parser.parse_args()
     asyncio.run(
         migrate(
             status_only=args.status,
             baseline_existing=args.baseline_existing,
+            strict_checksums=args.strict_checksums,
         )
     )
 
