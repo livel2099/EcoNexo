@@ -24,7 +24,7 @@ import type {
   Rule,
   Session,
 } from "./types";
-import type { EmailRegisterInput, GoogleAuthInput } from "./api";
+import type { EmailRegisterInput, GoogleAuthInput, RegistrationPending } from "./api";
 
 const DEMO_EMAIL = "admin@misiones.econexo.ar";
 const DEMO_PASSWORD = "econexo123";
@@ -478,7 +478,7 @@ export async function demoLogin(email: string, password: string): Promise<Sessio
   };
 }
 
-export async function demoRegisterEmail(input: EmailRegisterInput): Promise<Session> {
+async function demoCreateAccount(input: EmailRegisterInput): Promise<Session> {
   if (!input.organization_name.trim() || !input.name.trim() || !input.terms_accepted) {
     throw new Error("Completá la organización, tus datos y aceptá los términos.");
   }
@@ -548,6 +548,29 @@ export async function demoRegisterEmail(input: EmailRegisterInput): Promise<Sess
   };
 }
 
+/** Alta institucional: crea la solicitud pero no habilita el acceso. */
+export async function demoRegisterEmail(input: EmailRegisterInput): Promise<RegistrationPending> {
+  if (!input.phone?.trim()) {
+    throw new Error("Ingresá un teléfono de contacto.");
+  }
+  const session = await demoCreateAccount(input);
+  return {
+    status: "pending_approval",
+    organization_id: session.org_id,
+    organization_name: input.organization_name.trim(),
+    email: session.email,
+    phone: input.phone,
+    detail:
+      "Recibimos tu solicitud. Administración general va a contactarte por WhatsApp " +
+      `al ${input.phone} para coordinar la licencia y habilitar el acceso.`,
+  };
+}
+
+/** Cuenta comunitaria de EcoNexoFoI: gratuita e inmediata, sin aprobación. */
+export async function demoRegisterCommunity(input: EmailRegisterInput): Promise<Session> {
+  return { ...await demoCreateAccount(input), account_type: "community" };
+}
+
 export async function demoGoogleLogin(input: GoogleAuthInput): Promise<Session> {
   await Promise.resolve();
   if (input.mode === "register" && (!input.organization_name || !input.terms_accepted)) {
@@ -583,13 +606,14 @@ export async function demoGoogleLogin(input: GoogleAuthInput): Promise<Session> 
 
 function demoPlans(): SubscriptionPlan[] {
   return [
-    { plan_key: "sandbox", display_name: "Sandbox calificado", description: "Evaluación comercial limitada.", price_min_usd: 0, price_max_usd: 0, billing_period: "trial", duration_days: 14, entitlements: { max_users: 2, max_devices: 2, max_zones: 1, max_rules: 2, max_reports_per_month: 1, max_critical_layers: 1, municipality_limit: 1, included_modules: ["core"] } },
-    { plan_key: "diagnostic", display_name: "Diagnóstico territorial", description: "Mapa base, lectura de riesgo y propuesta de piloto.", price_min_usd: 2000, price_max_usd: 4000, billing_period: "one_time", duration_days: 30, entitlements: { max_users: 3, max_devices: 0, max_zones: 1, max_rules: 0, max_reports_per_month: 1, max_critical_layers: 1, municipality_limit: 1, included_modules: ["core"] } },
-    { plan_key: "pilot_8_weeks", display_name: "Piloto 8 semanas", description: "Dashboard, tres capas críticas, validación, reportes y capacitación.", price_min_usd: 18000, price_max_usd: 35000, billing_period: "one_time", duration_days: 56, entitlements: { max_users: 10, max_devices: 25, max_zones: 2, max_rules: 12, max_reports_per_month: 4, max_critical_layers: 3, municipality_limit: 2, report_frequency: "semanal o quincenal", api_access: false, audit_export: true, custom_models: false, sla: false, included_modules: ["core", "fire_smoke", "forestry_pests"] } },
-    { plan_key: "municipal", display_name: "SaaS Municipal", description: "Un municipio, alertas base, reportes mensuales y soporte limitado.", price_min_usd: 800, price_max_usd: 1500, billing_period: "monthly", duration_days: null, entitlements: { max_users: 10, max_devices: 50, max_zones: 5, max_rules: 20, max_reports_per_month: 4, max_critical_layers: 3, municipality_limit: 1, report_frequency: "mensual", api_access: false, audit_export: false, custom_models: false, sla: false, included_modules: ["core"] } },
-    { plan_key: "province_pro", display_name: "SaaS Provincia / Pro", description: "Múltiples zonas, reportes quincenales y usuarios internos.", price_min_usd: 3500, price_max_usd: 8000, billing_period: "monthly", duration_days: null, entitlements: { max_users: 50, max_devices: 500, max_zones: 30, max_rules: 100, max_reports_per_month: 12, max_critical_layers: 12, municipality_limit: 79, report_frequency: "quincenal", api_access: false, audit_export: true, custom_models: false, sla: false, included_modules: ["core"] } },
-    { plan_key: "enterprise", display_name: "Enterprise minero / energético", description: "SLA, integraciones, API, auditoría y modelos personalizados.", price_min_usd: 12000, price_max_usd: null, billing_period: "monthly", duration_days: null, entitlements: { max_users: 250, max_devices: 5000, max_zones: 250, max_rules: 1000, max_reports_per_month: 100, max_critical_layers: 50, municipality_limit: 79, report_frequency: "personalizada", api_access: true, audit_export: true, custom_models: true, sla: true, included_modules: ["core", "fire_smoke", "forestry_pests"] } },
-    { plan_key: "academy", display_name: "Academia EcoNexo", description: "Capacitación, manuales, certificación interna y simulacros.", price_min_usd: 2000, price_max_usd: 6000, billing_period: "cohort", duration_days: 45, entitlements: { max_users: 40, max_devices: 0, max_zones: 1, max_rules: 0, max_reports_per_month: 2, max_critical_layers: 1, municipality_limit: 1, report_frequency: "simulación", api_access: false, audit_export: false, custom_models: false, sla: false, included_modules: ["core"] } },
+    { plan_key: "sandbox", display_name: "Sandbox calificado", description: "Evaluación comercial limitada.", price_min_usd: 0, price_max_usd: 0, billing_period: "trial", duration_days: 14, entitlements: { max_users: 2, max_devices: 2, max_zones: 1, max_rules: 2, max_critical_layers: 1, municipality_limit: 1, included_modules: ["core", "agro"] } },
+    { plan_key: "diagnostic", display_name: "Diagnóstico territorial", description: "Mapa base, lectura de riesgo y propuesta de piloto.", price_min_usd: 2000, price_max_usd: 4000, billing_period: "one_time", duration_days: 30, entitlements: { max_users: 3, max_devices: 0, max_zones: 1, max_rules: 0, max_critical_layers: 1, municipality_limit: 1, included_modules: ["core", "agro"] } },
+    { plan_key: "pilot_8_weeks", display_name: "Piloto 8 semanas", description: "Dashboard, tres capas críticas, validación, reportes y capacitación.", price_min_usd: 18000, price_max_usd: 35000, billing_period: "one_time", duration_days: 56, entitlements: { max_users: 10, max_devices: 25, max_zones: 2, max_rules: 12, max_critical_layers: 3, municipality_limit: 2, report_frequency: "semanal o quincenal", api_access: false, audit_export: true, custom_models: false, sla: false, included_modules: ["core", "fire_smoke", "forestry_pests", "agro"] } },
+    { plan_key: "municipal", display_name: "SaaS Municipal", description: "Un municipio, alertas base, reportes mensuales y soporte limitado.", price_min_usd: 800, price_max_usd: 1500, billing_period: "monthly", duration_days: null, entitlements: { max_users: 10, max_devices: 50, max_zones: 5, max_rules: 20, max_critical_layers: 3, municipality_limit: 1, report_frequency: "mensual", api_access: false, audit_export: false, custom_models: false, sla: false, included_modules: ["core", "agro"] } },
+    { plan_key: "province_pro", display_name: "SaaS Provincia / Pro", description: "Múltiples zonas, reportes quincenales y usuarios internos.", price_min_usd: 3500, price_max_usd: 8000, billing_period: "monthly", duration_days: null, entitlements: { max_users: 50, max_devices: 500, max_zones: 30, max_rules: 100, max_critical_layers: 12, municipality_limit: 79, report_frequency: "quincenal", api_access: false, audit_export: true, custom_models: false, sla: false, included_modules: ["core", "agro"] } },
+    { plan_key: "enterprise", display_name: "Enterprise minero / energético", description: "SLA, integraciones, API, auditoría y modelos personalizados.", price_min_usd: 12000, price_max_usd: null, billing_period: "monthly", duration_days: null, entitlements: { max_users: 250, max_devices: 5000, max_zones: 250, max_rules: 1000, max_critical_layers: 50, municipality_limit: 79, report_frequency: "personalizada", api_access: true, audit_export: true, custom_models: true, sla: true, included_modules: ["core", "fire_smoke", "forestry_pests", "agro"] } },
+    { plan_key: "agro_productor", display_name: "EcoNexo AG · Productor", description: "Lotes, fenología, balance hídrico y ventanas de aplicación sobre datos meteorológicos reales.", price_min_usd: 400, price_max_usd: 1200, billing_period: "monthly", duration_days: null, entitlements: { max_users: 8, max_devices: 25, max_zones: 10, max_rules: 25, max_critical_layers: 3, municipality_limit: 3, report_frequency: "quincenal", api_access: false, audit_export: true, custom_models: false, sla: false, included_modules: ["core", "agro"] } },
+    { plan_key: "academy", display_name: "Academia EcoNexo", description: "Capacitación, manuales, certificación interna y simulacros.", price_min_usd: 2000, price_max_usd: 6000, billing_period: "cohort", duration_days: 45, entitlements: { max_users: 40, max_devices: 0, max_zones: 1, max_rules: 0, max_critical_layers: 1, municipality_limit: 1, report_frequency: "simulación", api_access: false, audit_export: false, custom_models: false, sla: false, included_modules: ["core", "agro"] } },
   ];
 }
 
@@ -604,9 +628,16 @@ function demoSubscription(state: DemoState): SubscriptionMe {
   };
 }
 
+const AGRO_SIN_DEMO =
+  "EcoNexo AG procesa datos meteorológicos reales y no tiene modo demo: mostrar " +
+  "indicadores agronómicos inventados sería peor que no mostrarlos. Conectá la API " +
+  "productiva para usar el módulo.";
+
 export async function demoGet<T>(path: string): Promise<T> {
   await Promise.resolve();
   const state = readState();
+
+  if (path.startsWith("/agro/")) throw new Error(AGRO_SIN_DEMO);
 
   if (path === "/orgs/me") return copy(state.org) as T;
   if (path === "/orgs/public") {
@@ -672,6 +703,7 @@ export async function demoGet<T>(path: string): Promise<T> {
       { module_key: "core", status: "active", plan_name: "Plataforma EcoNexo", starts_at: isoAgo(40000), expires_at: null, config: { human_approval_required: true }, available: true },
       { module_key: "fire_smoke", status: "trial", plan_name: "Focos de incendio forestal y humo", starts_at: isoAgo(1000), expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(), config: { plain_language: true, emergency_numbers: ["911", "100", "103", "105"] }, available: true },
       { module_key: "forestry_pests", status: "trial", plan_name: "Vigilancia de plagas forestales", starts_at: isoAgo(1000), expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(), config: { plain_language: true, focus_area: "San Antonio - General Manuel Belgrano" }, available: true },
+      { module_key: "agro", status: "suspended", plan_name: "EcoNexo AG · inteligencia agronómica", starts_at: isoAgo(1000), expires_at: null, config: {}, available: false },
     ];
     return copy(modules) as T;
   }
@@ -862,6 +894,7 @@ export async function demoPost<T>(path: string, body: unknown): Promise<T> {
     return copy(report) as T;
   }
 
+  if (path.startsWith("/agro/")) throw new Error(AGRO_SIN_DEMO);
   throw new Error(`Ruta demo no implementada: POST ${path}`);
 }
 
@@ -913,6 +946,7 @@ export async function demoPatch<T>(path: string, body?: unknown): Promise<T> {
     return copy(zone) as T;
   }
 
+  if (path.startsWith("/agro/")) throw new Error(AGRO_SIN_DEMO);
   throw new Error(`Ruta demo no implementada: PATCH ${path}`);
 }
 
@@ -953,6 +987,7 @@ export async function demoDelete(path: string): Promise<void> {
     pushAudit(state, "delete", "environmental_snapshot", snapshotMatch[1]);
     writeState(state); return;
   }
+  if (path.startsWith("/agro/")) throw new Error(AGRO_SIN_DEMO);
   throw new Error(`Ruta demo no implementada: DELETE ${path}`);
 }
 

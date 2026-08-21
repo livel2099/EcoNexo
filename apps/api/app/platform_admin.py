@@ -48,7 +48,8 @@ async def ensure_platform_admin() -> None:
                     ) VALUES ($1,'econexo-plataforma','municipio','Misiones','Capital',
                               'Posadas','provincial',true)
                     ON CONFLICT (slug) DO UPDATE SET
-                        name=EXCLUDED.name, is_active=true, updated_at=now()
+                        name=EXCLUDED.name, is_active=true,
+                        access_status='approved', updated_at=now()
                     RETURNING id
                     """,
                     settings.platform_admin_organization.strip() or "EcoNexo Plataforma",

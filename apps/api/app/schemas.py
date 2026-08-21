@@ -1,6 +1,7 @@
 """Contratos de API (Pydantic v2). Validacion estricta de entrada/salida."""
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -42,9 +43,37 @@ class EmailRegisterIn(BaseModel):
     department: str | None = Field(default=None, max_length=120)
     name: str = Field(min_length=2, max_length=100)
     email: EmailStr
+    phone: str = Field(min_length=6, max_length=32)
     password: str = Field(min_length=8, max_length=128)
     terms_accepted: bool = False
     legal_version: str = Field(default="2026-07-27", max_length=32)
+
+    @field_validator("phone")
+    @classmethod
+    def normalize_phone(cls, value: str) -> str:
+        # Se guarda en E.164 porque administracion general lo abre con wa.me,
+        # que rechaza espacios, guiones y prefijos con 0 o 15.
+        digits = re.sub(r"[^0-9+]", "", value)
+        if digits.startswith("00"):
+            digits = "+" + digits[2:]
+        if not digits.startswith("+"):
+            national = digits.lstrip("0")
+            # 0<area>15<numero> es el formato local argentino para moviles. El
+            # 15 no forma parte del numero internacional y no se puede quitar
+            # sin saber cuantos digitos tiene el codigo de area, asi que se
+            # pide el formato internacional en vez de adivinar.
+            if re.fullmatch(r"[0-9]{2,4}15[0-9]{6,8}", national):
+                raise ValueError(
+                    "Escribí el número en formato internacional, sin el 0 ni el 15. "
+                    "Por ejemplo, +54 9 376 412 3456"
+                )
+            # El producto opera solo en Misiones: sin codigo de pais se asume +54.
+            digits = "+54" + national if len(national) <= 11 else "+" + national
+        if not re.fullmatch(r"\+[1-9][0-9]{7,14}", digits):
+            raise ValueError(
+                "Ingresá un teléfono válido con código de país, por ejemplo +54 9 376 412 3456"
+            )
+        return digits
 
     @field_validator("organization_name", "name")
     @classmethod
@@ -399,7 +428,7 @@ class PublicImpactReportOut(BaseModel):
 
 
 # --- Licencias modulares y Alerta IA ---
-ModuleKey = Literal["core", "fire_smoke", "forestry_pests"]
+ModuleKey = Literal["core", "fire_smoke", "forestry_pests", "agro"]
 ModuleStatus = Literal["trial", "active", "suspended", "expired"]
 
 
@@ -432,7 +461,7 @@ class AlertShareOut(BaseModel):
 # --- Suscripciones, límites y mensajes administrativos ---
 SubscriptionPlanKey = Literal[
     "sandbox", "diagnostic", "pilot_8_weeks", "municipal",
-    "province_pro", "enterprise", "academy"
+    "province_pro", "enterprise", "agro_productor", "academy"
 ]
 SubscriptionStatus = Literal[
     "pending", "trial", "active", "past_due", "suspended", "expired", "cancelled"
@@ -544,6 +573,7 @@ class PlatformUserCreateIn(BaseModel):
     org_id: UUID
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr
+    phone: str | None = Field(default=None, max_length=32)
     role: Literal["admin", "operador", "visualizador"] = "operador"
     temporary_password: str = Field(min_length=12, max_length=256)
 
@@ -563,6 +593,7 @@ class PlatformUserOut(BaseModel):
     org_name: str
     name: str
     email: EmailStr
+    phone: str | None = None
     role: Literal["admin", "operador", "visualizador"]
     is_active: bool
     organization_active: bool
@@ -601,6 +632,10 @@ class PlatformOrganizationOut(BaseModel):
     province: str
     municipality: str | None = None
     is_active: bool
+    access_status: Literal["pending", "approved", "suspended"] = "approved"
+    contact_name: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
     users_total: int
     users_active: int
     plan_key: str | None = None
@@ -949,6 +984,120 @@ class EnvironmentalSnapshotRecordOut(BaseModel):
     activated_alerts: int = 0
     snapshot: EnvironmentalSnapshot
     created_at: datetime
+
+class RegistrationPendingOut(BaseModel):
+    """Respuesta del alta institucional: queda esperando aprobación manual."""
+
+    status: Literal["pending_approval"] = "pending_approval"
+    organization_id: UUID
+    organization_name: str
+    email: EmailStr
+    phone: str
+    detail: str
+
+
+# --- EcoNexo AG (modulo agro) ---
+class AgroLotIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    crop_key: str = Field(min_length=2, max_length=40)
+    sowing_date: date | None = None
+    area_ha: float = Field(default=1.0, gt=0, le=100000)
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    zone_id: UUID | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_lot(self):
+        ensure_in_misiones(self.lat, self.lon)
+        if self.sowing_date and self.sowing_date > date.today():
+            raise ValueError("La fecha de siembra no puede ser futura")
+        return self
+
+
+class AgroLotUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    crop_key: str | None = Field(default=None, min_length=2, max_length=40)
+    sowing_date: date | None = None
+    area_ha: float | None = Field(default=None, gt=0, le=100000)
+    notes: str | None = Field(default=None, max_length=1000)
+    is_active: bool | None = None
+
+
+class AgroDailyOut(BaseModel):
+    day: date
+    tmax_c: float | None = None
+    tmin_c: float | None = None
+    precipitation_mm: float | None = None
+    et0_mm: float | None = None
+    kc: float | None = None
+    etc_mm: float | None = None
+    gdd: float | None = None
+    gdd_accum: float | None = None
+    balance_mm: float | None = None
+    balance_accum_mm: float | None = None
+    stage_key: str | None = None
+    stage_name: str | None = None
+    is_forecast: bool = False
+
+
+class AgroAdvisoryOut(BaseModel):
+    id: UUID
+    lot_id: UUID
+    lot_name: str | None = None
+    kind: Literal["helada", "riego", "pulverizacion", "enfermedad", "estres_termico", "fenologia"]
+    level: Literal["bajo", "medio", "alto"]
+    title: str
+    detail: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    valid_from: datetime
+    valid_to: datetime | None = None
+    created_at: datetime
+
+
+class AgroLotOut(BaseModel):
+    id: UUID
+    name: str
+    crop_key: str
+    crop_name: str
+    sowing_date: date | None = None
+    area_ha: float
+    lat: float
+    lon: float
+    zone_id: UUID | None = None
+    notes: str | None = None
+    is_active: bool
+    last_refresh_at: datetime | None = None
+    last_refresh_status: str | None = None
+    stage_name: str | None = None
+    gdd_accum: float | None = None
+    balance_14d_mm: float | None = None
+    advisories: list[AgroAdvisoryOut] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgroRefreshOut(BaseModel):
+    lot_id: UUID
+    days_processed: int
+    history_days: int
+    forecast_days: int
+    gdd_accum: float | None = None
+    stage_name: str | None = None
+    advisories: list[AgroAdvisoryOut] = Field(default_factory=list)
+    sources: list[str]
+    detail: str
+
+
+class AgroSummaryOut(BaseModel):
+    lots_total: int
+    lots_active: int
+    area_ha: float
+    advisories_high: int
+    advisories_medium: int
+    lots_never_refreshed: int
+    last_refresh_at: datetime | None = None
+
 
 # Alias de compatibilidad usados por el router de autenticación.
 RegisterIn = EmailRegisterIn

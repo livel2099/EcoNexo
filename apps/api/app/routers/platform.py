@@ -29,7 +29,7 @@ router = APIRouter(prefix="/platform", tags=["platform-admin"], include_in_schem
 async def _user_out(target_id: UUID) -> PlatformUserOut:
     row = await db.pool().fetchrow(
         """
-        SELECT u.id, u.org_id, o.name AS org_name, u.name, u.email, u.role,
+        SELECT u.id, u.org_id, o.name AS org_name, u.name, u.email, u.phone, u.role,
                u.is_active, o.is_active AS organization_active, u.auth_provider,
                u.email_verified, u.must_change_password, u.last_login_at,
                u.created_at, u.updated_at
@@ -48,6 +48,10 @@ async def _organization_out(org_id: UUID) -> PlatformOrganizationOut:
         """
         SELECT o.id, o.name, o.slug, o.vertical::text AS vertical, o.province,
                o.municipality, o.is_active,
+               COALESCE(o.access_status,'approved') AS access_status,
+               contacto.name AS contact_name,
+               contacto.email AS contact_email,
+               contacto.phone AS contact_phone,
                count(u.id)::int AS users_total,
                (count(u.id) FILTER (WHERE u.is_active))::int AS users_active,
                os.plan_key, sp.display_name AS plan_name,
@@ -55,10 +59,16 @@ async def _organization_out(org_id: UUID) -> PlatformOrganizationOut:
                o.created_at, o.updated_at
         FROM organizations o
         LEFT JOIN users u ON u.org_id=o.id
+        LEFT JOIN LATERAL (
+            SELECT name, email, phone FROM users
+            WHERE org_id=o.id AND role='admin'
+            ORDER BY created_at LIMIT 1
+        ) contacto ON true
         LEFT JOIN organization_subscriptions os ON os.org_id=o.id
         LEFT JOIN subscription_plans sp ON sp.plan_key=os.plan_key
         WHERE o.id=$1
-        GROUP BY o.id, os.plan_key, sp.display_name, os.status
+        GROUP BY o.id, os.plan_key, sp.display_name, os.status,
+                 contacto.name, contacto.email, contacto.phone
         """,
         org_id,
     )
@@ -112,14 +122,15 @@ async def create_user(
     row = await db.pool().fetchrow(
         """
         INSERT INTO users (
-            org_id,email,name,role,password_hash,auth_provider,email_verified,
+            org_id,email,name,phone,role,password_hash,auth_provider,email_verified,
             must_change_password,password_changed_at
-        ) VALUES ($1,lower($2),$3,$4::user_role,$5,'password',false,true,NULL)
+        ) VALUES ($1,lower($2),$3,$4,$5::user_role,$6,'password',false,true,NULL)
         RETURNING id
         """,
         body.org_id,
         str(body.email),
         body.name.strip(),
+        body.phone.strip() if body.phone else None,
         body.role,
         hash_secret(body.temporary_password),
     )
@@ -145,7 +156,7 @@ async def users(
     term = search.strip()
     rows = await db.pool().fetch(
         """
-        SELECT u.id, u.org_id, o.name AS org_name, u.name, u.email, u.role,
+        SELECT u.id, u.org_id, o.name AS org_name, u.name, u.email, u.phone, u.role,
                u.is_active, o.is_active AS organization_active, u.auth_provider,
                u.email_verified, u.must_change_password, u.last_login_at,
                u.created_at, u.updated_at
@@ -259,6 +270,10 @@ async def organizations(
         """
         SELECT o.id, o.name, o.slug, o.vertical::text AS vertical, o.province,
                o.municipality, o.is_active,
+               COALESCE(o.access_status,'approved') AS access_status,
+               contacto.name AS contact_name,
+               contacto.email AS contact_email,
+               contacto.phone AS contact_phone,
                count(u.id)::int AS users_total,
                (count(u.id) FILTER (WHERE u.is_active))::int AS users_active,
                os.plan_key, sp.display_name AS plan_name,
@@ -266,13 +281,20 @@ async def organizations(
                o.created_at, o.updated_at
         FROM organizations o
         LEFT JOIN users u ON u.org_id=o.id
+        LEFT JOIN LATERAL (
+            SELECT name, email, phone FROM users
+            WHERE org_id=o.id AND role='admin'
+            ORDER BY created_at LIMIT 1
+        ) contacto ON true
         LEFT JOIN organization_subscriptions os ON os.org_id=o.id
         LEFT JOIN subscription_plans sp ON sp.plan_key=os.plan_key
         WHERE ($1='' OR o.name ILIKE '%' || $1 || '%'
                      OR o.slug ILIKE '%' || $1 || '%'
                      OR COALESCE(o.municipality,'') ILIKE '%' || $1 || '%')
-        GROUP BY o.id, os.plan_key, sp.display_name, os.status
-        ORDER BY o.is_active DESC, o.created_at DESC
+        GROUP BY o.id, os.plan_key, sp.display_name, os.status,
+                 contacto.name, contacto.email, contacto.phone
+        ORDER BY (COALESCE(o.access_status,'approved')='pending') DESC,
+                 o.is_active DESC, o.created_at DESC
         LIMIT $2 OFFSET $3
         """,
         search.strip(),
@@ -308,7 +330,13 @@ async def update_organization(
     row = await db.pool().fetchrow(
         """
         UPDATE organizations SET name=COALESCE($2,name),
-            is_active=COALESCE($3,is_active), updated_at=now()
+            is_active=COALESCE($3,is_active),
+            access_status=CASE
+              WHEN $3::boolean IS NULL THEN access_status
+              WHEN $3::boolean THEN 'approved'
+              ELSE 'suspended'
+            END,
+            updated_at=now()
         WHERE id=$1 RETURNING id
         """,
         org_id,

@@ -15,6 +15,10 @@ from fastapi import HTTPException, status
 
 from . import db
 
+# Los informes no tienen tope mensual: la licencia habilita la funcion, no
+# raciona cuantos informes se emiten. usage_snapshot sigue contando los del mes
+# a modo informativo.
+
 PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
     "sandbox": {
         "name": "Sandbox calificado",
@@ -28,7 +32,6 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "max_devices": 2,
             "max_zones": 1,
             "max_rules": 2,
-            "max_reports_per_month": 1,
             "max_critical_layers": 1,
             "municipality_limit": 1,
             "report_frequency": "muestra",
@@ -39,7 +42,7 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "sla": False,
             "community_reports": True,
             "operational_alerts": False,
-            "included_modules": ["core"],
+            "included_modules": ["core", "agro"],
         },
     },
     "diagnostic": {
@@ -54,7 +57,6 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "max_devices": 0,
             "max_zones": 1,
             "max_rules": 0,
-            "max_reports_per_month": 1,
             "max_critical_layers": 1,
             "municipality_limit": 1,
             "report_frequency": "informe diagnóstico",
@@ -65,7 +67,7 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "sla": False,
             "community_reports": False,
             "operational_alerts": False,
-            "included_modules": ["core"],
+            "included_modules": ["core", "agro"],
         },
     },
     "pilot_8_weeks": {
@@ -80,7 +82,6 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "max_devices": 25,
             "max_zones": 2,
             "max_rules": 12,
-            "max_reports_per_month": 4,
             "max_critical_layers": 3,
             "municipality_limit": 2,
             "report_frequency": "semanal o quincenal",
@@ -91,7 +92,7 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "sla": False,
             "community_reports": True,
             "operational_alerts": True,
-            "included_modules": ["core", "fire_smoke", "forestry_pests"],
+            "included_modules": ["core", "fire_smoke", "forestry_pests", "agro"],
         },
     },
     "municipal": {
@@ -106,7 +107,6 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "max_devices": 50,
             "max_zones": 5,
             "max_rules": 20,
-            "max_reports_per_month": 4,
             "max_critical_layers": 3,
             "municipality_limit": 1,
             "report_frequency": "mensual",
@@ -117,7 +117,7 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "sla": False,
             "community_reports": True,
             "operational_alerts": True,
-            "included_modules": ["core"],
+            "included_modules": ["core", "agro"],
         },
     },
     "province_pro": {
@@ -132,7 +132,6 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "max_devices": 500,
             "max_zones": 30,
             "max_rules": 100,
-            "max_reports_per_month": 12,
             "max_critical_layers": 12,
             "municipality_limit": 79,
             "report_frequency": "quincenal",
@@ -143,7 +142,7 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "sla": False,
             "community_reports": True,
             "operational_alerts": True,
-            "included_modules": ["core"],
+            "included_modules": ["core", "agro"],
         },
     },
     "enterprise": {
@@ -158,7 +157,6 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "max_devices": 5000,
             "max_zones": 250,
             "max_rules": 1000,
-            "max_reports_per_month": 100,
             "max_critical_layers": 50,
             "municipality_limit": 79,
             "report_frequency": "personalizada",
@@ -169,7 +167,35 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "sla": True,
             "community_reports": True,
             "operational_alerts": True,
-            "included_modules": ["core", "fire_smoke", "forestry_pests"],
+            "included_modules": ["core", "fire_smoke", "forestry_pests", "agro"],
+        },
+    },
+    "agro_productor": {
+        "name": "EcoNexo AG · Productor",
+        "description": (
+            "Lotes, fenología por grados día, balance hídrico y ventanas de aplicación "
+            "sobre datos meteorológicos reales."
+        ),
+        "price_min_usd": 400,
+        "price_max_usd": 1200,
+        "billing_period": "monthly",
+        "duration_days": None,
+        "entitlements": {
+            "max_users": 8,
+            "max_devices": 25,
+            "max_zones": 10,
+            "max_rules": 25,
+            "max_critical_layers": 3,
+            "municipality_limit": 3,
+            "report_frequency": "quincenal",
+            "support_level": "acompañamiento agronómico",
+            "api_access": False,
+            "audit_export": True,
+            "custom_models": False,
+            "sla": False,
+            "community_reports": True,
+            "operational_alerts": True,
+            "included_modules": ["core", "agro"],
         },
     },
     "academy": {
@@ -184,7 +210,6 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "max_devices": 0,
             "max_zones": 1,
             "max_rules": 0,
-            "max_reports_per_month": 2,
             "max_critical_layers": 1,
             "municipality_limit": 1,
             "report_frequency": "simulación",
@@ -195,7 +220,7 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "sla": False,
             "community_reports": True,
             "operational_alerts": False,
-            "included_modules": ["core"],
+            "included_modules": ["core", "agro"],
         },
     },
 }
@@ -354,29 +379,6 @@ async def enforce_resource_limit(org_id: UUID, limit_key: str) -> None:
         )
 
 
-async def enforce_monthly_report_limit(org_id: UUID) -> None:
-    subscription = await require_active_subscription(org_id)
-    entitlements = merged_entitlements(subscription)
-    limit = entitlements.get("max_reports_per_month")
-    if limit is None:
-        return
-    current = int(
-        await db.pool().fetchval(
-            """
-            SELECT count(*) FROM impact_reports
-            WHERE org_id=$1 AND created_at >= date_trunc('month', now())
-            """,
-            org_id,
-        )
-        or 0
-    )
-    if current >= int(limit):
-        raise HTTPException(
-            status.HTTP_402_PAYMENT_REQUIRED,
-            f"La licencia alcanzó el límite de {limit} informes del mes.",
-        )
-
-
 async def module_included_by_plan(org_id: UUID, module_key: str) -> bool:
     row = await require_active_subscription(org_id)
     included = merged_entitlements(row).get("included_modules", ["core"])
@@ -391,6 +393,7 @@ async def sync_modules(org_id: UUID, user_id: UUID | None = None) -> None:
         "core": "Plataforma EcoNexo",
         "fire_smoke": "Focos de incendio forestal y humo",
         "forestry_pests": "Vigilancia de plagas forestales",
+        "agro": "EcoNexo AG · inteligencia agronómica",
     }.items():
         default_status = "active" if module_key in included else "suspended"
         await db.pool().execute(

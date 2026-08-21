@@ -110,8 +110,10 @@ export default function SubscriptionPanel({ token }: { token: string }) {
         const current = subscription.usage[usageKey];
         const rawLimit = subscription.entitlements[limitKey];
         const limit = typeof rawLimit === "number" ? rawLimit : null;
-        const percent = limit && limit > 0 ? Math.min(100, Math.round(current / limit * 100)) : current ? 100 : 0;
-        return <article key={usageKey}><span>{label}</span><strong>{current}<small> / {limit ?? "∞"}</small></strong><i><b style={{ width: `${percent}%` }} /></i></article>;
+        // Sin tope la barra queda vacía: llenarla al 100% haría leer como
+        // agotado un recurso que no tiene límite.
+        const percent = limit && limit > 0 ? Math.min(100, Math.round(current / limit * 100)) : 0;
+        return <article key={usageKey}><span>{label}</span><strong>{current}<small>{limit == null ? " · sin límite" : ` / ${limit}`}</small></strong><i><b style={{ width: `${percent}%` }} /></i></article>;
       })}
     </div>
 

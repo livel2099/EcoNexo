@@ -2130,3 +2130,204 @@ textarea:focus-visible,
 
 .nav button.foi-nav-link { color: #07252c; border-color: #f4b942; background: #f4b942; font-weight: 850; }
 .nav button.foi-nav-link:hover { color: #03181d; border-color: #ffd36f; background: #ffd36f; }
+
+/* Acuse del alta institucional: la solicitud queda esperando aprobación. */
+.auth-pending {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.15rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.auth-pending h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+.auth-pending p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.auth-pending dl {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.auth-pending dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+.auth-pending dt {
+  opacity: 0.72;
+}
+
+.auth-pending dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
+.auth-pending-note {
+  opacity: 0.75;
+  font-size: 0.82rem;
+}
+
+/* Consola de administración general: solicitudes de alta y contacto. */
+.platform-org-console article.pending {
+  border-color: color-mix(in srgb, var(--warn, #f4b942) 55%, transparent);
+  background: color-mix(in srgb, var(--warn, #f4b942) 9%, transparent);
+}
+
+.platform-org-whatsapp {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #25d366;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.platform-org-whatsapp:hover,
+.platform-org-whatsapp:focus-visible {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   EcoNexo AG · panel agronómico
+   ========================================================================== */
+.agro-console { display: grid; gap: 1.1rem; }
+
+.agro-header { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: flex-start; }
+.agro-header h2 { margin: .2rem 0 .35rem; font-size: 1.3rem; }
+.agro-header p { margin: 0; max-width: 62ch; color: var(--muted); font-size: .88rem; line-height: 1.55; }
+.agro-header-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+.agro-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .7rem; }
+.agro-tiles article {
+  padding: .75rem .9rem; border: 1px solid var(--border-soft); border-radius: 12px;
+  background: var(--panel); display: grid; gap: .25rem;
+}
+.agro-tiles article.alto { border-color: color-mix(in srgb, var(--red) 45%, transparent); }
+.agro-tiles span { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); }
+.agro-tiles strong { font-size: 1.5rem; font-weight: 700; }
+.agro-tiles strong small { font-size: .8rem; font-weight: 500; color: var(--muted); }
+.agro-tile-date { font-size: .95rem !important; }
+
+.agro-notice {
+  padding: .7rem .9rem; border-radius: 10px; font-size: .85rem; line-height: 1.5;
+  border: 1px solid color-mix(in srgb, var(--green) 40%, transparent);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+}
+
+.agro-form {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .8rem;
+  padding: 1rem; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--panel);
+}
+.agro-form label { display: grid; gap: .3rem; font-size: .8rem; color: var(--muted); }
+.agro-form label small { color: var(--muted-2); font-size: .72rem; }
+.agro-form-wide { grid-column: 1 / -1; }
+
+.agro-layout { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 1rem; align-items: start; }
+@media (max-width: 1000px) { .agro-layout { grid-template-columns: 1fr; } }
+
+.agro-lots { display: grid; gap: .7rem; }
+.agro-lot {
+  padding: .85rem; border: 1px solid var(--border-soft); border-radius: 13px;
+  background: var(--panel); display: grid; gap: .6rem;
+}
+.agro-lot.selected { border-color: color-mix(in srgb, var(--green-bright) 55%, transparent); }
+.agro-lot.inactive { opacity: .55; }
+.agro-lot header { display: flex; justify-content: space-between; align-items: flex-start; gap: .6rem; }
+.agro-lot header strong { display: block; font-size: .98rem; }
+.agro-lot header span { font-size: .78rem; color: var(--muted); }
+.agro-lot header small { font-size: .7rem; color: var(--muted-2); text-align: right; }
+
+.agro-lot-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; margin: 0; }
+.agro-lot-metrics dt { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-2); }
+.agro-lot-metrics dd { margin: 0; font-size: .95rem; font-weight: 600; }
+.agro-lot-metrics dd.deficit { color: var(--amber); }
+
+.agro-lot-flags { display: flex; flex-wrap: wrap; gap: .35rem; list-style: none; margin: 0; padding: 0; }
+.agro-lot-flags li {
+  font-size: .68rem; padding: .15rem .5rem; border-radius: 999px;
+  border: 1px solid var(--border-soft); color: var(--muted);
+}
+.agro-lot-flags li.alto { border-color: var(--red); color: var(--red); }
+.agro-lot-flags li.medio { border-color: var(--amber); color: var(--amber); }
+
+.agro-lot-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
+.agro-lot-actions button { font-size: .75rem; padding: .3rem .6rem; }
+
+.agro-detail { display: grid; gap: 1rem; }
+.agro-card {
+  padding: 1rem; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--panel);
+  display: grid; gap: .75rem;
+}
+.agro-card h3 { margin: 0; font-size: 1rem; }
+
+.agro-chart { margin: 0; display: grid; gap: .4rem; }
+.agro-chart svg { width: 100%; height: 150px; overflow: visible; }
+.agro-chart-area { fill: color-mix(in srgb, var(--cyan) 16%, transparent); stroke: none; }
+.agro-chart-line { fill: none; stroke: var(--cyan); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.agro-chart-zero { stroke: var(--muted-2); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.agro-chart-forecast { stroke: var(--amber); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.agro-chart figcaption { font-size: .74rem; color: var(--muted-2); line-height: 1.45; }
+
+.agro-series-table { overflow-x: auto; }
+.agro-series-table table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.agro-series-table th { text-align: right; padding: .3rem .45rem; color: var(--muted-2); font-weight: 500; border-bottom: 1px solid var(--border-soft); }
+.agro-series-table th:first-child, .agro-series-table td:first-child { text-align: left; }
+.agro-series-table td { text-align: right; padding: .28rem .45rem; border-bottom: 1px solid var(--border-soft); }
+.agro-series-table tr.forecast td { color: var(--amber); }
+.agro-series-table td small { font-size: .64rem; opacity: .8; }
+
+.agro-advisory {
+  padding: .7rem .85rem; border-radius: 11px; border-left: 3px solid var(--muted-2);
+  background: color-mix(in srgb, var(--panel-2) 70%, transparent); display: grid; gap: .35rem;
+}
+.agro-advisory.alto { border-left-color: var(--red); }
+.agro-advisory.medio { border-left-color: var(--amber); }
+.agro-advisory.bajo { border-left-color: var(--green); }
+.agro-advisory header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; }
+.agro-advisory-kind {
+  font-size: .66rem; text-transform: uppercase; letter-spacing: .07em;
+  padding: .12rem .45rem; border-radius: 999px; border: 1px solid var(--border-soft); color: var(--muted);
+}
+.agro-advisory strong { font-size: .9rem; }
+.agro-advisory small { color: var(--muted-2); font-size: .72rem; }
+.agro-advisory p { margin: 0; font-size: .82rem; line-height: 1.5; color: var(--muted); }
+
+.agro-params { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .5rem; margin: 0; }
+.agro-params dt { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-2); }
+.agro-params dd { margin: 0; font-size: .85rem; }
+.agro-params-note { margin: 0; font-size: .78rem; color: var(--muted-2); line-height: 1.5; }
+
+.agro-stages { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.agro-stages th { text-align: left; padding: .3rem .45rem; color: var(--muted-2); font-weight: 500; border-bottom: 1px solid var(--border-soft); }
+.agro-stages td { padding: .28rem .45rem; border-bottom: 1px solid var(--border-soft); }
+
+.agro-empty { margin: 0; font-size: .84rem; color: var(--muted-2); line-height: 1.5; }
+.agro-disclaimer {
+  margin: 0; font-size: .76rem; color: var(--muted-2); line-height: 1.55;
+  padding-top: .7rem; border-top: 1px solid var(--border-soft);
+}
+
+.agro-locked {
+  display: grid; gap: .7rem; padding: 1.4rem;
+  border: 1px solid var(--border-soft); border-radius: 16px; background: var(--panel);
+  max-width: 62ch;
+}
+.agro-locked h2 { margin: 0; font-size: 1.2rem; }
+.agro-locked p { margin: 0; font-size: .88rem; line-height: 1.55; color: var(--muted); }
+.agro-locked ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .3rem; }
+.agro-locked li { font-size: .85rem; line-height: 1.5; color: var(--muted); }
+.agro-locked-note { font-size: .8rem !important; color: var(--muted-2) !important; }

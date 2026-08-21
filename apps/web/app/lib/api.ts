@@ -6,6 +6,7 @@ import {
   demoLogin,
   demoPatch,
   demoPost,
+  demoRegisterCommunity,
   demoRegisterEmail,
   demoSubmitReport,
 } from "./demo";
@@ -99,13 +100,25 @@ async function request(url: string, init: RequestInit = {}, timeoutMs = DEFAULT_
   }
 }
 
+/** Error de API con el código HTTP, para poder distinguir 402 de 500. */
+export interface ApiError extends Error {
+  status?: number;
+}
+
+function withStatus(error: Error, status: number): ApiError {
+  (error as ApiError).status = status;
+  return error;
+}
+
 async function responseError(response: Response, fallback: string): Promise<Error> {
   try {
     const body = await response.json() as { detail?: string | { msg?: string }[] };
-    if (typeof body.detail === "string") return new Error(body.detail);
-    if (Array.isArray(body.detail) && body.detail[0]?.msg) return new Error(body.detail[0].msg);
+    if (typeof body.detail === "string") return withStatus(new Error(body.detail), response.status);
+    if (Array.isArray(body.detail) && body.detail[0]?.msg) {
+      return withStatus(new Error(body.detail[0].msg), response.status);
+    }
   } catch { /* response without JSON */ }
-  return new Error(`${fallback} (${response.status})`);
+  return withStatus(new Error(`${fallback} (${response.status})`), response.status);
 }
 
 async function checked<T>(response: Response, fallback: string, redirectUnauthorized = true): Promise<T> {
@@ -154,18 +167,29 @@ export interface EmailRegisterInput {
   department?: string;
   name: string;
   email: string;
+  phone: string;
   password: string;
   terms_accepted: boolean;
   legal_version?: string;
 }
 
-export async function registerWithEmail(input: EmailRegisterInput): Promise<Session> {
+/** El alta institucional no entrega sesión: queda esperando aprobación. */
+export interface RegistrationPending {
+  status: "pending_approval";
+  organization_id: string;
+  organization_name: string;
+  email: string;
+  phone: string;
+  detail: string;
+}
+
+export async function registerWithEmail(input: EmailRegisterInput): Promise<RegistrationPending> {
   if (IS_DEMO) return demoRegisterEmail(input);
-  return checked<Session>(await request(`${API}/auth/register`, {
+  return checked<RegistrationPending>(await request(`${API}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
-  }), "No se pudo crear la organización", false);
+  }), "No se pudo registrar la organización", false);
 }
 
 export interface CommunityRegisterInput {
@@ -180,16 +204,16 @@ export interface CommunityRegisterInput {
 
 export async function registerCommunity(input: CommunityRegisterInput): Promise<Session> {
   if (IS_DEMO) {
-    const session = await demoRegisterEmail({
+    return demoRegisterCommunity({
       organization_name: "EcoNexoFoI · Comunidad abierta",
       vertical: "forestal",
       name: input.name,
       email: input.email,
+      phone: "+540000000000",
       password: input.password,
       terms_accepted: input.terms_accepted,
       legal_version: input.legal_version,
     });
-    return { ...session, account_type: "community" };
   }
   return checked<Session>(await request(`${API}/auth/community/register`, {
     method: "POST",

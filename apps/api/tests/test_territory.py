@@ -31,6 +31,7 @@ def test_registration_normalizes_department_from_municipality():
         department=None,
         name="Responsable Técnico",
         email="responsable@example.com",
+        phone="+5493764123456",
         password="Clave2026!",
         terms_accepted=True,
     )

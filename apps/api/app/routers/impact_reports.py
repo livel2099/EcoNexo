@@ -17,7 +17,7 @@ from ..schemas import (
     PublicImpactReportOut,
 )
 from ..security import new_token, token_digest
-from ..subscriptions import enforce_monthly_report_limit
+from ..subscriptions import require_active_subscription
 
 router = APIRouter(prefix="/impact-reports", tags=["impact-reports"])
 
@@ -146,7 +146,9 @@ async def create_report(
     body: ImpactReportCreateIn,
     user: CurrentUser = Depends(require_role("admin", "operador")),
 ) -> ImpactReportOut:
-    await enforce_monthly_report_limit(user.org_id)
+    # La licencia sigue siendo obligatoria; lo que ya no existe es un tope
+    # mensual de informes.
+    await require_active_subscription(user.org_id)
     metrics = await _period_metrics(user.org_id, body.period_start, body.period_end)
     snapshot_row = None
     if body.environmental_snapshot_id is not None:

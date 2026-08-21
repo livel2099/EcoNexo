@@ -273,7 +273,7 @@ async def update_platform_subscription(
     await sync_modules(org_id, user.id)
     if body.active_modules is not None:
         requested = set(body.active_modules)
-        for module_key in ("core", "fire_smoke", "forestry_pests"):
+        for module_key in ("core", "fire_smoke", "forestry_pests", "agro"):
             module_status = "active" if module_key in requested or module_key == "core" else "suspended"
             await db.pool().execute(
                 """

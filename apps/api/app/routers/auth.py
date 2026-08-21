@@ -14,8 +14,15 @@ from ..config import get_settings
 from ..deps import CurrentUser, current_user
 from ..foi_schemas import CommunityRegisterIn
 from ..rate_limit import enforce_rate_limit
-from ..schemas import ChangePasswordIn, GoogleAuthIn, LoginIn, RegisterIn, TokenOut
-from ..security import create_access_token, hash_secret, new_token, verify_secret
+from ..schemas import (
+    ChangePasswordIn,
+    GoogleAuthIn,
+    LoginIn,
+    RegisterIn,
+    RegistrationPendingOut,
+    TokenOut,
+)
+from ..security import create_access_token, hash_secret, verify_secret
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -71,6 +78,7 @@ async def login(body: LoginIn, request: Request) -> TokenOut:
                u.password_hash, u.avatar_url, u.auth_provider, u.account_type,
                u.must_change_password, u.is_active,
                COALESCE(o.is_active, true) AS organization_active,
+               COALESCE(o.access_status, 'approved') AS access_status,
                false AS platform_admin
         FROM users u
         JOIN organizations o ON o.id=u.org_id
@@ -78,14 +86,37 @@ async def login(body: LoginIn, request: Request) -> TokenOut:
         """,
         str(body.email).strip(),
     )
-    if row is None or not row["is_active"] or not row["organization_active"] or not verify_secret(body.password, row["password_hash"]):
+    if row is None or not verify_secret(body.password, row["password_hash"]):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales inválidas")
+    # Recien con la contraseña verificada se explica por que no puede entrar:
+    # antes de eso el mensaje delataria que la cuenta existe.
+    if row["access_status"] == "pending":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Tu alta está pendiente de aprobación. Administración general te contactará "
+            "por WhatsApp al teléfono que registraste para habilitar el acceso.",
+        )
+    if not row["is_active"] or not row["organization_active"]:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Tu cuenta está suspendida. Escribí a administración general para reactivarla.",
+        )
     await db.pool().execute("UPDATE users SET last_login_at=now() WHERE id=$1", row["id"])
     return _session(row)
 
 
-@router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
-async def register_organization(body: RegisterIn, request: Request) -> TokenOut:
+@router.post(
+    "/register",
+    response_model=RegistrationPendingOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def register_organization(body: RegisterIn, request: Request) -> RegistrationPendingOut:
+    """Registra la solicitud de alta institucional. No otorga acceso todavía.
+
+    La organización queda en ``pending`` hasta que administración general la
+    habilite, después de cobrar la licencia. El teléfono es el canal por el que
+    se hace ese contacto.
+    """
     await enforce_rate_limit(request, bucket="auth-register", limit=6, window_seconds=60 * 60)
     if not body.terms_accepted:
         raise HTTPException(422, "Debés aceptar los términos y la política de privacidad")
@@ -103,28 +134,36 @@ async def register_organization(body: RegisterIn, request: Request) -> TokenOut:
                 """
                 INSERT INTO organizations (
                     name, slug, vertical, primary_color, province, department,
-                    municipality, territory_scope, is_active
-                ) VALUES ($1,$2,$3::org_vertical,'#059669','Misiones',$4,$5,'municipal',true)
+                    municipality, territory_scope, is_active, access_status
+                ) VALUES ($1,$2,$3::org_vertical,'#059669','Misiones',$4,$5,'municipal',false,'pending')
                 RETURNING id
                 """,
                 body.organization_name.strip(), slug, body.vertical,
                 body.department, body.municipality,
             )
             try:
-                row = await conn.fetchrow(
+                await conn.execute(
                     """
                     INSERT INTO users (
-                        org_id,email,name,role,password_hash,auth_provider,
+                        org_id,email,name,phone,role,password_hash,auth_provider,
                         email_verified,terms_accepted_at,legal_version,account_type,is_active
-                    ) VALUES ($1,$2,$3,'admin',$4,'password',false,now(),$5,'institutional',true)
-                    RETURNING id,org_id,role::text AS role,name,email,avatar_url,
-                              auth_provider,account_type,must_change_password,false AS platform_admin
+                    ) VALUES ($1,$2,$3,$4,'admin',$5,'password',false,now(),$6,'institutional',true)
                     """,
-                    org_id, email, body.name.strip(), hash_secret(body.password), body.legal_version,
+                    org_id, email, body.name.strip(), body.phone,
+                    hash_secret(body.password), body.legal_version,
                 )
             except asyncpg.UniqueViolationError as exc:
                 raise HTTPException(status.HTTP_409_CONFLICT, "El correo ya está registrado") from exc
-    return _session(row, is_new_user=True)
+    return RegistrationPendingOut(
+        organization_id=org_id,
+        organization_name=body.organization_name.strip(),
+        email=email,
+        phone=body.phone,
+        detail=(
+            "Recibimos tu solicitud. Administración general va a contactarte por WhatsApp "
+            f"al {body.phone} para coordinar la licencia y habilitar el acceso."
+        ),
+    )
 
 
 @router.post("/community/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
@@ -212,13 +251,20 @@ async def google_auth(body: GoogleAuthIn, request: Request) -> TokenOut:
                 """
                 SELECT u.id,u.org_id,u.role::text AS role,u.name,u.email,u.avatar_url,
                        u.auth_provider,u.account_type,u.must_change_password,
-                       false AS platform_admin,o.is_active AS organization_active
+                       false AS platform_admin,o.is_active AS organization_active,
+                       COALESCE(o.access_status,'approved') AS access_status
                 FROM users u JOIN organizations o ON o.id=u.org_id
                 WHERE u.is_active AND (u.google_sub=$1 OR lower(u.email)=lower($2))
                 """,
                 google_sub, email,
             )
             if row is not None:
+                if row["access_status"] == "pending":
+                    raise HTTPException(
+                        403,
+                        "Tu alta está pendiente de aprobación. Administración general te "
+                        "contactará por WhatsApp para habilitar el acceso.",
+                    )
                 if not row["organization_active"]:
                     raise HTTPException(403, "La organización está deshabilitada")
                 await conn.execute(
@@ -235,34 +281,14 @@ async def google_auth(body: GoogleAuthIn, request: Request) -> TokenOut:
 
             if body.mode != "register":
                 raise HTTPException(404, "No existe una cuenta de EcoNexo para este correo")
-            if not body.organization_name or not body.vertical or not body.terms_accepted:
-                raise HTTPException(422, "Completá la organización y aceptá los términos para registrarte")
-            base_slug = _slug(body.organization_name)
-            slug = base_slug
-            if await conn.fetchval("SELECT EXISTS(SELECT 1 FROM organizations WHERE slug=$1)", slug):
-                slug = f"{base_slug[:62]}-{uuid4().hex[:8]}"
-            org_id = await conn.fetchval(
-                """
-                INSERT INTO organizations (
-                    name,slug,vertical,primary_color,province,department,
-                    municipality,territory_scope,is_active
-                ) VALUES ($1,$2,$3::org_vertical,'#059669','Misiones',$4,$5,'municipal',true)
-                RETURNING id
-                """,
-                body.organization_name.strip(), slug, body.vertical, body.department, body.municipality,
+            # El alta institucional necesita un telefono de contacto para que
+            # administracion general pueda coordinar la licencia, y Google no lo
+            # entrega. Se deriva al formulario por email, que si lo pide.
+            raise HTTPException(
+                422,
+                "El alta institucional se hace con el formulario de email, que pide un "
+                "teléfono de contacto. Después vas a poder entrar con Google.",
             )
-            row = await conn.fetchrow(
-                """
-                INSERT INTO users (
-                    org_id,email,name,role,password_hash,google_sub,auth_provider,
-                    email_verified,avatar_url,terms_accepted_at,legal_version,account_type,is_active
-                ) VALUES ($1,$2,$3,'admin',$4,$5,'google',true,$6,now(),$7,'institutional',true)
-                RETURNING id,org_id,role::text AS role,name,email,avatar_url,auth_provider,
-                          account_type,must_change_password,false AS platform_admin
-                """,
-                org_id, email, name, hash_secret(new_token(32)), google_sub, avatar_url, body.legal_version,
-            )
-    return _session(row, is_new_user=True)
 
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

@@ -21,9 +21,20 @@ from .ws import publish
 log = logging.getLogger("econexo.pipeline")
 
 
+NEUTRAL_ANOMALY_SCORE = 0.5
+
+
 async def anomaly_score(device_id: str, variable: str, value: float) -> float:
-    """Consulta el anomaly-service (PyTorch). Si no responde, degrada a 0.5."""
-    url = get_settings().anomaly_service_url
+    """Consulta el anomaly-service (PyTorch). Si no responde, degrada a 0.5.
+
+    Con ANOMALY_ENABLED=false no hay servicio que consultar: se devuelve el
+    score neutro sin salir a la red. Antes se intentaba igual y cada condicion
+    evaluada pagaba el timeout de 3 s contra un host inexistente.
+    """
+    settings = get_settings()
+    if not settings.anomaly_enabled:
+        return NEUTRAL_ANOMALY_SCORE
+    url = settings.anomaly_service_url
     try:
         async with httpx.AsyncClient(timeout=3.0) as c:
             r = await c.post(f"{url}/score", json={
@@ -33,7 +44,7 @@ async def anomaly_score(device_id: str, variable: str, value: float) -> float:
             return float(r.json()["score"])
     except Exception as exc:
         log.warning("anomaly-service no disponible: %s", exc)
-        return 0.5
+        return NEUTRAL_ANOMALY_SCORE
 
 
 async def gather_sources(org_id: UUID, lat: float, lon: float, radius_m: float) -> list[Source]:

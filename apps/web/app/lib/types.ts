@@ -322,7 +322,7 @@ export interface AuditEvent {
 
 // --- Licencias modulares y trazabilidad de Alerta IA ---
 export interface ModuleEntitlement {
-  module_key: "core" | "fire_smoke" | "forestry_pests";
+  module_key: "core" | "fire_smoke" | "forestry_pests" | "agro";
   status: "trial" | "active" | "suspended" | "expired";
   plan_name: string;
   starts_at: string;
@@ -336,7 +336,7 @@ export interface AlertShareInput {
   audience: "medios" | "organizacion" | "laboratorio" | "emergencia" | "publico" | "otro";
   title: string;
   message: string;
-  module_key: "core" | "fire_smoke" | "forestry_pests";
+  module_key: "core" | "fire_smoke" | "forestry_pests" | "agro";
   snapshot_id?: string | null;
   alert_id?: string | null;
   metadata?: Record<string, unknown>;
@@ -345,7 +345,7 @@ export interface AlertShareInput {
 export interface AlertShareResult { id: string; created_at: string; }
 
 // --- Suscripciones comerciales y mensajes administrativos ---
-export type SubscriptionPlanKey = "sandbox" | "diagnostic" | "pilot_8_weeks" | "municipal" | "province_pro" | "enterprise" | "academy";
+export type SubscriptionPlanKey = "sandbox" | "diagnostic" | "pilot_8_weeks" | "municipal" | "province_pro" | "enterprise" | "agro_productor" | "academy";
 export type SubscriptionStatus = "pending" | "trial" | "active" | "past_due" | "suspended" | "expired" | "cancelled";
 
 export interface SubscriptionPlan {
@@ -440,6 +440,7 @@ export interface PlatformUser {
   org_name: string;
   name: string;
   email: string;
+  phone: string | null;
   role: UserRole;
   is_active: boolean;
   organization_active: boolean;
@@ -459,6 +460,10 @@ export interface PlatformOrganization {
   province: string;
   municipality: string | null;
   is_active: boolean;
+  access_status: "pending" | "approved" | "suspended";
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
   users_total: number;
   users_active: number;
   plan_key: string | null;
@@ -479,4 +484,105 @@ export interface PlatformAudit {
   resource_id: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
+}
+
+// --- EcoNexo AG (modulo agro) ---
+export type AgroAdvisoryKind =
+  | "helada" | "riego" | "pulverizacion" | "enfermedad" | "estres_termico" | "fenologia";
+export type AgroLevel = "bajo" | "medio" | "alto";
+
+export interface AgroCropStage {
+  key: string;
+  name: string;
+  gdd_from: number;
+  gdd_to: number | null;
+  kc: number;
+}
+
+export interface AgroCrop {
+  key: string;
+  name: string;
+  perennial: boolean;
+  t_base_c: number;
+  t_cap_c: number;
+  frost_c: number;
+  heat_c: number;
+  kc_perennial: number | null;
+  stages: AgroCropStage[];
+  disease: { name: string; rango_c: number[]; hr_min: number; horas_umbral: number };
+}
+
+export interface AgroAdvisory {
+  id: string;
+  lot_id: string;
+  lot_name: string | null;
+  kind: AgroAdvisoryKind;
+  level: AgroLevel;
+  title: string;
+  detail: string;
+  payload: Record<string, unknown>;
+  valid_from: string;
+  valid_to: string | null;
+  created_at: string;
+}
+
+export interface AgroLot {
+  id: string;
+  name: string;
+  crop_key: string;
+  crop_name: string;
+  sowing_date: string | null;
+  area_ha: number;
+  lat: number;
+  lon: number;
+  zone_id: string | null;
+  notes: string | null;
+  is_active: boolean;
+  last_refresh_at: string | null;
+  last_refresh_status: string | null;
+  stage_name: string | null;
+  gdd_accum: number | null;
+  balance_14d_mm: number | null;
+  advisories: AgroAdvisory[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgroDaily {
+  day: string;
+  tmax_c: number | null;
+  tmin_c: number | null;
+  precipitation_mm: number | null;
+  et0_mm: number | null;
+  kc: number | null;
+  etc_mm: number | null;
+  gdd: number | null;
+  gdd_accum: number | null;
+  balance_mm: number | null;
+  balance_accum_mm: number | null;
+  stage_key: string | null;
+  stage_name: string | null;
+  is_forecast: boolean;
+}
+
+export interface AgroRefresh {
+  lot_id: string;
+  days_processed: number;
+  history_days: number;
+  forecast_days: number;
+  gdd_accum: number | null;
+  stage_name: string | null;
+  advisories: AgroAdvisory[];
+  sources: string[];
+  detail: string;
+}
+
+export interface AgroSummary {
+  lots_total: number;
+  lots_active: number;
+  area_ha: number;
+  advisories_high: number;
+  advisories_medium: number;
+  lots_never_refreshed: number;
+  last_refresh_at: string | null;
 }

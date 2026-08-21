@@ -20,6 +20,8 @@ import CircuitBackdrop from "../../components/CircuitBackdrop";
 import FireSmokePanel from "../../components/FireSmokePanel";
 import ForestryPestPanel from "../../components/ForestryPestPanel";
 
+import AgroPanel from "../../components/AgroPanel";
+
 const MapView = dynamic(() => import("../../components/MapView"), { ssr: false });
 const COMMAND_CENTER: [number, number] = MISIONES_CENTER;
 const BANNER: Record<string, string> = { normal: "Estado normal", atencion: "Atención", critico: "Estado crítico" };
@@ -59,7 +61,7 @@ const DEFAULT_SOURCE_SETTINGS: EnvironmentalSourceSettings = {
   updated_at: new Date(0).toISOString(),
 };
 
-type View = "comando" | "fuego" | "plagas" | "observatorio" | "dispositivos" | "reglas" | "reportes" | "informes" | "admin";
+type View = "comando" | "fuego" | "plagas" | "agro" | "observatorio" | "dispositivos" | "reglas" | "reportes" | "informes" | "admin";
 
 function pct(value: number | null) {
   return value == null ? "—" : `${Math.round(value * 100)}%`;
@@ -235,6 +237,7 @@ export default function Dashboard() {
             {navItem("comando", "Centro de Comando")}
             {navItem("fuego", "Fuego y humo")}
             {navItem("plagas", "Plagas forestales")}
+            {navItem("agro", "EcoNexo AG")}
             {navItem("observatorio", "Alerta IA")}
             {navItem("dispositivos", "Dispositivos")}
             {navItem("reglas", "Reglas")}
@@ -347,6 +350,7 @@ export default function Dashboard() {
           </aside>
         </>
       ) : token && view === "fuego" ? <FireSmokePanel token={token} org={org} devices={localDevices} alerts={localAlerts} detections={localDetections} zones={localZones} earth={earthIntel} center={commandCenter} sourceSettings={sourceSettings} />
+        : token && view === "agro" ? <AgroPanel token={token} />
         : token && view === "plagas" ? <ForestryPestPanel token={token} devices={localDevices} alerts={localAlerts} detections={localDetections} zones={localZones} sourceSettings={sourceSettings} />
         : token && view === "observatorio" ? <ObservatoryPanel token={token} devices={localDevices} detections={localDetections} commandIntel={earthIntel} commandAssessment={commandAssessment} sourceSettings={sourceSettings} />
         : token && view === "dispositivos" ? <DevicesPanel token={token} />

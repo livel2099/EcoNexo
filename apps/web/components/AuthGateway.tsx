@@ -14,6 +14,7 @@ import {
   registerWithEmail,
   saveSession,
 } from "../app/lib/api";
+import type { RegistrationPending } from "../app/lib/api";
 import SiteFooter from "./SiteFooter";
 import TechLogo from "./TechLogo";
 import { MISIONES_MUNICIPALITIES, municipalityDepartment } from "../app/lib/misiones";
@@ -58,7 +59,9 @@ export default function AuthGateway() {
   const [institution, setInstitution] = useState("");
   const [vertical, setVertical] = useState<Vertical>("forestal");
   const [municipality, setMunicipality] = useState("Posadas");
+  const [phone, setPhone] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [pending, setPending] = useState<RegistrationPending | null>(null);
   const [googleReady, setGoogleReady] = useState(false);
   const [apiStatus, setApiStatus] = useState<ApiStatus>(IS_DEMO ? "demo" : "checking");
   const [busy, setBusy] = useState(false);
@@ -172,6 +175,10 @@ export default function AuthGateway() {
         setError("Completá el nombre de la organización.");
         return;
       }
+      if (mode === "register" && !/^\+?[0-9\s()-]{6,}$/.test(phone.trim())) {
+        setError("Ingresá un teléfono de contacto con código de país, por ejemplo +54 376 412 3456.");
+        return;
+      }
       if (password.length < 8 || !/[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(password) || !/\d/.test(password)) {
         setError("La contraseña debe tener al menos 8 caracteres, una letra y un número.");
         return;
@@ -188,20 +195,23 @@ export default function AuthGateway() {
 
     setBusy(true);
     try {
-      const session = mode === "register"
-        ? await registerWithEmail({
-            organization_name: organizationName.trim(),
-            vertical,
-            municipality,
-            department: selectedDepartment,
-            name: fullName.trim(),
-            email,
-            password,
-            terms_accepted: termsAccepted,
-            legal_version: LEGAL_VERSION,
-          })
-        : mode === "community"
-          ? await registerCommunity({
+      if (mode === "register") {
+        setPending(await registerWithEmail({
+          organization_name: organizationName.trim(),
+          vertical,
+          municipality,
+          department: selectedDepartment,
+          name: fullName.trim(),
+          email,
+          phone: phone.trim(),
+          password,
+          terms_accepted: termsAccepted,
+          legal_version: LEGAL_VERSION,
+        }));
+        return;
+      }
+      const session = mode === "community"
+        ? await registerCommunity({
               name: fullName.trim(),
               email,
               password,
@@ -210,11 +220,11 @@ export default function AuthGateway() {
               terms_accepted: termsAccepted,
               legal_version: LEGAL_VERSION,
             })
-          : await login(email, password);
+        : await login(email, password);
       saveSession(session);
       router.replace(destinationForSession(session));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : mode === "community" ? "No se pudo crear la cuenta gratuita" : mode === "register" ? "No se pudo crear la organización" : "Credenciales inválidas");
+      setError(cause instanceof Error ? cause.message : mode === "community" ? "No se pudo crear la cuenta gratuita" : mode === "register" ? "No se pudo registrar la organización" : "Credenciales inválidas");
       void checkConnection();
     } finally {
       setBusy(false);
@@ -224,6 +234,7 @@ export default function AuthGateway() {
   function changeMode(nextMode: Mode) {
     setMode(nextMode);
     setError("");
+    setPending(null);
   }
 
   return (
@@ -263,10 +274,28 @@ export default function AuthGateway() {
 
           <div className={`auth-panel-heading ${mode === "community" ? "foi-auth-heading" : ""}`}>
             <span className="eyebrow">{mode === "community" ? "COMUNIDAD CIENTÍFICA ABIERTA" : "ACCESO SEGURO"}</span>
-            <h2>{mode === "login" ? "Bienvenido de nuevo" : mode === "community" ? "Creá tu perfil gratuito" : "Activá tu espacio institucional"}</h2>
-            <p>{mode === "login" ? "Una sola cuenta para el centro de comando y EcoNexoFoI." : mode === "community" ? "Publicá investigaciones, proponé áreas de estudio y colaborá con profesionales sin costo." : "Registrate con email. El primer usuario quedará como administrador; Google es opcional."}</p>
+            <h2>{pending ? "Solicitud en revisión" : mode === "login" ? "Bienvenido de nuevo" : mode === "community" ? "Creá tu perfil gratuito" : "Activá tu espacio institucional"}</h2>
+            <p>{mode === "login" ? "Una sola cuenta para el centro de comando y EcoNexoFoI." : mode === "community" ? "Publicá investigaciones, proponé áreas de estudio y colaborá con profesionales sin costo." : "Registrate con email. Revisamos la solicitud y te contactamos por WhatsApp para habilitar el acceso."}</p>
           </div>
 
+          {pending ? (
+            <div className="auth-pending" role="status">
+              <h3>Solicitud enviada</h3>
+              <p>{pending.detail}</p>
+              <dl>
+                <div><dt>Organización</dt><dd>{pending.organization_name}</dd></div>
+                <div><dt>Email</dt><dd>{pending.email}</dd></div>
+                <div><dt>WhatsApp</dt><dd>{pending.phone}</dd></div>
+              </dl>
+              <p className="auth-pending-note">
+                Todavía no podés ingresar. El acceso se habilita desde administración general
+                una vez confirmada la licencia.
+              </p>
+              <button type="button" className="primary" onClick={() => changeMode("login")}>
+                Volver al ingreso
+              </button>
+            </div>
+          ) : (
           <form onSubmit={emailSubmit} className={`email-login ${mode !== "login" ? "email-registration" : ""}`}>
             {mode === "register" && (
               <div className="registration-fields">
@@ -284,6 +313,10 @@ export default function AuthGateway() {
                     <option value="municipio">Municipio y gestión territorial</option>
                     <option value="energetica">Energía e infraestructura crítica</option>
                   </select>
+                </label>
+                <label>Teléfono de contacto (WhatsApp)
+                  <input required type="tel" inputMode="tel" autoComplete="tel" maxLength={32} value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+54 376 412 3456" />
+                  <small>Administración general te escribe a este número para coordinar la licencia.</small>
                 </label>
               </div>
             )}
@@ -331,11 +364,12 @@ export default function AuthGateway() {
             )}
 
             <button className="primary auth-submit" disabled={busy || apiStatus === "checking"}>
-              {busy ? "Procesando…" : mode === "community" ? "Crear cuenta gratuita y entrar" : mode === "register" ? "Crear organización y entrar" : "Ingresar"}
+              {busy ? "Procesando…" : mode === "community" ? "Crear cuenta gratuita y entrar" : mode === "register" ? "Enviar solicitud de alta" : "Ingresar"}
             </button>
           </form>
+          )}
 
-          {mode !== "community" && (GOOGLE_CLIENT_ID || IS_DEMO) && (
+          {!pending && mode !== "community" && (GOOGLE_CLIENT_ID || IS_DEMO) && (
             <>
               <div className="auth-separator"><span>o continuar con Google</span></div>
               <div className="google-auth-area">

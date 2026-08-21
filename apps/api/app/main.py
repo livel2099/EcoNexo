@@ -19,6 +19,7 @@ from . import db
 from .config import get_settings
 from .routers import (
     admin,
+    agro,
     alerts,
     auth,
     copernicus,
@@ -125,6 +126,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(agro.router)
 app.include_router(foi.router)
 app.include_router(orgs.router)
 app.include_router(devices.router)
@@ -156,7 +158,39 @@ async def unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
 
 @app.get("/health", tags=["meta"])
 async def health() -> dict:
-    return {"status": "ok", "service": "econexo-api"}
+    return {"status": "ok", "service": "econexo-api", "territory": "Misiones"}
+
+
+@app.get("/ready", tags=["meta"])
+async def ready() -> JSONResponse:
+    """Readiness real: base accesible, PostGIS cargado y guarda territorial viva.
+
+    El panel publico de Estado consulta este endpoint. Mientras no existio,
+    reportaba "Readiness incompleto" de forma permanente aunque todo estuviera
+    funcionando.
+    """
+    checks: dict[str, bool] = {"database": False, "postgis": False, "territory_guard": False}
+    try:
+        pool = db.pool()
+        checks["database"] = bool(await pool.fetchval("SELECT true"))
+        # to_regproc devuelve NULL con funciones sobrecargadas como ST_MakePoint,
+        # asi que se consultan los catalogos directamente.
+        checks["postgis"] = bool(
+            await pool.fetchval("SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='postgis')")
+        )
+        checks["territory_guard"] = bool(
+            await pool.fetchval(
+                "SELECT EXISTS(SELECT 1 FROM pg_proc WHERE proname='econexo_inside_misiones')"
+            )
+        )
+    except Exception as exc:
+        logging.getLogger("econexo.api").warning("Readiness incompleto: %s", exc)
+
+    ok = all(checks.values())
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={"status": "ready" if ok else "degraded", "checks": checks},
+    )
 
 
 @app.websocket("/ws")

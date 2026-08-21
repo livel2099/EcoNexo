@@ -56,6 +56,7 @@ def test_email_registration_requires_letter_and_number() -> None:
             vertical="forestal",
             name="Miguel Ibachuta",
             email="miguel@example.com",
+            phone="+5493764123456",
             password="sololetras",
             terms_accepted=True,
         )
@@ -69,11 +70,15 @@ def test_email_registration_accepts_local_onboarding() -> None:
         vertical="forestal",
         name="Miguel Ibachuta",
         email="miguel@example.com",
+        phone="0376 412 3456",
         password="EcoNexo2026",
         terms_accepted=True,
     )
     assert body.organization_name == "EcoNexo Misiones"
     assert str(body.email) == "miguel@example.com"
+    # El alta institucional exige telefono y lo normaliza a E.164, porque es el
+    # canal por el que administracion general habilita el acceso.
+    assert body.phone == "+543764123456"
 
 
 def test_local_cors_accepts_localhost_and_loopback() -> None:

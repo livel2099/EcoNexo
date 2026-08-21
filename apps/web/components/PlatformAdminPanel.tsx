@@ -26,6 +26,19 @@ function metadataLabel(value: Record<string, unknown>): string {
   return entries.length ? entries.map(([key, item]) => `${key}: ${String(item)}`).join(" · ") : "—";
 }
 
+/**
+ * wa.me solo acepta dígitos: sin +, espacios ni separadores.
+ * En Argentina los móviles se marcan con un 9 entre el código de país y el de
+ * área (+54 9 376 ...). Si el número llegó sin ese 9, el enlace no resuelve.
+ */
+function whatsappLink(phone: string): string {
+  const digits = phone.replace(/[^0-9]/g, "");
+  const normalized = digits.startsWith("54") && !digits.startsWith("549")
+    ? `549${digits.slice(2)}`
+    : digits;
+  return `https://wa.me/${normalized}`;
+}
+
 export default function PlatformAdminPanel() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -169,12 +182,13 @@ export default function PlatformAdminPanel() {
   }
 
   async function toggleOrganization(item: PlatformOrganization) {
-    if (!token || !window.confirm(`${item.is_active ? "Suspender" : "Reactivar"} la organización ${item.name}?`)) return;
+    const verb = item.is_active ? "Suspender" : item.access_status === "pending" ? "Aprobar el acceso de" : "Reactivar";
+    if (!token || !window.confirm(`${verb} la organización ${item.name}?`)) return;
     setBusy(true); setError("");
     try {
       await apiPatch(`/platform/organizations/${item.id}`, token, { is_active: !item.is_active });
       await load(token, search);
-      flash(item.is_active ? "Organización suspendida." : "Organización reactivada.");
+      flash(item.is_active ? "Organización suspendida." : item.access_status === "pending" ? "Acceso aprobado. La organización ya puede ingresar." : "Organización reactivada.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo actualizar la organización"); }
     finally { setBusy(false); }
   }
@@ -255,11 +269,23 @@ export default function PlatformAdminPanel() {
       {tab === "organizations" && <section className="platform-table-card">
         <div className="platform-table-title"><h2>Organizaciones</h2><span>{organizations.length} resultados</span></div>
         <div className="platform-org-console">
-          {organizations.map((item) => <article key={item.id} className={item.is_active ? "" : "inactive"}>
-            <div><strong>{item.name}</strong><span>{item.municipality || item.province} · {item.vertical}</span><small>{item.slug}</small></div>
+          {organizations.map((item) => <article key={item.id} className={item.access_status === "pending" ? "pending" : item.is_active ? "" : "inactive"}>
+            <div>
+              <strong>{item.name}</strong>
+              <span>{item.municipality || item.province} · {item.vertical}</span>
+              <small>{item.slug}</small>
+              {item.access_status === "pending" && <b className="status-warn">Alta pendiente de aprobación</b>}
+            </div>
+            <div>
+              <strong>{item.contact_name || "Sin contacto"}</strong>
+              <span>{item.contact_email || "—"}</span>
+              {item.contact_phone
+                ? <a className="platform-org-whatsapp" href={whatsappLink(item.contact_phone)} target="_blank" rel="noreferrer">WhatsApp {item.contact_phone}</a>
+                : <small>sin teléfono registrado</small>}
+            </div>
             <div><strong>{item.users_active}/{item.users_total}</strong><span>usuarios activos</span></div>
             <div><strong>{item.plan_name || "Sin licencia"}</strong><span>{item.subscription_status || "sin estado"}</span></div>
-            <div className="platform-org-actions"><button disabled={busy} onClick={() => void renameOrganization(item)}>Renombrar</button><button disabled={busy} className={item.is_active ? "danger" : ""} onClick={() => void toggleOrganization(item)}>{item.is_active ? "Suspender" : "Reactivar"}</button></div>
+            <div className="platform-org-actions"><button disabled={busy} onClick={() => void renameOrganization(item)}>Renombrar</button><button disabled={busy} className={item.is_active ? "danger" : ""} onClick={() => void toggleOrganization(item)}>{item.is_active ? "Suspender" : item.access_status === "pending" ? "Aprobar acceso" : "Reactivar"}</button></div>
           </article>)}
         </div>
       </section>}

@@ -1,0 +1,12 @@
+# Normalizacion de fin de linea.
+#
+# En Windows core.autocrlf=true deja CRLF en el working tree. Para la mayoria
+# de los archivos da igual, pero para estos dos tipos no:
+#
+#  - *.sh  lo ejecuta `sh` dentro del contenedor Linux; con CRLF falla en la
+#          primera linea con "set: Illegal option -".
+#  - *.sql el runner de migraciones guarda el sha256 del archivo. Con CRLF el
+#          checksum difiere entre un checkout Windows y uno Linux, y la
+#          migracion se reporta como modificada aunque sea identica.
+*.sh  text eol=lf
+*.sql text eol=lf
