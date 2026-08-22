@@ -16,6 +16,7 @@ from ..schemas import (
     ImpactReportPublishOut,
     PublicImpactReportOut,
 )
+from ..metrics import response_time_reduction
 from ..security import new_token, token_digest
 from ..subscriptions import require_active_subscription
 
@@ -106,8 +107,10 @@ async def _period_metrics(org_id: UUID, start: date, end: date) -> dict:
         "average_detection_seconds": round(float(row["avg_detection_s"]), 1)
         if row["avg_detection_s"] is not None else None,
         "average_response_seconds": round(response, 1) if response is not None else None,
-        "response_time_reduction": round(1 - response / baseline, 3)
-        if response is not None and baseline else None,
+        # El promedio se conserva porque el campo se llama "average", pero la
+        # reduccion derivada va acotada: un informe institucional no puede
+        # afirmar un -26431%.
+        "response_time_reduction": response_time_reduction(response, baseline),
         "citizen_reports_total": int(row["citizen_reports_total"] or 0),
         "citizen_reports_verified": verified,
         "valid_reports_rate": round(verified / (verified + rejected), 3)

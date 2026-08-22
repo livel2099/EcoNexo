@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 
 from .. import db
 from ..deps import CurrentUser, current_user
+from ..metrics import ratio, response_time_reduction
 from ..schemas import KpiOut
 
 router = APIRouter(prefix="/kpis", tags=["kpis"])
@@ -22,7 +23,8 @@ async def kpis(user: CurrentUser = Depends(current_user)) -> KpiOut:
     # hasta la creacion de la alerta (segundos).
     det = await p.fetchval(
         """
-        SELECT AVG(EXTRACT(EPOCH FROM (a.detected_at - r.ts)))
+        SELECT percentile_cont(0.5) WITHIN GROUP (
+                 ORDER BY EXTRACT(EPOCH FROM (a.detected_at - r.ts)))
         FROM alerts a
         JOIN LATERAL (
             SELECT ts FROM readings
@@ -45,7 +47,7 @@ async def kpis(user: CurrentUser = Depends(current_user)) -> KpiOut:
         """,
         user.org_id,
     )
-    precision = round(prec["ok"] / prec["total"], 3) if prec["total"] else None
+    precision = ratio(prec["ok"], prec["total"])
 
     # KPI3 — reportes ciudadanos validos y accionables
     rep = await p.fetchrow(
@@ -57,18 +59,22 @@ async def kpis(user: CurrentUser = Depends(current_user)) -> KpiOut:
         """,
         user.org_id,
     )
-    valid_rate = round(rep["ok"] / rep["total"], 3) if rep["total"] else None
+    valid_rate = ratio(rep["ok"], rep["total"])
 
     # KPI4 — reduccion del tiempo de respuesta institucional vs baseline
-    avg_resp = await p.fetchval(
+    # Mediana, no promedio: la tarjeta describe el comportamiento tipico y no
+    # puede quedar definida por el caso extremo de una alerta olvidada.
+    resp = await p.fetchval(
         """
-        SELECT AVG(EXTRACT(EPOCH FROM (acknowledged_at - detected_at)))
+        SELECT percentile_cont(0.5) WITHIN GROUP (
+                 ORDER BY EXTRACT(EPOCH FROM (acknowledged_at - detected_at)))
         FROM alerts WHERE org_id=$1 AND acknowledged_at IS NOT NULL
           AND detected_at > now() - interval '30 days'
         """,
         user.org_id,
     )
-    reduction = round(1 - (avg_resp / baseline), 3) if avg_resp and baseline else None
+    reduction = response_time_reduction(
+        float(resp) if resp is not None else None, baseline)
 
     # Banner de estado global
     active = await p.fetchrow(
