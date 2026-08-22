@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
 
     open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
+    open_meteo_archive_url: str = "https://archive-api.open-meteo.com/v1/archive"
+    # El archivo devuelve cientos de dias por consulta: necesita mas aire que
+    # el pronostico, sobre todo desde una IP de salida compartida.
+    agro_http_timeout_seconds: float = 45.0
+    agro_http_retries: int = 3
     nasa_firms_key: str = ""
     firms_inline_enabled: bool = True
     firms_source: str = "VIIRS_SNPP_NRT"

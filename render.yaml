@@ -76,6 +76,12 @@ services:
         value: "false"
       - key: OPEN_METEO_FORECAST_URL
         value: https://api.open-meteo.com/v1/forecast
+      - key: OPEN_METEO_ARCHIVE_URL
+        value: https://archive-api.open-meteo.com/v1/archive
+      - key: AGRO_HTTP_TIMEOUT_SECONDS
+        value: "45"
+      - key: AGRO_HTTP_RETRIES
+        value: "3"
       - key: COPERNICUS_ENABLED_BY_DEFAULT
         value: "true"
       - key: COPERNICUS_MODE

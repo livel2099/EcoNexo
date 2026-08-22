@@ -21,17 +21,38 @@ puedan probarse sin infraestructura.
 """
 from __future__ import annotations
 
+import asyncio
 import math
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable, Sequence
 
 import httpx
 
 from .config import get_settings
 
-ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 TIMEZONE = "America/Argentina/Buenos_Aires"
+
+# Argentina no aplica horario de verano desde 2009, asi que el desplazamiento
+# es fijo. Se usa como respaldo si el sistema no trae la base de zonas horarias.
+_OFFSET_ARGENTINA = timezone(timedelta(hours=-3))
+
+
+def today_local() -> date:
+    """Fecha de hoy en la zona horaria del territorio, no la del servidor.
+
+    El contenedor corre en UTC y las consultas a Open-Meteo se piden en hora
+    argentina. Entre las 21 y las 24 de Argentina las dos fechas difieren en un
+    dia: el historico devolvia hasta el dia que el pronostico daba por primero,
+    el mismo dia entraba dos veces en la serie y la carga fallaba por clave
+    duplicada. Todas las noches, durante tres horas.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo(TIMEZONE)).date()
+    except Exception:
+        return datetime.now(_OFFSET_ARGENTINA).date()
 
 DAILY_VARIABLES = (
     "temperature_2m_max",
@@ -239,6 +260,7 @@ def build_daily_series(crop: Crop, days: Sequence[dict[str, Any]],
     una serie inventada.
     """
     salida: list[DailyPoint] = []
+    vistos: set[date] = set()
     gdd_accum = gdd_inicial
     balance_accum = 0.0
     for crudo in days:
@@ -246,6 +268,11 @@ def build_daily_series(crop: Crop, days: Sequence[dict[str, Any]],
         tmin = crudo.get("tmin")
         if tmax is None or tmin is None:
             continue
+        # Historico y pronostico pueden solaparse en el dia de hoy. Gana el
+        # primero, que por orden de llamada es el dato observado.
+        if crudo["day"] in vistos:
+            continue
+        vistos.add(crudo["day"])
         et0 = crudo.get("et0_mm")
         lluvia = crudo.get("precipitation_mm") or 0.0
         gdd = growing_degree_days(float(tmax), float(tmin), crop.t_base, crop.t_cap)
@@ -462,6 +489,55 @@ def irrigation_outlook(series: Sequence[DailyPoint], dias: int = 14) -> dict[str
 # Acceso a datos reales
 # --------------------------------------------------------------------------
 
+class OpenMeteoError(RuntimeError):
+    """Falla al consultar Open-Meteo, con la causa concreta a la vista.
+
+    El mensaje termina en pantalla y en ``agro_lots.last_refresh_status``: si
+    dice solo "no se pudo", nadie puede distinguir un limite de consultas de un
+    corte de red o de una coordenada invalida.
+    """
+
+
+async def _consultar(url: str, params: dict[str, str], que: str) -> dict[str, Any]:
+    """GET con reintentos ante fallas transitorias.
+
+    Open-Meteo limita por IP de origen. En un hosting compartido la IP de
+    salida es de todos los inquilinos, asi que un 429 puede llegar aunque la
+    plataforma consulte poco. Se reintenta con espera creciente antes de darse
+    por vencido.
+    """
+    settings = get_settings()
+    intentos = max(1, settings.agro_http_retries)
+    ultimo = ""
+    for intento in range(1, intentos + 1):
+        try:
+            async with httpx.AsyncClient(timeout=settings.agro_http_timeout_seconds) as client:
+                respuesta = await client.get(url, params=params)
+            if respuesta.status_code == 200:
+                return respuesta.json()
+            if respuesta.status_code == 429:
+                ultimo = (
+                    f"{que}: Open-Meteo respondió 429 (límite de consultas por IP). "
+                    "El hosting comparte la IP de salida con otros servicios."
+                )
+            elif respuesta.status_code >= 500:
+                ultimo = f"{que}: Open-Meteo respondió {respuesta.status_code}"
+            else:
+                # 4xx que no es 429 es un problema del pedido, no del momento:
+                # reintentar solo demora el diagnostico.
+                detalle = respuesta.text[:160].replace(chr(10), " ")
+                raise OpenMeteoError(f"{que}: Open-Meteo rechazó la consulta "
+                                     f"({respuesta.status_code}) {detalle}")
+        except httpx.TimeoutException:
+            ultimo = (f"{que}: Open-Meteo no respondió en "
+                      f"{settings.agro_http_timeout_seconds:.0f} s")
+        except httpx.HTTPError as exc:
+            ultimo = f"{que}: no se pudo conectar con Open-Meteo ({type(exc).__name__})"
+        if intento < intentos:
+            await asyncio.sleep(1.5 * intento)
+    raise OpenMeteoError(f"{ultimo} después de {intentos} intentos")
+
+
 def _serie(payload: dict[str, Any], bloque: str, clave: str) -> list[Any]:
     return (payload.get(bloque) or {}).get(clave) or []
 
@@ -509,7 +585,6 @@ def _parse_hourly(payload: dict[str, Any]) -> list[dict[str, Any]]:
 async def fetch_history(lat: float, lon: float, desde: date,
                         hasta: date) -> list[dict[str, Any]]:
     """Serie diaria historica (reanalisis ERA5 via Open-Meteo)."""
-    settings = get_settings()
     params = {
         "latitude": f"{lat:.4f}",
         "longitude": f"{lon:.4f}",
@@ -518,16 +593,13 @@ async def fetch_history(lat: float, lon: float, desde: date,
         "daily": ",".join(DAILY_VARIABLES),
         "timezone": TIMEZONE,
     }
-    async with httpx.AsyncClient(timeout=settings.pipeline_http_timeout_seconds) as client:
-        respuesta = await client.get(ARCHIVE_URL, params=params)
-        respuesta.raise_for_status()
-        return _parse_daily(respuesta.json())
+    payload = await _consultar(get_settings().open_meteo_archive_url, params, "histórico")
+    return _parse_daily(payload)
 
 
 async def fetch_forecast(lat: float, lon: float, dias: int = 7
                          ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Pronostico diario y horario. Devuelve ``(diario, horario)``."""
-    settings = get_settings()
     params = {
         "latitude": f"{lat:.4f}",
         "longitude": f"{lon:.4f}",
@@ -536,10 +608,7 @@ async def fetch_forecast(lat: float, lon: float, dias: int = 7
         "hourly": ",".join(HOURLY_VARIABLES),
         "timezone": TIMEZONE,
     }
-    async with httpx.AsyncClient(timeout=settings.pipeline_http_timeout_seconds) as client:
-        respuesta = await client.get(settings.open_meteo_forecast_url, params=params)
-        respuesta.raise_for_status()
-        payload = respuesta.json()
+    payload = await _consultar(get_settings().open_meteo_forecast_url, params, "pronóstico")
     return _parse_daily(payload), _parse_hourly(payload)
 
 

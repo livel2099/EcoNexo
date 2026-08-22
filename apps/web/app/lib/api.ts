@@ -133,14 +133,30 @@ async function checked<T>(response: Response, fallback: string, redirectUnauthor
   return response.json() as Promise<T>;
 }
 
+/**
+ * Estado de la API para el cartel del login.
+ *
+ * Se prueban dos rutas a propósito. Los bloqueadores de anuncios y las
+ * extensiones de privacidad filtran por patrón de URL, y `/health` es un
+ * nombre que varias listas bloquean: la petición muere con
+ * ERR_BLOCKED_BY_CLIENT antes de salir del navegador y el login termina
+ * anunciando "API sin conexión" con la API perfectamente sana. Si la primera
+ * ruta no llega, se intenta una segunda con otro nombre; solo si fallan las
+ * dos se declara caída.
+ */
 export async function getApiStatus(): Promise<boolean> {
   if (IS_DEMO) return true;
-  try {
-    const response = await request(`${API}/health`, { cache: "no-store" }, 35_000);
-    return response.ok;
-  } catch {
-    return false;
+  for (const ruta of ["/health", "/ready"]) {
+    try {
+      const response = await request(`${API}${ruta}`, { cache: "no-store" }, 20_000);
+      // /ready responde 503 si la base está degradada, pero haber recibido
+      // respuesta ya prueba que la API es alcanzable.
+      if (response.ok || response.status === 503) return true;
+    } catch {
+      // Bloqueada o sin respuesta: se prueba la siguiente.
+    }
   }
+  return false;
 }
 
 export async function login(email: string, password: string): Promise<Session> {

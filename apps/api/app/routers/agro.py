@@ -11,7 +11,7 @@ La idea es que un agronomo pueda discutirla, no solo acatarla.
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -449,7 +449,7 @@ async def refresh_lot(
     lote = await _lot_or_404(lot_id, user.org_id)
     crop = agro.crop_or_404(lote["crop_key"])
     lat, lon = float(lote["lat"]), float(lote["lon"])
-    hoy = date.today()
+    hoy = agro.today_local()
 
     desde = lote["sowing_date"] or (hoy - timedelta(days=history_days))
     if crop.perennial or desde > hoy:
@@ -459,21 +459,31 @@ async def refresh_lot(
     try:
         historia = await agro.fetch_history(lat, lon, desde, hoy - timedelta(days=1))
         pron_diario, pron_horario = await agro.fetch_forecast(lat, lon, FORECAST_DAYS)
+    except agro.OpenMeteoError as exc:
+        # La causa concreta viaja al usuario y queda en el lote: "no se pudo"
+        # no permite distinguir un limite de consultas de un corte de red.
+        motivo = str(exc)
+        await db.pool().execute(
+            "UPDATE agro_lots SET last_refresh_at=now(), last_refresh_status=$2 WHERE id=$1",
+            lot_id, f"error: {motivo[:200]}",
+        )
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, motivo) from exc
     except Exception as exc:
         await db.pool().execute(
             "UPDATE agro_lots SET last_refresh_at=now(), last_refresh_status=$2 WHERE id=$1",
-            lot_id, f"error: {str(exc)[:160]}",
+            lot_id, f"error: {type(exc).__name__}: {str(exc)[:160]}",
         )
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            "No se pudo obtener el dato meteorológico de Open-Meteo. Reintentá en unos minutos.",
+            f"Falló la consulta meteorológica ({type(exc).__name__}). Reintentá en unos minutos.",
         ) from exc
 
-    dias_pronostico = {d["day"] for d in pron_diario}
+    dias_archivo = {d["day"] for d in historia}
     serie = agro.build_daily_series(crop, historia + pron_diario)
     if not serie:
         raise HTTPException(502, "Open-Meteo no devolvió días utilizables para este lote")
-    observado = [p for p in serie if p.day not in dias_pronostico]
+    observado = [p for p in serie if p.day in dias_archivo]
+    dias_pronostico = {p.day for p in serie if p.day not in dias_archivo}
 
     registros = [
         (lot_id, user.org_id, p.day, p.tmax, p.tmin, p.precipitation_mm, p.et0_mm,

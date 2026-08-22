@@ -317,3 +317,149 @@ def test_ningun_plan_racionaria_informes():
         if "max_reports_per_month" in plan["entitlements"]
     ]
     assert con_tope == [], f"planes con tope de informes: {con_tope}"
+
+
+# --------------------------------------------------------------------------
+# Consulta a Open-Meteo: reintentos y errores explicitos
+# --------------------------------------------------------------------------
+
+class _RespuestaFalsa:
+    def __init__(self, status_code, payload=None, text=""):
+        self.status_code = status_code
+        self._payload = payload or {}
+        self.text = text
+
+    def json(self):
+        return self._payload
+
+
+class _ClienteFalso:
+    """Reemplaza httpx.AsyncClient devolviendo una secuencia fija."""
+
+    def __init__(self, respuestas, registro):
+        self._respuestas = list(respuestas)
+        self._registro = registro
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    async def get(self, url, params=None):
+        self._registro.append(url)
+        siguiente = self._respuestas.pop(0)
+        if isinstance(siguiente, Exception):
+            raise siguiente
+        return siguiente
+
+
+@pytest.fixture
+def sin_esperas(monkeypatch):
+    """Anula la espera entre reintentos para que la prueba no tarde."""
+    async def _dormir(_segundos):
+        return None
+
+    monkeypatch.setattr(agro.asyncio, "sleep", _dormir)
+
+
+def _montar(monkeypatch, respuestas):
+    registro = []
+    monkeypatch.setattr(agro.httpx, "AsyncClient", _ClienteFalso(respuestas, registro))
+    return registro
+
+
+@pytest.mark.asyncio
+async def test_reintenta_ante_un_limite_de_consultas(monkeypatch, sin_esperas):
+    registro = _montar(monkeypatch, [
+        _RespuestaFalsa(429),
+        _RespuestaFalsa(429),
+        _RespuestaFalsa(200, {"daily": {"time": []}}),
+    ])
+    resultado = await agro._consultar("https://x/y", {}, "histórico")
+    assert resultado == {"daily": {"time": []}}
+    assert len(registro) == 3
+
+
+@pytest.mark.asyncio
+async def test_agota_los_reintentos_y_explica_el_limite(monkeypatch, sin_esperas):
+    _montar(monkeypatch, [_RespuestaFalsa(429)] * 3)
+    with pytest.raises(agro.OpenMeteoError) as exc:
+        await agro._consultar("https://x/y", {}, "histórico")
+    mensaje = str(exc.value)
+    assert "429" in mensaje
+    assert "límite de consultas" in mensaje
+    assert "histórico" in mensaje
+
+
+@pytest.mark.asyncio
+async def test_un_error_del_pedido_no_se_reintenta(monkeypatch, sin_esperas):
+    # Un 400 no mejora reintentando: reintentar solo demora el diagnostico.
+    registro = _montar(monkeypatch, [_RespuestaFalsa(400, text="Bad Request")])
+    with pytest.raises(agro.OpenMeteoError) as exc:
+        await agro._consultar("https://x/y", {}, "pronóstico")
+    assert "rechazó la consulta" in str(exc.value)
+    assert len(registro) == 1
+
+
+@pytest.mark.asyncio
+async def test_el_timeout_dice_cuanto_espero(monkeypatch, sin_esperas):
+    import httpx
+
+    _montar(monkeypatch, [httpx.TimeoutException("timeout")] * 3)
+    with pytest.raises(agro.OpenMeteoError) as exc:
+        await agro._consultar("https://x/y", {}, "histórico")
+    assert "no respondió" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_un_5xx_transitorio_se_supera_reintentando(monkeypatch, sin_esperas):
+    registro = _montar(monkeypatch, [
+        _RespuestaFalsa(503),
+        _RespuestaFalsa(200, {"hourly": {"time": []}}),
+    ])
+    assert await agro._consultar("https://x/y", {}, "pronóstico") == {"hourly": {"time": []}}
+    assert len(registro) == 2
+
+
+# --------------------------------------------------------------------------
+# Zona horaria y solapamiento historico/pronostico
+# --------------------------------------------------------------------------
+
+def test_la_fecha_es_la_del_territorio_no_la_del_servidor():
+    """Entre las 21 y las 24 de Argentina, UTC ya esta en el dia siguiente.
+
+    Si se usara la fecha del servidor, el historico se pediria hasta el dia que
+    el pronostico da por primero y la serie repetiria ese dia.
+    """
+    from datetime import datetime, timezone as tz
+
+    hoy = agro.today_local()
+    ahora_utc = datetime.now(tz.utc)
+    assert hoy in {ahora_utc.date(), (ahora_utc - timedelta(days=1)).date()}
+    # Argentina esta detras de UTC: nunca puede ir un dia adelante.
+    assert hoy <= ahora_utc.date()
+
+
+def test_un_dia_repetido_no_entra_dos_veces_en_la_serie():
+    maiz = agro.CROPS["maiz"]
+    dia = {"day": date(2026, 8, 21), "tmax": 30.0, "tmin": 18.0,
+           "precipitation_mm": 0.0, "et0_mm": 5.0}
+    serie = agro.build_daily_series(maiz, [dia, dict(dia)])
+    assert len(serie) == 1
+
+
+def test_ante_un_dia_solapado_gana_el_dato_observado():
+    """El historico se pasa primero, asi que su valor es el que queda."""
+    maiz = agro.CROPS["maiz"]
+    observado = {"day": date(2026, 8, 21), "tmax": 30.0, "tmin": 18.0,
+                 "precipitation_mm": 12.0, "et0_mm": 5.0}
+    pronosticado = {"day": date(2026, 8, 21), "tmax": 25.0, "tmin": 15.0,
+                    "precipitation_mm": 0.0, "et0_mm": 3.0}
+    serie = agro.build_daily_series(maiz, [observado, pronosticado])
+    assert len(serie) == 1
+    assert serie[0].tmax == 30.0
+    assert serie[0].precipitation_mm == 12.0

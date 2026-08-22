@@ -345,6 +345,9 @@ export default function AgroPanel({ token }: { token: string }) {
                 </div>
                 <small>{lot.last_refresh_at ? `procesado ${fechaHora(lot.last_refresh_at)}` : "sin procesar"}</small>
               </header>
+              {lot.last_refresh_status?.startsWith("error:") && (
+                <p className="agro-lot-error">{lot.last_refresh_status.replace(/^error:\s*/, "")}</p>
+              )}
               <dl className="agro-lot-metrics">
                 <div><dt>Etapa</dt><dd>{lot.stage_name || "—"}</dd></div>
                 <div><dt>Grados día</dt><dd>{lot.gdd_accum != null ? lot.gdd_accum.toFixed(0) : "—"}</dd></div>

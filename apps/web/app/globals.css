@@ -2331,3 +2331,11 @@ textarea:focus-visible,
 .agro-locked ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .3rem; }
 .agro-locked li { font-size: .85rem; line-height: 1.5; color: var(--muted); }
 .agro-locked-note { font-size: .8rem !important; color: var(--muted-2) !important; }
+
+.agro-lot-error {
+  margin: 0; padding: .45rem .6rem; border-radius: 8px;
+  font-size: .76rem; line-height: 1.45;
+  color: var(--amber);
+  border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+}
