@@ -278,7 +278,13 @@ async def update_platform_subscription(
             await db.pool().execute(
                 """
                 UPDATE organization_modules
-                SET status=$3, expires_at=CASE WHEN $3='active' THEN $4 ELSE NULL END,
+                SET status=$3,
+                    -- El cast es obligatorio: dentro de un CASE, Postgres
+                    -- resuelve el tipo por las ramas y no por la columna
+                    -- destino, asi que un parametro nulo se toma como text y
+                    -- la sentencia falla. Pasa con todo plan sin vencimiento
+                    -- (municipal, provincia, enterprise, agro_productor).
+                    expires_at=CASE WHEN $3='active' THEN $4::timestamptz ELSE NULL END,
                     updated_at=now()
                 WHERE org_id=$1 AND module_key=$2
                 """,

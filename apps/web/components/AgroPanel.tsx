@@ -239,7 +239,7 @@ export default function AgroPanel({ token }: { token: string }) {
 
   if (locked) {
     return (
-      <section className="agro-console">
+      <section className="view agro-console">
         <article className="agro-locked">
           <span className="eyebrow">ECONEXO AG · MÓDULO NO HABILITADO</span>
           <h2>Inteligencia agronómica por lote</h2>
@@ -260,7 +260,7 @@ export default function AgroPanel({ token }: { token: string }) {
   }
 
   return (
-    <section className="agro-console">
+    <section className="view agro-console">
       <header className="agro-header">
         <div>
           <span className="eyebrow">ECONEXO AG · INTELIGENCIA AGRONÓMICA</span>
