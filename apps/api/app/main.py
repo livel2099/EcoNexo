@@ -41,22 +41,32 @@ from .routers import (
     zones,
 )
 from .security import decode_token
+from .telemetry_pipeline import pipeline_scheduler
 from .ws import manager, mqtt_bridge
 
 logging.basicConfig(level=logging.INFO)
-_stop = asyncio.Event()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Cada ciclo de vida conserva su propio evento: evita tareas heredadas en reinicios.
+    stop = asyncio.Event()
     await db.connect()
-    bridge = asyncio.create_task(mqtt_bridge(_stop))
-    yield
-    _stop.set()
-    bridge.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await bridge
-    await db.disconnect()
+    workers = [asyncio.create_task(mqtt_bridge(stop), name="mqtt-bridge")]
+    if s.pipeline_scheduler_enabled:
+        workers.append(
+            asyncio.create_task(pipeline_scheduler(stop), name="telemetry-pipeline-scheduler")
+        )
+    try:
+        yield
+    finally:
+        stop.set()
+        for worker in workers:
+            worker.cancel()
+        for worker in workers:
+            with contextlib.suppress(asyncio.CancelledError):
+                await worker
+        await db.disconnect()
 
 
 app = FastAPI(

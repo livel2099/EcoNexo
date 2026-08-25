@@ -63,6 +63,10 @@ class Settings(BaseSettings):
 
     public_app_url: str = "http://localhost:3000"
     cors_origins: str = "http://localhost:3000"
+    # Origen público del frontend cuando se despliega como Static Site en
+    # Render. Se mantiene separado de PUBLIC_APP_URL para que una corrección
+    # del dominio web no deje al API sin su origen CORS durante un redeploy.
+    econexo_web_origin: str = ""
 
     open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
     open_meteo_archive_url: str = "https://archive-api.open-meteo.com/v1/archive"
@@ -75,6 +79,7 @@ class Settings(BaseSettings):
     firms_source: str = "VIIRS_SNPP_NRT"
     pipeline_max_devices_per_run: int = 100
     pipeline_http_timeout_seconds: float = 20.0
+    pipeline_scheduler_enabled: bool = True
 
     copernicus_enabled_by_default: bool = True
     copernicus_mode: str = "process_api"
@@ -99,9 +104,10 @@ class Settings(BaseSettings):
     @property
     def cors_list(self) -> list[str]:
         origins = [origin.strip().rstrip("/") for origin in self.cors_origins.split(",") if origin.strip()]
-        app_origin = self.public_app_url.strip().rstrip("/")
-        if app_origin and app_origin not in origins:
-            origins.append(app_origin)
+        for origin in (self.public_app_url, self.econexo_web_origin):
+            normalized = origin.strip().rstrip("/")
+            if normalized and normalized not in origins:
+                origins.append(normalized)
         expanded = list(origins)
         for origin in origins:
             parsed = urlparse(origin)

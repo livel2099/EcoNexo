@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .. import db
 from ..correlation import Source
-from ..deps import CurrentUser, current_user
+from ..deps import CurrentUser, current_user, require_internal_service
 from ..pipeline import create_alert
 
 router = APIRouter(prefix="/satellite", tags=["satellite"])
@@ -31,7 +31,10 @@ class IngestIn(BaseModel):
 
 
 @router.post("/ingest")
-async def ingest(body: IngestIn) -> dict:
+async def ingest(
+    body: IngestIn,
+    _: None = Depends(require_internal_service),
+) -> dict:
     """Interno: satellite-service publica detecciones. Las de alta confianza
     dentro de una zona de riesgo disparan el pipeline de alertas (incendio)."""
     p = db.pool()

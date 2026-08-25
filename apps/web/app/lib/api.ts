@@ -92,7 +92,7 @@ async function request(url: string, init: RequestInit = {}, timeoutMs = DEFAULT_
       throw new Error(`La API de EcoNexo no respondió a tiempo (${API}).`);
     }
     throw new Error(
-      `No se pudo conectar con la API de EcoNexo en ${API}. Verificá que ${API}/health responda.`,
+      `No se pudo conectar con la API de EcoNexo en ${API}. Verificá que ${API}/health responda; si responde pero el error continúa, desactivá o exceptuá los bloqueadores de contenido para la API.`,
       { cause },
     );
   } finally {

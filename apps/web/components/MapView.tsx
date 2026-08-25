@@ -172,33 +172,65 @@ export default function MapView({
 
   useEffect(() => {
     let disposed = false;
+    let layoutFrame = 0;
+    let layoutTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+    const container = containerRef.current;
     void import("leaflet").then(({ default: L }) => {
-      if (disposed || !containerRef.current || mapRef.current) return;
-      const safeCenter: [number, number] = isInMisiones(centerLat, centerLon)
-        ? [centerLat, centerLon]
-        : MISIONES_CENTER;
-      const map = L.map(containerRef.current, {
+      // El centro se actualiza en su propio efecto. Mantener esta inicializacion
+      // independiente evita destruir y recrear Leaflet cuando termina de llegar
+      // la configuracion de la organizacion al abrir el tablero.
+      if (disposed || !container || !container.isConnected || mapRef.current) return;
+      const map = L.map(container, {
         zoomControl: true,
         attributionControl: true,
         preferCanvas: true,
         minZoom: 7,
         maxBounds: L.latLngBounds(MISIONES_BOUNDS),
         maxBoundsViscosity: 0.92,
-      }).setView(safeCenter, 8);
+      }).setView(MISIONES_CENTER, 8);
       L.control.scale({ imperial: false, metric: true, position: "bottomright" }).addTo(map);
       mapRef.current = map;
       dataLayerRef.current = L.layerGroup().addTo(map);
+
+      // Cuando el dashboard aun esta terminando su grid o una transicion, Leaflet
+      // puede calcular un tamano 0x0 y no solicitar las primeras teselas. Forzar
+      // una segunda medicion despues del primer paint evita depender de alternar
+      // manualmente la capa base para que aparezca OpenStreetMap.
+      const invalidateLayout = () => {
+        if (!disposed && mapRef.current === map) {
+          map.invalidateSize({ animate: false, pan: false });
+        }
+      };
+      map.whenReady(invalidateLayout);
+      layoutFrame = window.requestAnimationFrame(() => {
+        invalidateLayout();
+        layoutTimer = globalThis.setTimeout(invalidateLayout, 180);
+      });
       setReady(true);
     });
     return () => {
       disposed = true;
+      window.cancelAnimationFrame(layoutFrame);
+      if (layoutTimer) globalThis.clearTimeout(layoutTimer);
       mapRef.current?.remove();
       mapRef.current = null;
       baseLayerRef.current = null;
       satelliteLayerRef.current = null;
       dataLayerRef.current = null;
     };
-  }, [centerLat, centerLon]);
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    const safeCenter: [number, number] = isInMisiones(centerLat, centerLon)
+      ? [centerLat, centerLon]
+      : MISIONES_CENTER;
+    const currentCenter = map.getCenter();
+    if (Math.abs(currentCenter.lat - safeCenter[0]) < 0.0001
+      && Math.abs(currentCenter.lng - safeCenter[1]) < 0.0001) return;
+    map.setView(safeCenter, Math.max(map.getZoom(), 8), { animate: false });
+  }, [centerLat, centerLon, ready]);
 
   // "Sin capa" siempre esta: es como se apaga la capa satelital.
   const layerChoices = useMemo<SatelliteMode[]>(() => {
@@ -222,13 +254,17 @@ export default function MapView({
     const container = containerRef.current;
     if (!ready || !container || typeof ResizeObserver === "undefined") return;
     let frame = 0;
+    const invalidate = () => mapRef.current?.invalidateSize({ animate: false, pan: false });
     const observer = new ResizeObserver(() => {
       // Se difiere un cuadro: durante la transicion CSS el contenedor todavia
       // esta cambiando y recalcular en cada paso es trabajo inutil.
       window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => mapRef.current?.invalidateSize({ animate: false }));
+      frame = window.requestAnimationFrame(invalidate);
     });
     observer.observe(container);
+    // ResizeObserver notifica los cambios posteriores, pero no todos los
+    // navegadores entregan una notificacion inicial antes de que Leaflet cargue.
+    frame = window.requestAnimationFrame(invalidate);
     return () => {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
@@ -236,11 +272,14 @@ export default function MapView({
   }, [ready]);
 
   useEffect(() => {
-    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
+    if (!ready || !map) return;
     let cancelled = false;
+    let frame = 0;
+    let settleTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+    let activeLayer: TileLayer | null = null;
     void import("leaflet").then(({ default: L }) => {
-      const map = mapRef.current;
-      if (cancelled || !map) return;
+      if (cancelled || mapRef.current !== map) return;
       if (baseLayerRef.current) map.removeLayer(baseLayerRef.current);
       let tileErrors = 0;
       const layer = baseMap === "dark"
@@ -261,12 +300,32 @@ export default function MapView({
         });
       layer.on("tileerror", () => {
         tileErrors += 1;
-        if (baseMap === "dark" && tileErrors >= 3) setBaseMap("street");
+        if (!cancelled && mapRef.current === map && baseMap === "dark" && tileErrors >= 3) {
+          setBaseMap("street");
+        }
       });
-      baseLayerRef.current = layer.addTo(map);
+      activeLayer = layer.addTo(map);
+      baseLayerRef.current = activeLayer;
       layer.bringToBack();
+
+      const refreshTiles = () => {
+        if (cancelled || mapRef.current !== map || !activeLayer || !map.hasLayer(activeLayer)) return;
+        map.invalidateSize({ animate: false, pan: false });
+        activeLayer.redraw();
+      };
+      map.whenReady(refreshTiles);
+      frame = window.requestAnimationFrame(() => {
+        refreshTiles();
+        settleTimer = globalThis.setTimeout(refreshTiles, 180);
+      });
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+      if (settleTimer) globalThis.clearTimeout(settleTimer);
+      if (activeLayer && map.hasLayer(activeLayer)) map.removeLayer(activeLayer);
+      if (baseLayerRef.current === activeLayer) baseLayerRef.current = null;
+    };
   }, [baseMap, ready]);
 
   useEffect(() => {

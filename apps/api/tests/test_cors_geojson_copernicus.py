@@ -18,6 +18,15 @@ def test_cors_always_includes_public_render_frontend(monkeypatch):
     assert "https://otro.example" in settings.cors_list
 
 
+def test_cors_accepts_the_explicit_static_web_origin():
+    settings = Settings(
+        public_app_url="https://app.econexo.com.ar",
+        cors_origins="https://app.econexo.com.ar",
+        econexo_web_origin="https://econexo-web.onrender.com/",
+    )
+    assert "https://econexo-web.onrender.com" in settings.cors_list
+
+
 def test_geojson_jsonb_string_is_decoded():
     raw = json.dumps({
         "type": "MultiPolygon",

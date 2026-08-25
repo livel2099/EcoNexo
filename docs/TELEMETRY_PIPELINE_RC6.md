@@ -39,6 +39,13 @@ GET   /devices/{id}/readings
 
 La migración 14 incorpora configuración de telemetría en `devices`, ajustes por organización en `telemetry_pipeline_settings`, historial en `pipeline_runs` y deduplicación de `satellite_detections`.
 
+## Actualización en producción
+
+- La API inicia el scheduler cuando `PIPELINE_SCHEDULER_ENABLED=true`.
+- Cada organización conserva el interruptor **Ejecución automática**: solo las que lo habilitan ejecutan su pipeline en el intervalo configurado.
+- `NASA_FIRMS_KEY` habilita focos reales; sin la clave se publica cero detecciones, nunca fixtures de demo.
+- Los servicios externos que publiquen detecciones deben enviar `X-Internal-Service-Token`; el valor debe coincidir con `INTERNAL_SERVICE_TOKEN` del API.
+
 ## Seguridad y precisión
 
 - Todos los recursos se filtran por `org_id`.

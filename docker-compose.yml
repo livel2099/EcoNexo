@@ -85,6 +85,7 @@ services:
     environment:
       <<: *db-env
       JWT_SECRET: ${JWT_SECRET:-change_me_dev_secret}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-change_me_internal_dev_secret}
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
       S3_ENDPOINT: http://minio:9000
@@ -154,6 +155,7 @@ services:
     environment:
       <<: *db-env
       NASA_FIRMS_KEY: ${NASA_FIRMS_KEY:-}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-change_me_internal_dev_secret}
       API_URL: http://api:8000
       FIRMS_POLL_SECONDS: ${FIRMS_POLL_SECONDS:-900}
     depends_on:

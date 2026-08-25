@@ -1,17 +1,23 @@
 .appShell {
-  --emerald: #059669;
-  --emerald-dark: #047857;
-  --petrol: #164e63;
-  --petrol-deep: #092f3b;
-  --cyan: #67d8e5;
-  --gold: #f4b942;
-  --ink: #142a31;
-  --muted: #667b81;
-  --line: #dce9e7;
-  --surface: #ffffff;
+  /* Reuse the platform tokens so EcoNexoFoI feels like a native module. */
+  --emerald: var(--green);
+  --emerald-dark: var(--green-bright);
+  --petrol: var(--panel-2);
+  --petrol-deep: var(--bg);
+  --gold: var(--amber);
+  --ink: var(--text);
+  --line: var(--border-soft);
+  --surface: var(--panel-solid);
   min-height: 100vh;
   color: var(--ink);
-  background: #f3f8f7;
+  color-scheme: dark;
+  background:
+    radial-gradient(circle at 12% -20%, color-mix(in srgb, var(--cyan) 13%, transparent), transparent 33%),
+    radial-gradient(circle at 88% 10%, color-mix(in srgb, var(--green-bright) 10%, transparent), transparent 30%),
+    linear-gradient(color-mix(in srgb, var(--cyan) 2.5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--cyan) 2.5%, transparent) 1px, transparent 1px),
+    var(--bg);
+  background-size: auto, auto, 36px 36px, 36px 36px, auto;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -328,4 +334,112 @@
 
 @media (prefers-reduced-motion: reduce) {
   .appShell *, .appShell *::before, .appShell *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+/* Palette bridge: all visible surfaces use the original EcoNexo command-center tokens. */
+.appShell :is(button, input, textarea, select):focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.topbar {
+  color: var(--text);
+  border-bottom-color: var(--border);
+  background: color-mix(in srgb, var(--bg-2) 94%, transparent);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--bg) 60%, transparent);
+}
+.brand, .profileButton, .searchBox input, .welcomeCard h1, .challengeCard, .challengeCard h2, .modalHeader, .modalHeader h2 { color: var(--text); }
+.brand small, .eyebrow, .modalHeader span, .mobileNav .mobileActive { color: var(--cyan); }
+.brand small { border-color: color-mix(in srgb, var(--cyan) 35%, transparent); }
+.searchBox { color: var(--muted); border-color: var(--border); background: color-mix(in srgb, var(--bg) 45%, transparent); }
+.searchBox:focus-within { border-color: color-mix(in srgb, var(--cyan) 70%, transparent); background: color-mix(in srgb, var(--bg) 72%, transparent); }
+.searchBox input::placeholder, .searchBox button, .searchBox kbd, .profileButton small, .iconButton, .logoutButton { color: var(--muted); }
+.searchBox kbd, .iconButton, .logoutButton { border-color: var(--border-soft); background: color-mix(in srgb, var(--text) 4%, transparent); }
+.iconButton i { border-color: var(--bg); background: var(--amber); }
+.avatar { color: var(--text); border-color: color-mix(in srgb, var(--text) 74%, transparent); box-shadow: 0 4px 12px color-mix(in srgb, var(--bg) 38%, transparent); }
+.avatarCurrent, .avatarEmerald { background: linear-gradient(145deg, var(--green-bright), var(--green)); }
+.avatarBlue { background: linear-gradient(145deg, var(--cyan), var(--panel-2)); }
+.avatarGold { color: var(--bg); background: var(--amber); }
+.avatarViolet { background: var(--violet); }
+
+.primaryNav button { color: var(--muted); }
+.primaryNav button:hover { color: var(--green-bright); background: color-mix(in srgb, var(--green-bright) 8%, transparent); }
+.primaryNav .navActive { color: var(--green-bright); border-color: color-mix(in srgb, var(--green-bright) 28%, transparent); background: color-mix(in srgb, var(--green-bright) 12%, transparent); }
+.primaryNav em, .verified, .peopleList .following, .inlineFollow.following, .communityJoinRow > .joinedMini, .commentsPanel form button, .modalFooter button[type="submit"], .toast > span { color: var(--bg); background: var(--green-bright); }
+.newPostButton, .challengeCard > button, .collabStrip > button, .mobilePublish { color: var(--bg) !important; background: var(--amber) !important; }
+.newPostButton { box-shadow: 0 8px 18px color-mix(in srgb, var(--amber) 24%, transparent); }
+.newPostButton:hover { box-shadow: 0 10px 25px color-mix(in srgb, var(--amber) 34%, transparent); }
+.sectionHeading > span, .sideTitle > span, .feedHeader > span, .sidebarFooter, .sidebarFooter span, .communityItem small, .postAuthor p, .answerStrip small, .collabStrip small, .postActions button, .trendList small, .trendList svg, .peopleList small, .freePlan, .sidebarEmpty, .loadingState, .attachmentCard small, .commentsList small, .noComments, .communityJoinRow small, .topicCloud small, .fileField small, .modalFooter > span { color: var(--muted); }
+.sectionHeading button, .sideTitle button, .postActions button:hover, .postActions .saved { color: var(--green-bright); }
+.communityItem:hover, .moreButton:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.communityIcon { color: var(--green-bright); background: color-mix(in srgb, var(--green-bright) 12%, transparent); }
+.communityBlue { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 12%, transparent); }
+.communityGold { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+
+.welcomeCard { background: radial-gradient(circle at 82% 20%, color-mix(in srgb, var(--cyan) 17%, transparent), transparent 24%), radial-gradient(circle at 8% 110%, color-mix(in srgb, var(--green-bright) 24%, transparent), transparent 42%), linear-gradient(125deg, var(--bg-2), var(--panel-2)); box-shadow: 0 16px 38px color-mix(in srgb, var(--bg) 45%, transparent); }
+.welcomeCard h1 em, .challengeLabel { color: var(--amber); }
+.welcomeCard p, .challengeCard p, .challengeMeta { color: var(--muted); }
+.welcomeActions button { color: var(--text); border-color: var(--border); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.welcomeActions button:first-child { color: var(--bg); border-color: var(--green-bright); background: var(--green-bright); }
+.core { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 42%, transparent); background: color-mix(in srgb, var(--bg) 82%, transparent); box-shadow: 0 0 0 12px color-mix(in srgb, var(--cyan) 4%, transparent), 0 0 34px color-mix(in srgb, var(--cyan) 15%, transparent); }
+.orbitOne, .orbitTwo, .orbitOne span, .orbitTwo span { border-color: color-mix(in srgb, var(--cyan) 28%, transparent); }
+.orbitOne span, .orbitTwo span { color: var(--cyan); background: var(--panel-2); }
+.orbitOne i { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+.orbitTwo i { background: var(--green-bright); box-shadow: 0 0 10px var(--green-bright); }
+.floatLabel { color: var(--text); border-color: var(--border-soft); background: color-mix(in srgb, var(--bg) 82%, transparent); }
+
+.feedTabs button, .moreButton, .postText, .commentsList p, .freePlan b, .postCommunity, .modalTools button, .modalFooter button, .composerModal label, .fileField { color: var(--muted); }
+.feedTabs .feedTabActive { color: var(--green-bright); }
+.feedTabs .feedTabActive::after { background: var(--green-bright); }
+.postCard, .sideCard, .emptyState, .loadingState, .composerModal { background: var(--panel-solid); }
+.postCard { box-shadow: 0 8px 20px color-mix(in srgb, var(--bg) 24%, transparent); }
+.postCard:hover { border-color: color-mix(in srgb, var(--green-bright) 32%, transparent); box-shadow: 0 12px 28px color-mix(in srgb, var(--bg) 42%, transparent); }
+.postCard h2, .trendList > button, .communityItem, .communityJoinRow > button:first-child, .emptyState h2 { color: var(--text); }
+.kindBadge { color: var(--green-bright); background: color-mix(in srgb, var(--green-bright) 12%, transparent); }
+.kindBlue { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 12%, transparent); }
+.kindGold { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.researchPreview { border-color: var(--border-soft); background: linear-gradient(100deg, color-mix(in srgb, var(--green) 9%, var(--panel-solid)), var(--panel-2)); }
+.researchPreview > div span, .researchPreview > div small, .researchPreview > button small { color: var(--muted); }
+.researchPreview > div b { color: var(--green-bright); }
+.researchPreview > button, .answerStrip button, .peopleList button, .inlineFollow, .communityJoinRow > button:last-child, .commentsPanel input, .modalFooter button { color: var(--text); border-color: var(--border); background: color-mix(in srgb, var(--bg) 48%, transparent); }
+.answerStrip, .collabStrip { border-color: var(--border-soft); background: color-mix(in srgb, var(--cyan) 6%, var(--panel-solid)); }
+.answerStrip > span { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 13%, transparent); }
+.collabStrip { border-color: color-mix(in srgb, var(--amber) 32%, transparent); background: color-mix(in srgb, var(--amber) 7%, var(--panel-solid)); }
+.avatarStack span { border-color: var(--panel-solid); background: var(--panel-2); }
+.avatarStack span:nth-child(2) { background: var(--green); }.avatarStack span:nth-child(3) { color: var(--bg); background: var(--amber); }.avatarStack span:nth-child(4) { background: var(--muted-2); }
+.collabStrip > .joinedButton { color: var(--green-bright); border-color: color-mix(in srgb, var(--green-bright) 36%, transparent); background: color-mix(in srgb, var(--green-bright) 10%, transparent); }
+.tagRow button, .topicCloud button { color: var(--cyan); border-color: var(--border-soft); background: color-mix(in srgb, var(--cyan) 7%, transparent); }
+.postActions { border-top-color: var(--border-soft); }
+.postActions .liked { color: var(--red); background: color-mix(in srgb, var(--red) 9%, transparent); }
+.postActions .saved { background: color-mix(in srgb, var(--green-bright) 10%, transparent); }
+.trendList > button, .communityJoinRow { border-bottom-color: var(--border-soft); }
+.challengeCard { background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--amber) 23%, transparent), transparent 35%), linear-gradient(145deg, var(--panel-2), var(--bg)); }
+.challengeCard::after { border-color: color-mix(in srgb, var(--cyan) 16%, transparent); box-shadow: 0 0 0 18px color-mix(in srgb, var(--cyan) 4%, transparent), 0 0 0 40px color-mix(in srgb, var(--cyan) 2.5%, transparent); }
+.challengeIcon { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 28%, transparent); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+.challengeMeta b { color: var(--text); }
+.peopleList button, .inlineFollow, .communityJoinRow > button:last-child { color: var(--green-bright); }
+.logoutButton:hover { color: var(--text); border-color: color-mix(in srgb, var(--amber) 52%, transparent); }
+.apiError { color: var(--red); border-color: color-mix(in srgb, var(--red) 42%, transparent); background: color-mix(in srgb, var(--red) 9%, var(--panel-solid)); }
+.apiError button { color: var(--text); border-color: color-mix(in srgb, var(--red) 42%, transparent); background: color-mix(in srgb, var(--bg) 52%, transparent); }
+.loadingState i { border-color: color-mix(in srgb, var(--green-bright) 18%, transparent); border-top-color: var(--green-bright); }
+.attachmentCard { color: var(--text); border-color: var(--border-soft); background: linear-gradient(105deg, color-mix(in srgb, var(--green) 8%, var(--panel-solid)), var(--panel-2)); }
+.postCommunity { border-color: var(--border-soft); background: color-mix(in srgb, var(--text) 3%, transparent); }
+.commentsPanel { border-top-color: var(--border-soft); }
+.commentsList article { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.commentsPanel input { color: var(--text); }
+.commentsPanel input:focus, .composerModal input:focus, .composerModal select:focus, .composerModal textarea:focus { border-color: var(--green-bright); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-bright) 12%, transparent); }
+.fileField { border-color: color-mix(in srgb, var(--cyan) 36%, transparent); background: color-mix(in srgb, var(--cyan) 5%, transparent); }
+.modalBackdrop { background: color-mix(in srgb, var(--bg) 72%, transparent); }
+.composerModal { border-color: var(--border); box-shadow: 0 30px 80px color-mix(in srgb, var(--bg) 70%, transparent); }
+.modalHeader { background: var(--bg-2); }
+.modalHeader button { color: var(--text); border-color: var(--border-soft); background: color-mix(in srgb, var(--text) 4%, transparent); }
+.composerModal input, .composerModal select, .composerModal textarea { color: var(--text); border-color: var(--border-soft); background: color-mix(in srgb, var(--bg) 48%, transparent); }
+.modalTools button { border-color: var(--border-soft); background: color-mix(in srgb, var(--text) 4%, transparent); }
+.modalFooter { border-top-color: var(--border-soft); background: color-mix(in srgb, var(--text) 3%, transparent); }
+.toast { color: var(--text); border-color: color-mix(in srgb, var(--cyan) 28%, transparent); background: var(--bg-2); box-shadow: 0 18px 40px color-mix(in srgb, var(--bg) 55%, transparent); }
+.emptyState button { color: var(--bg); background: var(--green-bright); }
+.trendList > button > span, .communityJoinRow > button:first-child > span, .avatarStack span { color: var(--text); }
+
+@media (max-width: 760px) {
+  .mobileNav { color: var(--muted); border-top-color: var(--border); background: color-mix(in srgb, var(--bg-2) 96%, transparent); box-shadow: 0 -10px 25px color-mix(in srgb, var(--bg) 45%, transparent); }
+  .mobilePublish { box-shadow: 0 9px 22px color-mix(in srgb, var(--amber) 35%, transparent); }
 }

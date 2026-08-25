@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hmac import compare_digest
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, status
 
+from .config import get_settings
 from .security import decode_token
 
 
@@ -33,6 +35,15 @@ async def current_user(authorization: str = Header(default="")) -> CurrentUser:
         account_type=payload.get("account_type", "institutional"),
         platform_admin=bool(payload.get("platform_admin", False)),
     )
+
+
+async def require_internal_service(
+    x_internal_service_token: str = Header(default=""),
+) -> None:
+    """Autoriza publicadores internos sin exponer la ingesta al público."""
+    expected = get_settings().internal_service_token.strip()
+    if not expected or not compare_digest(x_internal_service_token, expected):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credencial de servicio interno inválida")
 
 
 def require_role(*roles: str):

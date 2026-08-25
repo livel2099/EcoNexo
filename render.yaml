@@ -112,12 +112,17 @@ services:
         sync: false
       - key: FIRMS_INLINE_ENABLED
         value: "true"
+      # Defensa explícita: si NASA FIRMS no responde no se inventan focos.
+      - key: ALLOW_DEMO_SATELLITE_FIXTURES
+        value: "false"
       - key: FIRMS_SOURCE
         value: VIIRS_SNPP_NRT
       - key: PIPELINE_MAX_DEVICES_PER_RUN
         value: "100"
       - key: PIPELINE_HTTP_TIMEOUT_SECONDS
         value: "20"
+      - key: PIPELINE_SCHEDULER_ENABLED
+        value: "true"
 
   - type: web
     name: econexo-web

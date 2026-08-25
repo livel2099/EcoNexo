@@ -20,6 +20,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("econexo.satellite")
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
+INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "").strip()
 POLL = int(os.getenv("FIRMS_POLL_SECONDS", "900"))
 
 
@@ -30,9 +31,17 @@ async def cycle() -> None:
     vision = analyze()  # OpenCV sobre raster de muestra
     log.info("OpenCV: %d zonas de calor detectadas en el raster", len(vision["heat_zones"]))
 
+    if not INTERNAL_SERVICE_TOKEN:
+        log.error("INTERNAL_SERVICE_TOKEN no está configurado; se omite la ingesta")
+        return
+
     try:
         async with httpx.AsyncClient(timeout=15.0) as c:
-            r = await c.post(f"{API_URL}/satellite/ingest", json={"detections": detections})
+            r = await c.post(
+                f"{API_URL}/satellite/ingest",
+                json={"detections": detections},
+                headers={"X-Internal-Service-Token": INTERNAL_SERVICE_TOKEN},
+            )
             r.raise_for_status()
             log.info("Ingesta al API: %s", r.json())
     except Exception as exc:
