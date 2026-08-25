@@ -46,7 +46,7 @@
   z-index: 40;
   height: 72px;
   display: grid;
-  grid-template-columns: 250px minmax(260px, 600px) 250px;
+  grid-template-columns: 250px minmax(260px, 1fr) auto;
   justify-content: space-between;
   align-items: center;
   gap: 28px;
@@ -62,7 +62,7 @@
 .brand img { width: 198px; height: 58px; display: block; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,.12)); }
 .brand small { padding: 2px 6px; color: var(--cyan); border: 1px solid rgba(103,216,229,.28); border-radius: 12px; font-size: 8px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
 
-.searchBox { height: 42px; display: flex; align-items: center; gap: 10px; padding: 0 13px; color: #b6cfd3; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(0,0,0,.14); transition: border-color .2s, background .2s; }
+.searchBox { width: 100%; max-width: 600px; justify-self: center; height: 42px; display: flex; align-items: center; gap: 10px; padding: 0 13px; color: #b6cfd3; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(0,0,0,.14); transition: border-color .2s, background .2s; }
 .searchBox:focus-within { border-color: rgba(103,216,229,.7); background: rgba(0,0,0,.22); }
 .searchBox input { flex: 1; min-width: 0; color: #fff; border: 0; outline: 0; background: transparent; }
 .searchBox input::placeholder { color: #9ab3b8; }
@@ -70,6 +70,8 @@
 .searchBox kbd { padding: 2px 7px; color: #91aeb3; border: 1px solid rgba(255,255,255,.14); border-radius: 5px; font: 10px ui-monospace, monospace; }
 
 .headerActions { display: flex; justify-content: flex-end; align-items: center; gap: 13px; }
+.backHomeButton { height: 40px; display: flex; align-items: center; gap: 7px; padding: 0 11px; color: var(--text); border: 1px solid var(--border-soft); border-radius: 11px; background: color-mix(in srgb, var(--text) 4%, transparent); font-size: 10px; font-weight: 800; text-decoration: none; transition: .2s ease; }
+.backHomeButton:hover { color: var(--green-bright); border-color: color-mix(in srgb, var(--green-bright) 42%, transparent); background: color-mix(in srgb, var(--green-bright) 10%, transparent); }
 .iconButton { position: relative; width: 40px; height: 40px; display: grid; place-items: center; padding: 0; color: #d5e7e8; border: 1px solid rgba(255,255,255,.12); border-radius: 11px; background: rgba(255,255,255,.04); }
 .iconButton i { position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border: 1px solid var(--petrol-deep); border-radius: 50%; background: var(--gold); }
 .profileButton { display: flex; align-items: center; gap: 9px; padding: 0; color: #fff; text-align: left; border: 0; background: transparent; }
@@ -290,6 +292,8 @@
   .topbar { grid-template-columns: 205px minmax(260px, 1fr) 200px; padding: 0 22px; }
   .pageGrid { grid-template-columns: 205px minmax(500px, 720px) 285px; gap: 20px; padding-inline: 20px; }
   .profileButton > span:nth-child(2) { display: none; }
+  .backHomeButton { width: 40px; justify-content: center; padding: 0; }
+  .backHomeLabel { display: none; }
 }
 
 @media (max-width: 1020px) {
@@ -305,7 +309,7 @@
   .brand { height: 54px; }.brand img { width: 132px; height: 52px; }.brand small { display: none; }
   .searchBox { justify-self: end; width: 40px; height: 40px; padding: 0; justify-content: center; border: 0; background: transparent; }
   .searchBox input, .searchBox kbd, .searchBox button { display: none; }
-  .iconButton { width: 36px; height: 36px; }.profileButton { display: none; }
+  .backHomeButton { width: 36px; height: 36px; }.iconButton { display: none; }.profileButton { display: none; }
   .pageGrid { display: block; min-height: auto; padding: 15px 12px 30px; }
   .leftSidebar { display: none; }
   .welcomeCard { min-height: 255px; display: block; padding: 27px 22px; border-radius: 17px; }

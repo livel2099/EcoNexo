@@ -28,7 +28,7 @@ import {
 } from "./foi-api";
 import styles from "./research-network.module.css";
 
-type IconName = "home" | "compass" | "users" | "bookmark" | "bell" | "search" | "plus" | "arrow" | "heart" | "message" | "share" | "more" | "file" | "flask" | "check" | "close" | "image" | "link" | "chevron" | "lock" | "logout";
+type IconName = "home" | "compass" | "users" | "bookmark" | "bell" | "search" | "plus" | "arrow" | "back" | "heart" | "message" | "share" | "more" | "file" | "flask" | "check" | "close" | "image" | "link" | "chevron" | "lock" | "logout";
 
 function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -40,6 +40,7 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
     plus: <><path d="M12 5v14M5 12h14"/></>,
     arrow: <><path d="M5 12h14M13 6l6 6-6 6"/></>,
+    back: <><path d="M19 12H5M11 18l-6-6 6-6"/></>,
     heart: <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/>,
     message: <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/>,
     share: <><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></>,
@@ -255,6 +256,7 @@ export default function ResearchNetworkPage() {
         <a className={styles.brand} href="/red-investigacion" aria-label="EcoNexoFoI, inicio"><img src="/red-investigacion/econexo-foi-logo.svg" alt="EcoNexoFoI — Foro de Investigación" /><small>beta</small></a>
         <label className={styles.searchBox}><Icon name="search" size={19}/><span className={styles.srOnly}>Buscar</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar investigaciones, personas o temas"/>{query && <button type="button" onClick={() => setQuery("")} aria-label="Limpiar"><Icon name="close" size={16}/></button>}<kbd>⌘ K</kbd></label>
         <div className={styles.headerActions}>
+          <a className={styles.backHomeButton} href="/" aria-label="Volver al inicio de EcoNexo"><Icon name="back" size={18}/><span className={styles.backHomeLabel}>EcoNexo</span></a>
           <button className={styles.iconButton} aria-label="Notificaciones"><Icon name="bell" size={21}/><i/></button>
           <button className={styles.profileButton} aria-label="Perfil"><span className={`${styles.avatar} ${styles.avatarCurrent}`}>{initials(profile?.name || session?.name || "Usuario")}</span><span><b>{profile?.name || session?.name || "Cargando…"}</b><small>{profile?.headline || "EcoNexoFoI"}</small></span></button>
           <button className={styles.logoutButton} onClick={logout} aria-label="Cerrar sesión"><Icon name="logout" size={18}/></button>
