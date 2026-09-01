@@ -132,14 +132,40 @@ class Settings(BaseSettings):
         }
 
     @staticmethod
-    def _dsn_has_tls(dsn: str) -> bool:
-        query = urlparse(dsn).query
+    def _dsn_query(dsn: str) -> str:
+        """Query string del DSN sin pasar por urlparse.
+
+        urlparse levanta ValueError si el netloc trae corchetes: los interpreta
+        como un host IPv6 y valida el contenido como direccion. Una contraseña
+        con `[` o `]` sin codificar rompia el arranque con un traceback que
+        hablaba de IPv6 y no decia nada de la contraseña. Segun la RFC 3986 el
+        primer `?` abre la query, asi que alcanza con cortar ahi.
+        """
+        _, separador, query = dsn.partition("?")
+        return query if separador else ""
+
+    @classmethod
+    def _dsn_has_tls(cls, dsn: str) -> bool:
         modes = [
             value.split("=", 1)[1].strip().lower()
-            for value in query.split("&")
+            for value in cls._dsn_query(dsn).split("&")
             if value.strip().lower().startswith("sslmode=")
         ]
         return bool(modes) and modes[-1] not in {"disable", "allow", "prefer"}
+
+    @staticmethod
+    def _dsn_is_parseable(dsn: str) -> bool:
+        """Anticipa el mismo ValueError que asyncpg lanzaria al conectar.
+
+        asyncpg parsea el DSN con urlparse, asi que un caracter reservado sin
+        codificar en la contraseña (`[`, `]`, `@`, `/`, `?`, `#`) no es solo un
+        problema de esta validacion: la conexion tampoco se va a poder abrir.
+        """
+        try:
+            urlparse(dsn)
+        except ValueError:
+            return False
+        return True
 
     @property
     def cors_list(self) -> list[str]:
@@ -205,10 +231,16 @@ class Settings(BaseSettings):
         # La base dejo de ser un servicio interno de Render: ahora el trafico
         # sale a internet hacia Supabase. Sin sslmode explicito, libpq/asyncpg
         # aceptan texto plano si el servidor lo ofrece.
-        elif self.database_url.strip() and not self._dsn_has_tls(self.database_url):
-            findings.append("DATABASE_URL_SSLMODE")
-        if self.migrations_database_url.strip() and not self._dsn_has_tls(self.migrations_database_url):
-            findings.append("MIGRATIONS_DATABASE_URL_SSLMODE")
+        elif self.database_url.strip():
+            if not self._dsn_is_parseable(self.database_url):
+                findings.append("DATABASE_URL_ENCODING")
+            if not self._dsn_has_tls(self.database_url):
+                findings.append("DATABASE_URL_SSLMODE")
+        if self.migrations_database_url.strip():
+            if not self._dsn_is_parseable(self.migrations_database_url):
+                findings.append("MIGRATIONS_DATABASE_URL_ENCODING")
+            if not self._dsn_has_tls(self.migrations_database_url):
+                findings.append("MIGRATIONS_DATABASE_URL_SSLMODE")
         if self.platform_admin_bootstrap_enabled and (
             not self.platform_admin_list or len(self.platform_admin_initial_password) < 12
         ):

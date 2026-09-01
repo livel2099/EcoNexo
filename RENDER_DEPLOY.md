@@ -183,6 +183,10 @@ https://econexo.onrender.com/health
 Si apunta a `localhost`, el frontend fue construido con variables antiguas. Si devuelve CORS, corregir `CORS_ORIGINS` en la API y redesplegarla.
 Si el log muestra `socket.gaierror: Name or service not known`, la API conserva una URL de Render suspendida o un host incompleto. Reemplazá el secreto por la URL de Session pooler de Supabase y redesplegá; no es un problema de CORS.
 
+Si el arranque aborta con `Configuracion incompleta o insegura: DATABASE_URL_ENCODING`, la contraseña tiene caracteres reservados sin codificar. `urlparse` interpreta un `[` como apertura de host IPv6 y falla con un `ValueError` que habla de direcciones IP, no de la contraseña; **asyncpg usa el mismo parser, así que la conexión tampoco abriría**. Codificar en la contraseña: `[`→`%5B`, `]`→`%5D`, `@`→`%40`, `/`→`%2F`, `?`→`%3F`, `#`→`%23`, `:`→`%3A`.
+
+Si el error es `socket.gaierror` o `Network is unreachable` contra un host `db.<ref>.supabase.co`, esa es la **conexión directa**, que en Supabase resuelve solo por IPv6. Render no tiene salida IPv6: hay que usar el host del Session pooler (`aws-<n>-<region>.pooler.supabase.com`, usuario `postgres.<ref>`).
+
 Si el arranque aborta con `Configuracion incompleta o insegura: DATABASE_URL_SSLMODE`, la URL no lleva `sslmode` o lleva uno que acepta texto plano (`disable`, `allow`, `prefer`). El tráfico a Supabase sale a internet: usar `sslmode=require` como mínimo.
 
 Si `python -m app.migrate` aborta con `Extensiones fuera del search_path`, corregir `DB_SEARCH_PATH` con los esquemas que indica el mensaje. `python -m app.migrate --status` sigue funcionando en ese estado para inspeccionar qué migraciones faltan.

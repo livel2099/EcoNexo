@@ -237,3 +237,45 @@ def test_transaction_pooler_can_disable_prepared_statement_cache() -> None:
     """El pooler de transacciones de Supabase (:6543) rompe con cache activo."""
     settings = Settings(db_statement_cache_size=0)
     assert settings.db_connect_kwargs["statement_cache_size"] == 0
+
+
+def test_dsn_with_unencoded_brackets_is_reported_not_raised(monkeypatch) -> None:
+    """urlparse cree que `[` abre un host IPv6 y levanta ValueError.
+
+    El arranque moria con un traceback que hablaba de IPv4/IPv6 y no mencionaba
+    la contraseña. Ahora sale como hallazgo, no como excepcion.
+    """
+    monkeypatch.setenv("RENDER_SERVICE_ID", "srv-test")
+    settings = Settings(
+        environment="production",
+        database_url="postgresql://postgres:pa[ss]w@db.abc.supabase.co:5432/postgres?sslmode=require",
+        jwt_secret="a" * 64,
+        internal_service_token="b" * 64,
+        public_app_url="https://econexo.example.com",
+        cors_origins="https://econexo.example.com",
+        s3_enabled=False,
+    )
+    findings = settings.insecure_production_values()
+    assert "DATABASE_URL_ENCODING" in findings
+    # El sslmode esta bien puesto: no debe reportarse tambien.
+    assert "DATABASE_URL_SSLMODE" not in findings
+
+
+def test_url_encoded_password_passes_the_guard(monkeypatch) -> None:
+    monkeypatch.setenv("RENDER_SERVICE_ID", "srv-test")
+    settings = Settings(
+        environment="production",
+        database_url="postgresql://postgres:pa%5Bss%5Dw@db.abc.supabase.co:5432/postgres?sslmode=require",
+        jwt_secret="a" * 64,
+        internal_service_token="b" * 64,
+        public_app_url="https://econexo.example.com",
+        cors_origins="https://econexo.example.com",
+        s3_enabled=False,
+    )
+    assert settings.insecure_production_values() == []
+
+
+def test_dsn_without_query_does_not_confuse_the_tls_check() -> None:
+    settings = Settings()
+    assert settings._dsn_query("postgresql://u:p@host:5432/db") == ""
+    assert settings._dsn_query("postgresql://u:p@host:5432/db?sslmode=require") == "sslmode=require"
