@@ -86,6 +86,18 @@ def test_local_cors_accepts_localhost_and_loopback() -> None:
     assert "http://localhost:3000" in settings.cors_list
     assert "http://127.0.0.1:3000" in settings.cors_list
 
+def test_migration_dsn_prefers_a_dedicated_connection() -> None:
+    settings = Settings(
+        database_url="postgresql://runtime.example/econexo",
+        migrations_database_url="postgresql://migrations.example/econexo",
+    )
+    assert settings.migration_dsn == "postgresql://migrations.example/econexo"
+
+
+def test_migration_dsn_falls_back_to_application_connection() -> None:
+    settings = Settings(database_url="postgresql://runtime.example/econexo")
+    assert settings.migration_dsn == settings.dsn
+
 
 def test_secure_production_configuration_passes_launch_guard() -> None:
     settings = Settings(
@@ -135,7 +147,7 @@ def test_render_core_configuration_can_disable_optional_adapters(monkeypatch) ->
     monkeypatch.setenv("RENDER_SERVICE_ID", "srv-test")
     settings = Settings(
         environment="production",
-        database_url="postgresql://user:password@internal/econexo",
+        database_url="postgresql://user:password@pooler.supabase.com:5432/postgres?sslmode=require",
         jwt_secret="a" * 64,
         internal_service_token="b" * 64,
         public_app_url="https://econexo.example.com",
@@ -167,3 +179,61 @@ def test_render_placeholders_are_rejected(monkeypatch) -> None:
     assert "DATABASE_URL" in findings
     assert "JWT_SECRET" in findings
     assert "INTERNAL_SERVICE_TOKEN" in findings
+
+
+def test_production_requires_tls_towards_supabase(monkeypatch) -> None:
+    """La base ya no es un servicio interno de Render: el trafico sale a internet."""
+    monkeypatch.setenv("RENDER_SERVICE_ID", "srv-test")
+    settings = Settings(
+        environment="production",
+        database_url="postgresql://user:password@pooler.supabase.com:5432/postgres",
+        jwt_secret="a" * 64,
+        internal_service_token="b" * 64,
+        public_app_url="https://econexo.example.com",
+        cors_origins="https://econexo.example.com",
+        s3_enabled=False,
+    )
+    assert "DATABASE_URL_SSLMODE" in settings.insecure_production_values()
+
+
+def test_production_rejects_sslmode_that_accepts_plaintext(monkeypatch) -> None:
+    """`prefer` acepta texto plano en silencio si el servidor no ofrece TLS."""
+    monkeypatch.setenv("RENDER_SERVICE_ID", "srv-test")
+    settings = Settings(
+        environment="production",
+        database_url="postgresql://user:pw@pooler.supabase.com:5432/postgres?sslmode=prefer",
+        jwt_secret="a" * 64,
+        internal_service_token="b" * 64,
+        public_app_url="https://econexo.example.com",
+        cors_origins="https://econexo.example.com",
+        s3_enabled=False,
+    )
+    assert "DATABASE_URL_SSLMODE" in settings.insecure_production_values()
+
+
+def test_migrations_url_also_requires_tls(monkeypatch) -> None:
+    monkeypatch.setenv("RENDER_SERVICE_ID", "srv-test")
+    settings = Settings(
+        environment="production",
+        database_url="postgresql://user:pw@pooler.supabase.com:5432/postgres?sslmode=require",
+        migrations_database_url="postgresql://user:pw@db.supabase.co:5432/postgres",
+        jwt_secret="a" * 64,
+        internal_service_token="b" * 64,
+        public_app_url="https://econexo.example.com",
+        cors_origins="https://econexo.example.com",
+        s3_enabled=False,
+    )
+    assert "MIGRATIONS_DATABASE_URL_SSLMODE" in settings.insecure_production_values()
+
+
+def test_connect_kwargs_expose_supabase_extension_schema() -> None:
+    settings = Settings()
+    kwargs = settings.db_connect_kwargs
+    assert "extensions" in kwargs["server_settings"]["search_path"]
+    assert kwargs["statement_cache_size"] == 100
+
+
+def test_transaction_pooler_can_disable_prepared_statement_cache() -> None:
+    """El pooler de transacciones de Supabase (:6543) rompe con cache activo."""
+    settings = Settings(db_statement_cache_size=0)
+    assert settings.db_connect_kwargs["statement_cache_size"] == 0

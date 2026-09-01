@@ -4,7 +4,7 @@
 
 - Frontend Next.js estático en Cloudflare Workers/Assets.
 - API FastAPI en Render Web Service.
-- Render Postgres 16 con PostGIS.
+- Supabase PostgreSQL 16 con PostGIS (conexión TLS desde Render).
 - S3 o Cloudflare R2 privado para evidencias.
 - Broker MQTT administrado con TLS para dispositivos.
 - Servicios de anomalías, notificaciones e ingesta como servicios privados/workers cuando se habiliten.
@@ -24,6 +24,14 @@ S3_ENABLED=false
 Las funciones que no dependen de esos adaptadores —autenticación, organizaciones, suscripciones, usuarios, mapas, reglas, informes y administración— continúan disponibles. La carga de fotografías responde 503 hasta habilitar almacenamiento.
 
 ## Migraciones
+
+Con Supabase, cargar `DATABASE_URL` en Render con el URI de **Session pooler** (puerto `5432`) y `sslmode=require`. `MIGRATIONS_DATABASE_URL` es opcional para una conexión directa de DDL; sin ella, las migraciones usan `DATABASE_URL`.
+
+El arranque valida el `sslmode` en producción: sin él, o con `disable`/`allow`/`prefer`, `python -m app.check_config` aborta con `DATABASE_URL_SSLMODE`.
+
+`DB_SEARCH_PATH=public,extensions` es obligatorio en Supabase: PostGIS, `uuid-ossp` y `pgcrypto` se instalan en el esquema `extensions`, y el esquema de EcoNexo las invoca sin calificar. Las migraciones verifican esa visibilidad antes de aplicar nada y abortan con un mensaje que nombra el esquema, en vez de morir con un `function does not exist` a mitad de la 01.
+
+Para usar el Transaction pooler (`6543`) hay que poner además `DB_STATEMENT_CACHE_SIZE=0`: `asyncpg` cachea prepared statements y ese pooler no los soporta. El Session pooler no lo necesita.
 
 En un servicio pago, configurar el Pre-Deploy Command:
 
@@ -48,13 +56,14 @@ No usar `/ready` como health check inicial: puede responder 503 hasta sincroniza
 
 ## Orden de lanzamiento
 
-1. Crear Render Postgres y API en la misma región.
-2. Configurar variables con `.env.render.example` o Blueprint.
-3. Aplicar migraciones mediante Pre-Deploy en plan pago o al iniciar en plan gratuito.
-4. Confirmar `/health` y `/docs`.
-5. Sincronizar el límite oficial GeoRef desde Admin Core.
-6. Confirmar `/ready`.
-7. Desplegar el frontend Cloudflare con la URL pública de Render.
-8. Configurar S3/R2, Google, FIRMS y MQTT según el alcance contratado.
-9. Ejecutar pruebas de registro, login, licencias, reportes y alertas.
-10. Configurar backups, monitoreo y rollback antes del lanzamiento oficial.
+1. Crear el proyecto Supabase y confirmar que PostGIS está disponible.
+2. Cargar en Render el secreto `DATABASE_URL` con el Session pooler TLS de Supabase; eliminar el valor heredado de Render Postgres.
+3. Configurar las demás variables con `.env.render.example` o Blueprint.
+4. Aplicar migraciones mediante Pre-Deploy en plan pago o al iniciar en plan gratuito.
+5. Confirmar `/health` y `/docs`.
+6. Sincronizar el límite oficial GeoRef desde Admin Core.
+7. Confirmar `/ready`.
+8. Desplegar el frontend Cloudflare con la URL pública de Render.
+9. Configurar S3/R2, Google, FIRMS y MQTT según el alcance contratado.
+10. Ejecutar pruebas de registro, login, licencias, reportes y alertas.
+11. Configurar backups, monitoreo y rollback antes del lanzamiento oficial.

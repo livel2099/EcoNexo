@@ -51,7 +51,8 @@ NODES_PER_ORG = {"municipio": 12, "forestal": 14, "energetica": 12}
 
 
 async def main() -> None:
-    conn = await asyncpg.connect(get_settings().dsn)
+    settings = get_settings()
+    conn = await asyncpg.connect(settings.dsn, **settings.db_connect_kwargs)
     try:
         await _reset(conn)
         for row in ORGS:

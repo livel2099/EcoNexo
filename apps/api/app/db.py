@@ -1,4 +1,9 @@
-"""Pool asyncpg compartido. asyncpg maneja PostGIS via texto/GeoJSON en SQL."""
+"""Pool asyncpg compartido. asyncpg maneja PostGIS via texto/GeoJSON en SQL.
+
+La base es Supabase: la conexion sale a internet por el Session pooler, no es
+un servicio interno. Eso obliga a fijar el ``search_path`` (las extensiones no
+viven en ``public``) y a poder desactivar el cache de prepared statements.
+"""
 from __future__ import annotations
 
 import asyncpg
@@ -17,6 +22,7 @@ async def connect() -> asyncpg.Pool:
             min_size=settings.db_pool_min_size,
             max_size=settings.db_pool_max_size,
             command_timeout=settings.db_command_timeout_seconds,
+            **settings.db_connect_kwargs,
         )
     return _pool
 

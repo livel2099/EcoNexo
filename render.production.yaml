@@ -1,15 +1,6 @@
-# EcoNexo rc.6.2 - Blueprint de producción para Render.
-databases:
-  - name: econexo-db
-    plan: basic-256mb
-    diskSizeGB: 15
-    storageAutoscalingEnabled: true
-    region: oregon
-    postgresMajorVersion: "16"
-    databaseName: econexo
-    user: econexo_app
-    ipAllowList: []
-
+# EcoNexo rc.6.2 - API y web en Render; PostgreSQL/PostGIS en Supabase.
+# DATABASE_URL se carga como secreto en Render (no se versiona ni se vincula
+# a una base de Render). Ver RENDER_DEPLOY.md.
 services:
   - type: web
     name: econexo
@@ -29,15 +20,19 @@ services:
       - key: RELEASE_VERSION
         value: 1.0.0-rc.6.2-render
       - key: DATABASE_URL
-        fromDatabase:
-          name: econexo-db
-          property: connectionString
+        sync: false
       - key: DB_POOL_MIN_SIZE
         value: "1"
       - key: DB_POOL_MAX_SIZE
         value: "10"
       - key: DB_COMMAND_TIMEOUT_SECONDS
         value: "30"
+      # Supabase instala las extensiones en el esquema `extensions`.
+      - key: DB_SEARCH_PATH
+        value: "public,extensions"
+      # 0 solo si se conecta por el Transaction pooler (:6543).
+      - key: DB_STATEMENT_CACHE_SIZE
+        value: "100"
       - key: RUN_MIGRATIONS_ON_START
         value: "false"
       - key: JWT_SECRET

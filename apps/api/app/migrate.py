@@ -57,6 +57,41 @@ async def _ensure_tracking(conn: asyncpg.Connection) -> None:
     )
 
 
+# Las tres que crea 01_schema.sql y que el esquema usa sin calificar
+# (uuid_generate_v4, gen_random_uuid, ST_MakePoint...).
+_REQUIRED_EXTENSIONS = ("postgis", "uuid-ossp", "pgcrypto")
+
+
+async def _check_extension_visibility(conn: asyncpg.Connection) -> None:
+    """Falla temprano si una extension existe pero fuera del search_path.
+
+    Es el modo de falla tipico de Supabase: habilitar PostGIS desde el panel la
+    instala en el esquema ``extensions``. Ahi ``CREATE EXTENSION IF NOT EXISTS``
+    no hace nada, pero ``uuid_generate_v4()`` tampoco resuelve, y la migracion
+    01 muere con un "function does not exist" que no dice nada del search_path.
+    """
+    invisibles = await conn.fetch(
+        """
+        SELECT e.extname, n.nspname
+        FROM pg_extension e
+        JOIN pg_namespace n ON n.oid = e.extnamespace
+        WHERE e.extname = ANY($1::text[])
+          AND n.nspname <> ALL (current_schemas(true))
+        """,
+        list(_REQUIRED_EXTENSIONS),
+    )
+    if not invisibles:
+        return
+    detalle = ", ".join(f"{row['extname']} en '{row['nspname']}'" for row in invisibles)
+    visibles = await conn.fetchval("SELECT array_to_string(current_schemas(true), ',')")
+    raise RuntimeError(
+        f"Extensiones fuera del search_path: {detalle}. "
+        f"El search_path actual es '{visibles}'. "
+        "Agregue esos esquemas a DB_SEARCH_PATH (en Supabase suele ser "
+        "'public,extensions') y vuelva a ejecutar las migraciones."
+    )
+
+
 async def _database_has_core_schema(conn: asyncpg.Connection) -> bool:
     return bool(
         await conn.fetchval("SELECT to_regclass('public.organizations') IS NOT NULL")
@@ -71,8 +106,9 @@ async def migrate(
 ) -> None:
     settings = get_settings()
     conn = await asyncpg.connect(
-        dsn=settings.dsn,
+        dsn=settings.migration_dsn,
         command_timeout=max(settings.db_command_timeout_seconds, 120.0),
+        **settings.db_connect_kwargs,
     )
     try:
         await conn.execute("SELECT pg_advisory_lock($1)", _LOCK_ID)
@@ -96,6 +132,10 @@ async def migrate(
                 state = "aplicada" if row else "pendiente"
                 print(f"{state:9} {path.name}")
             return
+
+        # Despues de --status para que consultar el estado siga funcionando
+        # aunque el search_path este mal, que es justo cuando se lo consulta.
+        await _check_extension_visibility(conn)
 
         if core_existed and not tracking_existed and not applied and not baseline_existing:
             raise RuntimeError(

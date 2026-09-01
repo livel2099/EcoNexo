@@ -10,7 +10,7 @@ from app.schemas import PasswordChangeIn
 def test_platform_admin_bootstrap_configuration_is_secure() -> None:
     settings = Settings(
         environment="production",
-        database_url="postgresql://user:password@database/econexo",
+        database_url="postgresql://user:password@pooler.supabase.com:5432/postgres?sslmode=require",
         jwt_secret="a" * 64,
         internal_service_token="b" * 64,
         forwarded_allow_ips="127.0.0.1",

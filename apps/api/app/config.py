@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     release_version: str = "1.0.0-rc.6.2"
 
     database_url: str = ""
+    # Opcional: una conexión directa separada para DDL/migraciones. Si no se
+    # define, las migraciones usan DATABASE_URL igual que la aplicación.
+    migrations_database_url: str = ""
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "econexo"
@@ -23,6 +26,16 @@ class Settings(BaseSettings):
     db_pool_min_size: int = 2
     db_pool_max_size: int = 10
     db_command_timeout_seconds: float = 30.0
+    # Supabase instala postgis, uuid-ossp y pgcrypto en el esquema `extensions`,
+    # no en `public`. Sin este search_path, `uuid_generate_v4()` y las funciones
+    # ST_* no resuelven y la migracion 01 falla en el primer DEFAULT. Postgres
+    # ignora en silencio los esquemas del search_path que no existen, asi que el
+    # valor por defecto tambien sirve para el Postgres local del compose.
+    db_search_path: str = "public,extensions"
+    # asyncpg cachea prepared statements. El Session pooler de Supabase (5432)
+    # lo soporta; el Transaction pooler (6543) no, y responde
+    # "prepared statement already exists". Poner 0 desactiva el cache.
+    db_statement_cache_size: int = 100
 
     jwt_secret: str = "change_me_dev_secret"
     jwt_algorithm: str = "HS256"
@@ -102,6 +115,33 @@ class Settings(BaseSettings):
         return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
 
     @property
+    def migration_dsn(self) -> str:
+        return self.migrations_database_url.strip() or self.dsn
+
+    @property
+    def db_connect_kwargs(self) -> dict[str, object]:
+        """Parametros comunes a todas las conexiones asyncpg del proyecto.
+
+        Centralizado para que el pool del API, las migraciones y el seeder
+        hablen con la misma base de la misma forma. Antes cada uno abria la
+        conexion por su cuenta y solo el pool tenia timeout configurado.
+        """
+        return {
+            "server_settings": {"search_path": self.db_search_path.strip() or "public"},
+            "statement_cache_size": max(0, self.db_statement_cache_size),
+        }
+
+    @staticmethod
+    def _dsn_has_tls(dsn: str) -> bool:
+        query = urlparse(dsn).query
+        modes = [
+            value.split("=", 1)[1].strip().lower()
+            for value in query.split("&")
+            if value.strip().lower().startswith("sslmode=")
+        ]
+        return bool(modes) and modes[-1] not in {"disable", "allow", "prefer"}
+
+    @property
     def cors_list(self) -> list[str]:
         origins = [origin.strip().rstrip("/") for origin in self.cors_origins.split(",") if origin.strip()]
         for origin in (self.public_app_url, self.econexo_web_origin):
@@ -162,6 +202,13 @@ class Settings(BaseSettings):
             findings.append("CORS_ORIGINS")
         if os.getenv("RENDER_SERVICE_ID") and self._placeholder(self.database_url):
             findings.append("DATABASE_URL")
+        # La base dejo de ser un servicio interno de Render: ahora el trafico
+        # sale a internet hacia Supabase. Sin sslmode explicito, libpq/asyncpg
+        # aceptan texto plano si el servidor lo ofrece.
+        elif self.database_url.strip() and not self._dsn_has_tls(self.database_url):
+            findings.append("DATABASE_URL_SSLMODE")
+        if self.migrations_database_url.strip() and not self._dsn_has_tls(self.migrations_database_url):
+            findings.append("MIGRATIONS_DATABASE_URL_SSLMODE")
         if self.platform_admin_bootstrap_enabled and (
             not self.platform_admin_list or len(self.platform_admin_initial_password) < 12
         ):

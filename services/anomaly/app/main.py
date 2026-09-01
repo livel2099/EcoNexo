@@ -19,6 +19,12 @@ MODEL = AnomalyModel()
 
 
 def _dsn() -> str:
+    # DATABASE_URL primero: al mover la base a Supabase, las POSTGRES_* dejaron
+    # de describir un host alcanzable y este servicio seguia apuntando a
+    # localhost, entrenando siempre con cero muestras.
+    url = os.getenv("DATABASE_URL", "").strip()
+    if url:
+        return url
     return (
         f"postgresql://{os.getenv('POSTGRES_USER','econexo')}:"
         f"{os.getenv('POSTGRES_PASSWORD','econexo_dev_pw')}@"
@@ -27,9 +33,18 @@ def _dsn() -> str:
     )
 
 
+def _connect_kwargs() -> dict[str, object]:
+    """Mismo search_path que el API: las extensiones no viven en `public`."""
+    return {
+        "server_settings": {
+            "search_path": os.getenv("DB_SEARCH_PATH", "public,extensions")
+        }
+    }
+
+
 async def _train_from_db() -> None:
     try:
-        conn = await asyncpg.connect(_dsn())
+        conn = await asyncpg.connect(_dsn(), **_connect_kwargs())
     except Exception as exc:
         log.warning("No se pudo conectar a la DB para entrenar: %s", exc)
         return

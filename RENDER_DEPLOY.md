@@ -3,14 +3,25 @@
 Esta edición despliega tres componentes:
 
 ```text
-PostgreSQL/PostGIS  -> econexo-db
+Supabase PostgreSQL/PostGIS -> Base EcoNexo
 API FastAPI         -> EcoNexo / econexo.onrender.com
 Frontend estático   -> econexo-web.onrender.com
 ```
 
-Los archivos `render.yaml` y `render.production.yaml` también permiten crear la arquitectura completa mediante Blueprint.
+Los Blueprints despliegan API y frontend en Render. `DATABASE_URL` queda como secreto manual de Render y apunta a Supabase; ya no se vincula una base de Render.
 
 ## 1. API existente
+
+### Conectar Supabase
+
+1. Crear el proyecto de Supabase y conservar su contraseña únicamente en un gestor de secretos.
+2. En **Connect**, copiar el URI de **Session pooler** (puerto `5432`), no el Transaction pooler (`6543`). Agregar `?sslmode=require` si no viene incluido.
+3. En Render > EcoNexo API > Environment, eliminar el `DATABASE_URL` heredado de la base suspendida y cargar la URL de Supabase como secreto. Nunca exponerla con prefijo `NEXT_PUBLIC_`.
+4. Verificar que PostGIS esté habilitado/disponible en Supabase. La primera migración de EcoNexo ejecuta `CREATE EXTENSION IF NOT EXISTS postgis`.
+5. Dejar `DB_SEARCH_PATH=public,extensions`. Cuando PostGIS se habilita desde el panel de Supabase queda instalado en el esquema `extensions`, no en `public`: ahí `CREATE EXTENSION IF NOT EXISTS` no hace nada, pero `uuid_generate_v4()` y las funciones `ST_*` tampoco resuelven. `python -m app.migrate` detecta ese caso antes de aplicar nada y aborta con el nombre del esquema en el mensaje.
+6. Mantener `DB_STATEMENT_CACHE_SIZE=100`. Ponerlo en `0` **solo** si se usa el Transaction pooler (`:6543`), que no soporta prepared statements y responde `prepared statement "__asyncpg_stmt_x__" already exists`.
+
+Para una conexión directa exclusiva de DDL se puede definir `MIGRATIONS_DATABASE_URL`; si se deja vacía, `python -m app.migrate` usa `DATABASE_URL` (Session pooler).
 
 En el Web Service de la API:
 
@@ -43,7 +54,8 @@ RUN_MIGRATIONS_ON_START=false
 Importar `.env.render.example` y completar como mínimo:
 
 ```env
-DATABASE_URL=INTERNAL_DATABASE_URL_DE_RENDER
+DATABASE_URL=SUPABASE_SESSION_POOLER_URL_CON_SSLMODE_REQUIRE
+DB_SEARCH_PATH=public,extensions
 JWT_SECRET=SECRETO_ALEATORIO_1
 INTERNAL_SERVICE_TOKEN=SECRETO_ALEATORIO_2
 PUBLIC_APP_URL=https://econexo-web.onrender.com
@@ -169,3 +181,8 @@ https://econexo.onrender.com/health
 ```
 
 Si apunta a `localhost`, el frontend fue construido con variables antiguas. Si devuelve CORS, corregir `CORS_ORIGINS` en la API y redesplegarla.
+Si el log muestra `socket.gaierror: Name or service not known`, la API conserva una URL de Render suspendida o un host incompleto. Reemplazá el secreto por la URL de Session pooler de Supabase y redesplegá; no es un problema de CORS.
+
+Si el arranque aborta con `Configuracion incompleta o insegura: DATABASE_URL_SSLMODE`, la URL no lleva `sslmode` o lleva uno que acepta texto plano (`disable`, `allow`, `prefer`). El tráfico a Supabase sale a internet: usar `sslmode=require` como mínimo.
+
+Si `python -m app.migrate` aborta con `Extensiones fuera del search_path`, corregir `DB_SEARCH_PATH` con los esquemas que indica el mensaje. `python -m app.migrate --status` sigue funcionando en ese estado para inspeccionar qué migraciones faltan.
