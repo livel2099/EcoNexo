@@ -279,3 +279,24 @@ def test_dsn_without_query_does_not_confuse_the_tls_check() -> None:
     settings = Settings()
     assert settings._dsn_query("postgresql://u:p@host:5432/db") == ""
     assert settings._dsn_query("postgresql://u:p@host:5432/db?sslmode=require") == "sslmode=require"
+
+
+def test_describe_dsn_hides_the_password() -> None:
+    resumen = Settings.describe_dsn(
+        "postgresql://postgres.abc:sup3r-secret@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
+    )
+    assert resumen == "postgres.abc@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
+    assert "sup3r-secret" not in resumen
+
+
+def test_describe_dsn_survives_a_password_with_reserved_characters() -> None:
+    """Es justo el caso en que hace falta: urlparse aca levanta ValueError."""
+    resumen = Settings.describe_dsn(
+        "postgresql://postgres:pa[ss]@w0rd@db.abc.supabase.co:5432/postgres"
+    )
+    assert resumen == "postgres@db.abc.supabase.co:5432/postgres"
+    assert "pa[ss]" not in resumen
+
+
+def test_describe_dsn_handles_an_empty_url() -> None:
+    assert Settings.describe_dsn("") == "(vacia)"

@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import socket
 from pathlib import Path
 
 import asyncpg
@@ -105,11 +106,33 @@ async def migrate(
     strict_checksums: bool = False,
 ) -> None:
     settings = get_settings()
-    conn = await asyncpg.connect(
-        dsn=settings.migration_dsn,
-        command_timeout=max(settings.db_command_timeout_seconds, 120.0),
-        **settings.db_connect_kwargs,
+    origen = (
+        "MIGRATIONS_DATABASE_URL"
+        if settings.migrations_database_url.strip()
+        else "DATABASE_URL"
     )
+    destino = settings.describe_dsn(settings.migration_dsn)
+    print(f"Conectando a {destino} (desde {origen})")
+    try:
+        conn = await asyncpg.connect(
+            dsn=settings.migration_dsn,
+            command_timeout=max(settings.db_command_timeout_seconds, 120.0),
+            **settings.db_connect_kwargs,
+        )
+    except socket.gaierror as exc:
+        raise SystemExit(
+            f"No se pudo resolver el host de {origen}: {destino}
+"
+            "  El nombre no existe en DNS. Causas habituales:
+"
+            "  - Es el host de Direct connection (db.<ref>.supabase.co). Usar el
+"
+            "    Session pooler: postgres.<ref>@aws-<n>-<region>.pooler.supabase.com:5432
+"
+            "  - El proyecto de Supabase esta pausado: Supabase retira el DNS al pausar.
+"
+            f"  Detalle: {exc}"
+        ) from exc
     try:
         await conn.execute("SELECT pg_advisory_lock($1)", _LOCK_ID)
         tracking_existed = bool(

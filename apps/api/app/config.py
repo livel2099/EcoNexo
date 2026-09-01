@@ -154,6 +154,27 @@ class Settings(BaseSettings):
         return bool(modes) and modes[-1] not in {"disable", "allow", "prefer"}
 
     @staticmethod
+    def describe_dsn(dsn: str) -> str:
+        """`usuario@host:puerto/base` sin la contraseña, para log.
+
+        Un `getaddrinfo: Name or service not known` no dice que host intento
+        resolver, asi que no se puede distinguir entre una URL mal cargada y un
+        problema de red sin adivinar. Se parsea a mano, nunca con urlparse: si
+        la contraseña trae caracteres reservados esto tiene que seguir
+        funcionando, que es justo cuando mas se lo necesita.
+        """
+        if not dsn.strip():
+            return "(vacia)"
+        resto = dsn.split("://", 1)[-1]
+        resto = resto.split("?", 1)[0]
+        netloc, _, ruta = resto.partition("/")
+        # rsplit: la contraseña puede tener un `@` sin codificar, el separador
+        # real es el ultimo.
+        userinfo, _, hostport = netloc.rpartition("@")
+        usuario = userinfo.split(":", 1)[0] if userinfo else "(sin usuario)"
+        return f"{usuario}@{hostport or '(sin host)'}/{ruta or '(sin base)'}"
+
+    @staticmethod
     def _dsn_is_parseable(dsn: str) -> bool:
         """Anticipa el mismo ValueError que asyncpg lanzaria al conectar.
 
