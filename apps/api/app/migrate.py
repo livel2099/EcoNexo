@@ -121,16 +121,11 @@ async def migrate(
         )
     except socket.gaierror as exc:
         raise SystemExit(
-            f"No se pudo resolver el host de {origen}: {destino}
-"
-            "  El nombre no existe en DNS. Causas habituales:
-"
-            "  - Es el host de Direct connection (db.<ref>.supabase.co). Usar el
-"
-            "    Session pooler: postgres.<ref>@aws-<n>-<region>.pooler.supabase.com:5432
-"
-            "  - El proyecto de Supabase esta pausado: Supabase retira el DNS al pausar.
-"
+            f"No se pudo resolver el host de {origen}: {destino}\n"
+            "  El nombre no existe en DNS. Causas habituales:\n"
+            "  - Es el host de Direct connection (db.<ref>.supabase.co). Usar el\n"
+            "    Session pooler: postgres.<ref>@aws-<n>-<region>.pooler.supabase.com:5432\n"
+            "  - El proyecto de Supabase esta pausado: Supabase retira el DNS al pausar.\n"
             f"  Detalle: {exc}"
         ) from exc
     try:
