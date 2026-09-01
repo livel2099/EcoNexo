@@ -40,6 +40,7 @@ from .routers import (
     territory,
     zones,
 )
+from .platform_admin import ensure_platform_admin
 from .security import decode_token
 from .telemetry_pipeline import pipeline_scheduler
 from .ws import manager, mqtt_bridge
@@ -56,6 +57,19 @@ async def lifespan(app: FastAPI):
     # Cada ciclo de vida conserva su propio evento: evita tareas heredadas en reinicios.
     stop = asyncio.Event()
     await db.connect()
+    # ensure_platform_admin existia desde el bootstrap del proyecto pero no la
+    # invocaba nadie: la cuenta de administracion general nunca se creaba y el
+    # login respondia "Credenciales invalidas" con la configuracion correcta.
+    # Es idempotente y no hace nada si PLATFORM_ADMIN_BOOTSTRAP_ENABLED es false.
+    try:
+        await ensure_platform_admin()
+    except Exception:
+        # Un fallo aca no puede impedir que la API atienda: el resto del sistema
+        # funciona sin la cuenta de plataforma. Se registra completo para que no
+        # vuelva a pasar en silencio.
+        logging.getLogger("econexo.api").exception(
+            "No se pudo asegurar el administrador general"
+        )
     workers = [asyncio.create_task(mqtt_bridge(stop), name="mqtt-bridge")]
     if s.pipeline_scheduler_enabled:
         workers.append(
