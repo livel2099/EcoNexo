@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     # el pronostico, sobre todo desde una IP de salida compartida.
     agro_http_timeout_seconds: float = 45.0
     agro_http_retries: int = 3
+    # Clave del plan comercial de Open-Meteo. El plan gratuito limita por IP de
+    # origen, y en Render la IP de salida es compartida con otros inquilinos:
+    # el 429 llega aunque EcoNexo consulte poco. Con clave, el cupo es propio.
+    # Las URL comerciales van en OPEN_METEO_*_URL; la clave se agrega sola.
+    open_meteo_api_key: str = ""
     nasa_firms_key: str = ""
     firms_inline_enabled: bool = True
     firms_source: str = "VIIRS_SNPP_NRT"

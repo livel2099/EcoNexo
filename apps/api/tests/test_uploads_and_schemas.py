@@ -300,3 +300,31 @@ def test_describe_dsn_survives_a_password_with_reserved_characters() -> None:
 
 def test_describe_dsn_handles_an_empty_url() -> None:
     assert Settings.describe_dsn("") == "(vacia)"
+
+
+def test_invalid_boolean_env_var_is_reported_per_variable(monkeypatch, capsys) -> None:
+    """Un caracter de mas al pegar en Render invalidaba el arranque sin explicar cual."""
+    from pydantic import ValidationError
+
+    from app import check_config
+
+    def _falla():
+        raise ValidationError.from_exception_data(
+            "Settings",
+            [
+                {
+                    "type": "bool_parsing",
+                    "loc": ("platform_admin_force_password_change",),
+                    "input": "true<",
+                }
+            ],
+        )
+
+    monkeypatch.setattr(check_config, "get_settings", _falla)
+    with pytest.raises(SystemExit) as exc:
+        check_config._cargar_settings()
+    mensaje = str(exc.value)
+    assert "PLATFORM_ADMIN_FORCE_PASSWORD_CHANGE" in mensaje
+    assert "'true<'" in mensaje
+    # El stack de pydantic no aporta nada aca.
+    assert "pydantic_core" not in mensaje

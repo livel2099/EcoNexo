@@ -77,6 +77,10 @@ services:
         value: "45"
       - key: AGRO_HTTP_RETRIES
         value: "3"
+      # Plan comercial de Open-Meteo: sin clave, el cupo depende de la IP de
+      # salida de Render, que es compartida y devuelve 429 sin motivo propio.
+      - key: OPEN_METEO_API_KEY
+        sync: false
       - key: COPERNICUS_ENABLED_BY_DEFAULT
         value: "true"
       - key: COPERNICUS_MODE

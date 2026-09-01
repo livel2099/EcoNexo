@@ -68,3 +68,40 @@ def test_cada_ip_tiene_su_propio_cupo() -> None:
         )
 
     asyncio.run(_correr())
+
+
+def test_un_exito_devuelve_el_cupo_completo() -> None:
+    """Sin esto, tipear mal la contrasena y despues acertar dejaba bloqueado."""
+    request = _RequestFalso("203.0.113.9")
+
+    async def _correr() -> None:
+        for _ in range(2):
+            await rate_limit.enforce_rate_limit(
+                request, bucket="auth-password", limit=3, window_seconds=900
+            )
+        await rate_limit.clear_rate_limit(request, bucket="auth-password")
+        # El cupo vuelve entero: tres intentos mas sin 429.
+        for _ in range(3):
+            await rate_limit.enforce_rate_limit(
+                request, bucket="auth-password", limit=3, window_seconds=900
+            )
+
+    asyncio.run(_correr())
+
+
+def test_limpiar_no_afecta_a_otras_ips() -> None:
+    async def _correr() -> None:
+        otra = _RequestFalso("198.51.100.7")
+        for _ in range(3):
+            await rate_limit.enforce_rate_limit(
+                otra, bucket="auth-password", limit=3, window_seconds=900
+            )
+        await rate_limit.clear_rate_limit(
+            _RequestFalso("203.0.113.9"), bucket="auth-password"
+        )
+        with pytest.raises(HTTPException):
+            await rate_limit.enforce_rate_limit(
+                otra, bucket="auth-password", limit=3, window_seconds=900
+            )
+
+    asyncio.run(_correr())

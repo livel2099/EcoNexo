@@ -102,8 +102,18 @@ async def ensure_platform_admin() -> None:
                         user["id"],
                         settings.platform_admin_name.strip() or "Administrador General EcoNexo",
                     )
+                # Tambien access_status: si la cuenta nacio del formulario de
+                # registro, su organizacion quedo en 'pending' y el login
+                # responde 403 aunque la contrasena sea correcta. El bootstrap
+                # solo reactivaba is_active, asi que la administracion general
+                # quedaba bloqueada fuera de su propia plataforma sin que
+                # ningun redeploy lo corrigiera.
                 await conn.execute(
-                    "UPDATE organizations SET is_active=true, updated_at=now() WHERE id=$1",
+                    """
+                    UPDATE organizations
+                    SET is_active=true, access_status='approved', updated_at=now()
+                    WHERE id=$1
+                    """,
                     user["org_id"],
                 )
 

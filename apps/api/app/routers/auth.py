@@ -13,7 +13,7 @@ from .. import db
 from ..config import get_settings
 from ..deps import CurrentUser, current_user
 from ..foi_schemas import CommunityRegisterIn
-from ..rate_limit import enforce_rate_limit
+from ..rate_limit import clear_rate_limit, enforce_rate_limit
 from ..schemas import (
     ChangePasswordIn,
     GoogleAuthIn,
@@ -112,6 +112,8 @@ async def login(body: LoginIn, request: Request) -> TokenOut:
             "Tu cuenta está suspendida. Escribí a administración general para reactivarla.",
         )
     await db.pool().execute("UPDATE users SET last_login_at=now() WHERE id=$1", row["id"])
+    # Credencial correcta: no hay fuerza bruta que limitar desde esta IP.
+    await clear_rate_limit(request, bucket="auth-password")
     return _session(row)
 
 

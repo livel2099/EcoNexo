@@ -82,6 +82,8 @@ DELETE FROM rate_limit_hits
 WHERE hit_at < now() - make_interval(secs => $1)
 """
 
+_CLEAR_SQL = "DELETE FROM rate_limit_hits WHERE bucket_key = $1"
+
 
 async def _enforce_in_memory(key: str, limit: int, window_seconds: int) -> None:
     now = time.monotonic()
@@ -135,3 +137,25 @@ async def enforce_rate_limit(
         # de auth sin ningun limite es peor que uno limitado por proceso.
         log.warning("Limitador compartido no disponible (%s); se usa el local", exc)
         await _enforce_in_memory(key, limit, window_seconds)
+
+
+async def clear_rate_limit(request: Request, *, bucket: str) -> None:
+    """Devuelve el cupo entero tras una operacion exitosa.
+
+    El limitador defiende contra fuerza bruta, y una credencial correcta prueba
+    que no la hay. Contando tambien los aciertos, unos pocos tipeos mal seguidos
+    de un login bueno dejaban al usuario bloqueado 15 minutos por su propia
+    cuenta ya validada. Ahora el contador solo acumula intentos fallidos.
+    """
+    key = f"{bucket}:{client_ip(request)}"
+    async with _lock:
+        _hits.pop(key, None)
+    try:
+        pool = db.pool()
+    except RuntimeError:
+        return
+    try:
+        await pool.execute(_CLEAR_SQL, key)
+    except Exception as exc:
+        # No es critico: las filas vencen solas al cerrar la ventana.
+        log.warning("No se pudo limpiar el limite de %s: %s", bucket, exc)

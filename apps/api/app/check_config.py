@@ -1,6 +1,8 @@
 """Valida variables de entorno sin iniciar Uvicorn ni conectarse a la base."""
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 from .config import get_settings
 
 # En Render lo unico que se ve es este log: el nombre del hallazgo por si solo
@@ -22,8 +24,30 @@ _PISTAS = {
 }
 
 
+def _cargar_settings():
+    """Traduce el ValidationError de pydantic a una linea por variable.
+
+    El traceback crudo ocupa quince lineas de stack de pydantic y entierra el
+    unico dato util —que variable y con que valor— en la ultima. En Render eso
+    es lo unico que se ve, y cada lectura equivocada cuesta un deploy.
+    """
+    try:
+        return get_settings()
+    except ValidationError as exc:
+        lineas = ["Variables de entorno con valores invalidos:"]
+        for error in exc.errors():
+            variable = str(error["loc"][0]).upper() if error["loc"] else "(desconocida)"
+            recibido = repr(error.get("input"))
+            lineas.append(f"  - {variable}: {error['msg']}. Recibido: {recibido}")
+        lineas.append(
+            "  Revisar esos valores en Render > Environment. Un caracter de mas"
+        )
+        lineas.append("  al pegar (por ejemplo 'true<') alcanza para invalidarlos.")
+        raise SystemExit("\n".join(lineas)) from exc
+
+
 def main() -> None:
-    settings = get_settings()
+    settings = _cargar_settings()
     findings = settings.insecure_production_values()
     if findings:
         lineas = ["Configuracion incompleta o insegura: " + ", ".join(findings)]

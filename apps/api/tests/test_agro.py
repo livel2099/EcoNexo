@@ -324,10 +324,13 @@ def test_ningun_plan_racionaria_informes():
 # --------------------------------------------------------------------------
 
 class _RespuestaFalsa:
-    def __init__(self, status_code, payload=None, text=""):
+    def __init__(self, status_code, payload=None, text="", headers=None):
         self.status_code = status_code
         self._payload = payload or {}
         self.text = text
+        # httpx siempre expone headers; el doble tambien, para que un cambio
+        # que los lea no falle por el doble en vez de por el codigo.
+        self.headers = headers or {}
 
     def json(self):
         return self._payload
@@ -350,7 +353,7 @@ class _ClienteFalso:
         return False
 
     async def get(self, url, params=None):
-        self._registro.append(url)
+        self._registro.append((url, dict(params or {})))
         siguiente = self._respuestas.pop(0)
         if isinstance(siguiente, Exception):
             raise siguiente
@@ -463,3 +466,85 @@ def test_ante_un_dia_solapado_gana_el_dato_observado():
     assert len(serie) == 1
     assert serie[0].tmax == 30.0
     assert serie[0].precipitation_mm == 12.0
+
+
+@pytest.mark.asyncio
+async def test_la_clave_comercial_viaja_en_cada_consulta(monkeypatch, sin_esperas):
+    """Con clave propia el cupo deja de depender de la IP compartida del hosting."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("OPEN_METEO_API_KEY", "clave-de-prueba")
+    get_settings.cache_clear()
+    try:
+        registro = _montar(monkeypatch, [_RespuestaFalsa(200, {"daily": {"time": []}})])
+        await agro._consultar("https://x/y", {"latitude": "-27.4"}, "pronóstico")
+        _, params = registro[0]
+        assert params["apikey"] == "clave-de-prueba"
+        assert params["latitude"] == "-27.4"
+    finally:
+        get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_sin_clave_no_se_agrega_el_parametro(monkeypatch, sin_esperas):
+    registro = _montar(monkeypatch, [_RespuestaFalsa(200, {"daily": {"time": []}})])
+    await agro._consultar("https://x/y", {"latitude": "-27.4"}, "pronóstico")
+    _, params = registro[0]
+    assert "apikey" not in params
+
+
+@pytest.mark.asyncio
+async def test_respeta_el_retry_after_del_servidor(monkeypatch):
+    """La espera lineal previa era mas corta que cualquier ventana real."""
+    esperas = []
+
+    async def _dormir(segundos):
+        esperas.append(segundos)
+
+    monkeypatch.setattr(agro.asyncio, "sleep", _dormir)
+    _montar(monkeypatch, [
+        _RespuestaFalsa(429, headers={"retry-after": "12"}),
+        _RespuestaFalsa(200, {"daily": {"time": []}}),
+    ])
+    await agro._consultar("https://x/y", {}, "histórico")
+    assert esperas == [12.0]
+
+
+@pytest.mark.asyncio
+async def test_un_retry_after_desmedido_se_recorta(monkeypatch):
+    """Bloquear el request media hora es peor que reportar el limite."""
+    esperas = []
+
+    async def _dormir(segundos):
+        esperas.append(segundos)
+
+    monkeypatch.setattr(agro.asyncio, "sleep", _dormir)
+    _montar(monkeypatch, [
+        _RespuestaFalsa(429, headers={"retry-after": "3600"}),
+        _RespuestaFalsa(200, {"daily": {"time": []}}),
+    ])
+    await agro._consultar("https://x/y", {}, "histórico")
+    assert esperas == [30.0]
+
+
+@pytest.mark.asyncio
+async def test_sin_retry_after_la_espera_crece_geometricamente(monkeypatch):
+    esperas = []
+
+    async def _dormir(segundos):
+        esperas.append(segundos)
+
+    monkeypatch.setattr(agro.asyncio, "sleep", _dormir)
+    _montar(monkeypatch, [_RespuestaFalsa(429)] * 3)
+    with pytest.raises(agro.OpenMeteoError):
+        await agro._consultar("https://x/y", {}, "histórico")
+    # Antes eran 1.5 y 3.0 segundos: 4.5 en total para un cupo por IP.
+    assert esperas == [1.5, 4.5]
+
+
+@pytest.mark.asyncio
+async def test_el_mensaje_sugiere_la_clave_solo_si_falta(monkeypatch, sin_esperas):
+    _montar(monkeypatch, [_RespuestaFalsa(429)] * 3)
+    with pytest.raises(agro.OpenMeteoError) as exc:
+        await agro._consultar("https://x/y", {}, "histórico")
+    assert "OPEN_METEO_API_KEY" in str(exc.value)
