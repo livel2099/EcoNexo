@@ -22,7 +22,12 @@ from ..schemas import (
     RegistrationPendingOut,
     TokenOut,
 )
-from ..security import create_access_token, hash_secret, verify_secret
+from ..security import (
+    burn_verification_time,
+    create_access_token,
+    hash_secret,
+    verify_secret,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -86,7 +91,12 @@ async def login(body: LoginIn, request: Request) -> TokenOut:
         """,
         str(body.email).strip(),
     )
-    if row is None or not verify_secret(body.password, row["password_hash"]):
+    if row is None:
+        # Se gasta el tiempo de argon2 igual: sin esto el correo inexistente
+        # respondia mucho mas rapido y delataba que cuentas existen.
+        burn_verification_time()
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales inválidas")
+    if not verify_secret(body.password, row["password_hash"]):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciales inválidas")
     # Recien con la contraseña verificada se explica por que no puede entrar:
     # antes de eso el mensaje delataria que la cuenta existe.

@@ -26,3 +26,16 @@ def test_citizen_token_round_trip(monkeypatch) -> None:
 def test_token_digest_does_not_store_raw_token() -> None:
     assert token_digest("secret-token") != "secret-token"
     assert token_digest("secret-token") == token_digest("secret-token")
+
+
+def test_current_user_rejects_citizen_token_with_401() -> None:
+    """El token ciudadano no trae org_id ni un sub UUID: debe ser 401, no 500."""
+    import asyncio
+
+    from fastapi import HTTPException
+
+    from app.deps import current_user
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(current_user(authorization=f"Bearer {create_citizen_token()}"))
+    assert exc.value.status_code == 401

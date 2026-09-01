@@ -27,10 +27,20 @@ async def current_user(authorization: str = Header(default="")) -> CurrentUser:
     payload = decode_token(authorization.split(" ", 1)[1])
     if payload is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token invalido o expirado")
+    # Un token ciudadano esta firmado con la misma clave pero no trae org_id ni
+    # un sub UUID: sin esta guarda el endpoint respondia 500 en vez de 401.
+    try:
+        user_id = UUID(str(payload["sub"]))
+        org_id = UUID(str(payload["org_id"]))
+        role = str(payload["role"])
+    except (KeyError, ValueError, TypeError) as exc:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "Token invalido para esta operacion"
+        ) from exc
     return CurrentUser(
-        id=UUID(payload["sub"]),
-        org_id=UUID(payload["org_id"]),
-        role=payload["role"],
+        id=user_id,
+        org_id=org_id,
+        role=role,
         email=payload.get("email", ""),
         account_type=payload.get("account_type", "institutional"),
         platform_admin=bool(payload.get("platform_admin", False)),

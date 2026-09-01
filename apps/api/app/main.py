@@ -46,6 +46,10 @@ from .ws import manager, mqtt_bridge
 
 logging.basicConfig(level=logging.INFO)
 
+# Antes se definia despues de `lifespan`, que lo usa. Funcionaba porque
+# `lifespan` corre en runtime, pero cualquier reordenamiento lo rompia.
+s = get_settings()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -75,8 +79,6 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
-
-s = get_settings()
 
 
 class UnhandledErrorMiddleware:
@@ -207,13 +209,19 @@ async def ready() -> JSONResponse:
 async def ws_endpoint(websocket: WebSocket, token: str = Query(default="")) -> None:
     """Feed en vivo por organizacion. Auth via ?token=<jwt>."""
     payload = decode_token(token)
-    if payload is None:
+    # Un token ciudadano valida la firma pero no trae org_id: sin este chequeo
+    # el handler explotaba con KeyError en vez de cerrar el socket.
+    org_id = str(payload.get("org_id") or "") if payload else ""
+    if not org_id:
         await websocket.close(code=4401)
         return
-    org_id = payload["org_id"]
     await manager.connect(org_id, websocket)
     try:
         while True:
             await websocket.receive_text()  # keepalive; el server solo emite
     except WebSocketDisconnect:
+        pass
+    finally:
+        # En finally para que un error inesperado tampoco deje la conexion
+        # registrada en el manager y transmitiendo a un socket muerto.
         manager.disconnect(org_id, websocket)

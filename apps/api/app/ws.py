@@ -34,7 +34,13 @@ class ConnectionManager:
         self._conns[org_id].add(ws)
 
     def disconnect(self, org_id: str, ws: WebSocket) -> None:
-        self._conns[org_id].discard(ws)
+        conns = self._conns.get(org_id)
+        if conns is None:
+            return
+        conns.discard(ws)
+        if not conns:
+            # El defaultdict retenia un set vacio por cada org vista.
+            self._conns.pop(org_id, None)
 
     async def broadcast(self, org_id: str, message: dict) -> None:
         dead: list[WebSocket] = []
@@ -64,9 +70,16 @@ async def mqtt_bridge(stop: asyncio.Event) -> None:
                 await client.subscribe(TOPIC_ALERTS)
                 log.info("MQTT bridge conectado a %s:%s", s.mqtt_host, s.mqtt_port)
                 async for msg in client.messages:
+                    if stop.is_set():
+                        return
                     await _dispatch(str(msg.topic), msg.payload)
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:  # broker caido / arrancando
             log.warning("MQTT bridge reintentando: %s", exc)
+        if not stop.is_set():
+            # Tambien se espera cuando el broker cierra la suscripcion sin
+            # error: sin esta pausa el reintento quedaba en bucle cerrado.
             await asyncio.sleep(3)
 
 

@@ -30,6 +30,22 @@ def verify_secret(raw: str, hashed: str) -> bool:
         return False
 
 
+# Hash de una contraseña que nadie conoce, con los mismos parametros de argon2
+# que los reales. Se calcula una sola vez al importar el modulo.
+_DECOY_HASH = _ph.hash(secrets.token_urlsafe(32))
+
+
+def burn_verification_time() -> None:
+    """Consume el mismo tiempo que verificar una contraseña real.
+
+    ``/auth/login`` cortaba antes de argon2 cuando el correo no existia, asi
+    que la respuesta volvia en milisegundos en vez de decenas de milisegundos.
+    Esa diferencia es un oraculo: permite enumerar que correos estan
+    registrados sin acertar ninguna contraseña.
+    """
+    verify_secret("no-importa", _DECOY_HASH)
+
+
 def new_token(nbytes: int = 24) -> str:
     """Credencial/token aleatorio (p.ej. password MQTT, mostrado una sola vez)."""
     return secrets.token_urlsafe(nbytes)

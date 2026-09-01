@@ -14,11 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 def _masked_ip(request: Request) -> str:
-    raw = (
-        request.headers.get("cf-connecting-ip")
-        or request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
-        or (request.client.host if request.client else "")
-    )
+    # Igual que en rate_limit.client_ip: uvicorn ya resolvio request.client
+    # validando el proxy. Leer cf-connecting-ip o x-forwarded-for a mano dejaba
+    # que cualquiera escribiera la IP que queria en el registro administrativo.
+    raw = request.client.host if request.client else ""
     if not raw:
         return "no disponible"
     try:
