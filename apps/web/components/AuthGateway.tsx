@@ -16,7 +16,8 @@ import {
 } from "../app/lib/api";
 import type { RegistrationPending } from "../app/lib/api";
 import SiteFooter from "./SiteFooter";
-import TechLogo from "./TechLogo";
+import CircuitBackdrop from "./CircuitBackdrop";
+import TechLogo, { OfficialLogoMotion } from "./TechLogo";
 import { MISIONES_MUNICIPALITIES, municipalityDepartment } from "../app/lib/misiones";
 import type { Session } from "../app/lib/types";
 
@@ -239,10 +240,14 @@ export default function AuthGateway() {
 
   return (
     <main className="auth-page">
+      <CircuitBackdrop dense />
       <section className="auth-hero" aria-labelledby="auth-title">
         <TechLogo className="auth-brand-logo" showTagline />
         <div className="auth-kicker"><i /> Plataforma de decisión ambiental en tiempo real</div>
-        <h1 id="auth-title">Detectar antes.<br /><span>Decidir mejor.</span></h1>
+        <h1 id="auth-title">
+          <span className="auth-title-line auth-title-primary">Detectar antes.</span>
+          <span className="auth-title-line auth-title-outline">Decidir mejor.</span>
+        </h1>
         <p>
           EcoNexo integra sensores IoT, observación satelital y reportes ciudadanos para convertir señales de los 17 departamentos y 79 municipios de Misiones en alertas verificables, acciones trazables e informes institucionales.
         </p>
@@ -254,11 +259,18 @@ export default function AuthGateway() {
         <div className="auth-flow" aria-label="Flujo operativo">
           <span>OBSERVAR</span><b>→</b><span>CORRELACIONAR</span><b>→</b><span>PRIORIZAR</span><b>→</b><span>ACTUAR</span>
         </div>
+        <Link href="/reportar" className="community-report-link">
+          <span className="community-report-icon" aria-hidden="true">
+            <i /><i /><i />
+          </span>
+          <span><strong>Reportes comunitarios</strong><small>Informá un incidente ambiental sin iniciar sesión</small></span>
+          <b aria-hidden="true">↗</b>
+        </Link>
       </section>
 
       <section className="auth-panel-wrap">
         <div className="auth-panel">
-          <div className="auth-panel-brand"><img src="/brand/econexo-lockup.jpg" alt="EcoNexo · análisis predictivo y decisiones en tiempo real" className="official-auth-logo" /></div>
+          <div className="auth-panel-brand"><OfficialLogoMotion /></div>
 
           <div className={`auth-api-status ${apiStatus}`}>
             <i />

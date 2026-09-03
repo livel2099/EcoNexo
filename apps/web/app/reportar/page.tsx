@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import SiteFooter from "../../components/SiteFooter";
+import TechLogo from "../../components/TechLogo";
 import { publicGet, submitPublicReport } from "../lib/api";
 import { assertMisionesCoordinates, misionesLocationLabel } from "../lib/misiones";
 
@@ -92,7 +93,15 @@ export default function Reportar() {
 
   return (
     <main className="citizen-page">
-      <header className="citizen-header"><Link href="/" className="brand">ECO<span>NEXO</span></Link><span>REPORTE CIUDADANO</span></header>
+      <header className="citizen-header">
+        <Link href="/" className="citizen-brand-link" aria-label="EcoNexo · inicio">
+          <TechLogo compact showTagline={false} />
+        </Link>
+        <div className="citizen-header-actions">
+          <span>REPORTES COMUNITARIOS</span>
+          <Link href="/" className="citizen-home-link"><b aria-hidden="true">←</b> Volver al inicio</Link>
+        </div>
+      </header>
       <section className="citizen-layout">
         <aside className="citizen-context">
           <span className="eyebrow">EVIDENCIA DE CAMPO</span>
