@@ -270,7 +270,7 @@ export async function apiPost<T>(path: string, token: string, body: unknown): Pr
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
-  }), `POST ${path}`);
+  }, path === "/pipeline/run" || path === "/pipeline/bootstrap" ? 180_000 : DEFAULT_TIMEOUT_MS), `POST ${path}`);
 }
 
 export async function apiPostForm<T>(path: string, token: string, form: FormData): Promise<T> {

@@ -142,7 +142,7 @@ async def mark_stale_devices(org_id: UUID, stale_minutes: int) -> int:
     result = await db.pool().execute(
         """
         UPDATE devices SET status='offline', updated_at=now()
-        WHERE org_id=$1 AND telemetry_mode IN ('mqtt','manual')
+        WHERE org_id=$1
           AND status <> 'offline'
           AND (last_seen IS NULL OR last_seen < now() - make_interval(mins => $2))
         """,
@@ -431,19 +431,20 @@ async def run_org_pipeline(
     readings_inserted = 0
     alerts_created = 0
     detections_ingested = 0
-    devices = await db.pool().fetch(
-        """
-        SELECT id,org_id,name,external_id,tags,telemetry_mode,pipeline_enabled,
-               ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lon
-        FROM devices
-        WHERE org_id=$1 AND pipeline_enabled AND econexo_inside_misiones(location)
-        ORDER BY name
-        LIMIT $2
-        """,
-        org_id,
-        get_settings().pipeline_max_devices_per_run,
-    )
+    devices = []
     try:
+        devices = await db.pool().fetch(
+            """
+            SELECT id,org_id,name,external_id,tags,telemetry_mode,pipeline_enabled,
+                   ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lon
+            FROM devices
+            WHERE org_id=$1 AND pipeline_enabled AND econexo_inside_misiones(location)
+            ORDER BY name
+            LIMIT $2
+            """,
+            org_id,
+            get_settings().pipeline_max_devices_per_run,
+        )
         await mark_stale_devices(org_id, int(settings["stale_minutes"]))
         if settings["refresh_firms"]:
             try:

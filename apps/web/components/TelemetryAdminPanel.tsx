@@ -79,16 +79,23 @@ export default function TelemetryAdminPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [devicesLoaded, setDevicesLoaded] = useState(false);
 
   const load = useCallback(async () => {
-    const [nextDevices, nextSettings, nextRuns] = await Promise.all([
+    const [nextDevices, nextSettings, nextRuns] = await Promise.allSettled([
       apiGet<Device[]>("/devices", token),
       apiGet<TelemetryPipelineSettings>("/pipeline/settings", token),
       apiGet<PipelineRun[]>("/pipeline/runs?limit=12", token),
     ]);
-    setDevices(nextDevices);
-    setSettings(nextSettings);
-    setRuns(nextRuns);
+    // Un fallo de configuración no debe ocultar los nodos que sí se cargaron.
+    if (nextDevices.status === "fulfilled") {
+      setDevices(nextDevices.value);
+      setDevicesLoaded(true);
+    } else {
+      setDevicesLoaded(false);
+    }
+    if (nextSettings.status === "fulfilled") setSettings(nextSettings.value);
+    if (nextRuns.status === "fulfilled") setRuns(nextRuns.value);
     setDraft((current) => {
       if (current.zone_id || !zones.length) return current;
       const zone = zones[0];
@@ -99,6 +106,9 @@ export default function TelemetryAdminPanel({
         lon: String(zone.lon),
       };
     });
+    const failures = [nextDevices, nextSettings, nextRuns].filter((result) => result.status === "rejected");
+    if (failures.length) throw failures[0].reason;
+    setError("");
   }, [token, zones]);
 
   useEffect(() => {
@@ -115,6 +125,16 @@ export default function TelemetryAdminPanel({
     setNotice(message);
     setError("");
     globalThis.setTimeout(() => setNotice(""), 5000);
+  }
+
+  function showRun(run: PipelineRun, message: string) {
+    if (run.status === "partial" || run.status === "failed") {
+      setNotice("");
+      const detail = run.errors.map((item) => String(item.error || item.detail || "")).filter(Boolean).join(" · ");
+      setError(`${message}${detail ? ` ${detail}` : " Revisá las fuentes de los nodos y reintentá."}`);
+    } else {
+      flash(message);
+    }
   }
 
   function selectZone(zoneId: string) {
@@ -237,17 +257,24 @@ export default function TelemetryAdminPanel({
   async function bootstrap() {
     setBusy(true);
     setError("");
+    let created = false;
     try {
       await apiPost("/pipeline/bootstrap", token, {
         count: 2,
         zone_id: draft.zone_id || null,
       });
+      created = true;
+      await load();
+      onChanged?.();
       const run = await apiPost<PipelineRun>("/pipeline/run", token, {});
       await load();
       onChanged?.();
-      flash(`Red inicial creada y pipeline ${run.status}: ${run.readings_inserted} lecturas.`);
+      showRun(run, `Red inicial creada y pipeline ${run.status}: ${run.readings_inserted} lecturas.`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No se pudo preparar la red inicial");
+      const message = cause instanceof Error ? cause.message : "No se pudo preparar la red inicial";
+      await load().catch(() => undefined);
+      onChanged?.();
+      setError(created ? `La red ya fue creada. No se completó la actualización: ${message}. Usá “Ejecutar pipeline ahora” para reintentar.` : message);
     } finally {
       setBusy(false);
     }
@@ -260,7 +287,7 @@ export default function TelemetryAdminPanel({
       const run = await apiPost<PipelineRun>("/pipeline/run", token, {});
       await load();
       onChanged?.();
-      flash(`Pipeline ${run.status}: ${run.devices_updated} nodos, ${run.readings_inserted} lecturas y ${run.alerts_created} alertas.`);
+      showRun(run, `Pipeline ${run.status}: ${run.devices_updated} nodos, ${run.readings_inserted} lecturas y ${run.alerts_created} alertas.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo ejecutar el pipeline");
     } finally {
@@ -303,7 +330,7 @@ export default function TelemetryAdminPanel({
           <span><b>{zones.length}</b> zonas</span>
         </div>
         <div className="telemetry-pipeline-actions">
-          {!devices.length && <button type="button" className="primary" disabled={busy} onClick={() => void bootstrap()}>Crear red inicial y ejecutar</button>}
+          {devicesLoaded && !devices.length && <button type="button" className="primary" disabled={busy} onClick={() => void bootstrap()}>Crear red inicial y ejecutar</button>}
           <button type="button" className="primary" disabled={busy || !settings?.enabled} onClick={() => void runPipeline()}>{busy ? "Procesando…" : "Ejecutar pipeline ahora"}</button>
           <small>{runLabel(lastRun)}</small>
         </div>
@@ -341,7 +368,7 @@ export default function TelemetryAdminPanel({
                 <div className="telemetry-node-actions"><button type="button" disabled={busy} onClick={() => void addManualReading(device)}>Cargar lectura</button><button type="button" disabled={busy} onClick={() => void updateNode(device, { pipeline_enabled: !device.pipeline_enabled })}>{device.pipeline_enabled ? "Pausar pipeline" : "Activar pipeline"}</button><button type="button" className="danger" disabled={busy} onClick={() => void deleteNode(device)}>Eliminar</button></div>
               </div>
             ))}
-            {!devices.length && <div className="empty telemetry-empty"><strong>No hay nodos todavía.</strong><span>Creá uno manualmente o usá “Crear red inicial y ejecutar”.</span></div>}
+            {!devices.length && <div className="empty telemetry-empty"><strong>{devicesLoaded ? "No hay nodos todavía." : "Todavía no se pudo cargar la lista de nodos."}</strong><span>{devicesLoaded ? "Creá uno manualmente o usá “Crear red inicial y ejecutar”." : "Comprobá la conexión y volvé a cargar la telemetría."}</span></div>}
           </div>
         </article>
       </div>

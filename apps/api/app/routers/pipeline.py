@@ -43,7 +43,7 @@ def _settings_out(row) -> TelemetryPipelineSettingsOut:
 
 
 @router.get("/settings", response_model=TelemetryPipelineSettingsOut)
-async def get_settings(
+async def get_pipeline_settings(
     user: CurrentUser = Depends(current_user),
 ) -> TelemetryPipelineSettingsOut:
     return _settings_out(await pipeline_settings(user.org_id))
@@ -139,7 +139,8 @@ async def bootstrap_telemetry(
     if body.zone_id:
         zone = await db.pool().fetchrow(
             """
-            SELECT id,ST_Y(center::geometry) AS lat,ST_X(center::geometry) AS lon
+            SELECT id,ST_Y(COALESCE(center::geometry,ST_Centroid(area::geometry))) AS lat,
+                   ST_X(COALESCE(center::geometry,ST_Centroid(area::geometry))) AS lon
             FROM risk_zones WHERE id=$1 AND org_id=$2
             """,
             body.zone_id,
@@ -150,7 +151,8 @@ async def bootstrap_telemetry(
     else:
         zone = await db.pool().fetchrow(
             """
-            SELECT id,ST_Y(center::geometry) AS lat,ST_X(center::geometry) AS lon
+            SELECT id,ST_Y(COALESCE(center::geometry,ST_Centroid(area::geometry))) AS lat,
+                   ST_X(COALESCE(center::geometry,ST_Centroid(area::geometry))) AS lon
             FROM risk_zones WHERE org_id=$1 ORDER BY created_at LIMIT 1
             """,
             user.org_id,
