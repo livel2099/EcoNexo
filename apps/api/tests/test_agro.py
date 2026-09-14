@@ -376,15 +376,15 @@ def _montar(monkeypatch, respuestas):
 
 
 @pytest.mark.asyncio
-async def test_reintenta_ante_un_limite_de_consultas(monkeypatch, sin_esperas):
+async def test_no_reintenta_ante_un_limite_de_consultas(monkeypatch, sin_esperas):
     registro = _montar(monkeypatch, [
         _RespuestaFalsa(429),
         _RespuestaFalsa(429),
         _RespuestaFalsa(200, {"daily": {"time": []}}),
     ])
-    resultado = await agro._consultar("https://x/y", {}, "histórico")
-    assert resultado == {"daily": {"time": []}}
-    assert len(registro) == 3
+    with pytest.raises(agro.OpenMeteoError, match="429"):
+        await agro._consultar("https://x/y", {}, "histórico")
+    assert len(registro) == 1
 
 
 @pytest.mark.asyncio
@@ -506,12 +506,13 @@ async def test_respeta_el_retry_after_del_servidor(monkeypatch):
         _RespuestaFalsa(429, headers={"retry-after": "12"}),
         _RespuestaFalsa(200, {"daily": {"time": []}}),
     ])
-    await agro._consultar("https://x/y", {}, "histórico")
-    assert esperas == [12.0]
+    with pytest.raises(agro.OpenMeteoError, match="12 segundos"):
+        await agro._consultar("https://x/y", {}, "histórico")
+    assert esperas == []
 
 
 @pytest.mark.asyncio
-async def test_un_retry_after_desmedido_se_recorta(monkeypatch):
+async def test_un_retry_after_largo_se_respeta_sin_bloquear(monkeypatch):
     """Bloquear el request media hora es peor que reportar el limite."""
     esperas = []
 
@@ -523,12 +524,13 @@ async def test_un_retry_after_desmedido_se_recorta(monkeypatch):
         _RespuestaFalsa(429, headers={"retry-after": "3600"}),
         _RespuestaFalsa(200, {"daily": {"time": []}}),
     ])
-    await agro._consultar("https://x/y", {}, "histórico")
-    assert esperas == [30.0]
+    with pytest.raises(agro.OpenMeteoError, match="3600 segundos"):
+        await agro._consultar("https://x/y", {}, "histórico")
+    assert esperas == []
 
 
 @pytest.mark.asyncio
-async def test_sin_retry_after_la_espera_crece_geometricamente(monkeypatch):
+async def test_sin_retry_after_no_repite_consultas(monkeypatch):
     esperas = []
 
     async def _dormir(segundos):
@@ -539,7 +541,7 @@ async def test_sin_retry_after_la_espera_crece_geometricamente(monkeypatch):
     with pytest.raises(agro.OpenMeteoError):
         await agro._consultar("https://x/y", {}, "histórico")
     # Antes eran 1.5 y 3.0 segundos: 4.5 en total para un cupo por IP.
-    assert esperas == [1.5, 4.5]
+    assert esperas == []
 
 
 @pytest.mark.asyncio

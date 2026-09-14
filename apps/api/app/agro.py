@@ -29,6 +29,8 @@ from typing import Any, Iterable, Sequence
 
 import httpx
 
+from .open_meteo_http import RateLimited, customer_url, get_response
+
 from .config import get_settings
 
 TIMEZONE = "America/Argentina/Buenos_Aires"
@@ -503,33 +505,22 @@ async def _consultar(url: str, params: dict[str, str], que: str) -> dict[str, An
 
     Open-Meteo limita por IP de origen. En un hosting compartido la IP de
     salida es de todos los inquilinos, asi que un 429 puede llegar aunque la
-    plataforma consulte poco. Se reintenta con espera creciente antes de darse
-    por vencido.
+    plataforma consulte poco. El cliente compartido respeta la pausa del 429;
+    solo los errores transitorios de red y 5xx se reintentan aquí.
     """
     settings = get_settings()
     intentos = max(1, settings.agro_http_retries)
     ultimo = ""
-    espera_sugerida: float | None = None
     clave = settings.open_meteo_api_key.strip()
     if clave:
         params = {**params, "apikey": clave}
     for intento in range(1, intentos + 1):
         try:
             async with httpx.AsyncClient(timeout=settings.agro_http_timeout_seconds) as client:
-                respuesta = await client.get(url, params=params)
+                respuesta = await get_response(client, customer_url(url, clave), params, ttl=900)
             if respuesta.status_code == 200:
                 return respuesta.json()
-            if respuesta.status_code == 429:
-                # El cupo por IP no se libera en los pocos segundos que duraba
-                # la espera lineal. Si el servidor dice cuanto falta, se le hace
-                # caso; si no, la espera crece geometricamente.
-                espera_sugerida = _retry_after(respuesta.headers.get("retry-after"))
-                ultimo = (
-                    f"{que}: Open-Meteo respondió 429 (límite de consultas por IP). "
-                    "El hosting comparte la IP de salida con otros servicios."
-                    + ("" if clave else " Configurar OPEN_METEO_API_KEY da cupo propio.")
-                )
-            elif respuesta.status_code >= 500:
+            if respuesta.status_code >= 500:
                 ultimo = f"{que}: Open-Meteo respondió {respuesta.status_code}"
             else:
                 # 4xx que no es 429 es un problema del pedido, no del momento:
@@ -537,20 +528,15 @@ async def _consultar(url: str, params: dict[str, str], que: str) -> dict[str, An
                 detalle = respuesta.text[:160].replace(chr(10), " ")
                 raise OpenMeteoError(f"{que}: Open-Meteo rechazó la consulta "
                                      f"({respuesta.status_code}) {detalle}")
+        except RateLimited as exc:
+            raise OpenMeteoError(f"{que}: {exc}") from exc
         except httpx.TimeoutException:
             ultimo = (f"{que}: Open-Meteo no respondió en "
                       f"{settings.agro_http_timeout_seconds:.0f} s")
         except httpx.HTTPError as exc:
             ultimo = f"{que}: no se pudo conectar con Open-Meteo ({type(exc).__name__})"
         if intento < intentos:
-            if espera_sugerida is not None:
-                # Un Retry-After enorme no justifica bloquear el request: se
-                # corta y se reporta, que es mas util que un timeout del lote.
-                espera = min(espera_sugerida, 30.0)
-            else:
-                espera = 1.5 * (3 ** (intento - 1))
-            await asyncio.sleep(espera)
-            espera_sugerida = None
+            await asyncio.sleep(1.5 * (3 ** (intento - 1)))
     raise OpenMeteoError(f"{ultimo} después de {intentos} intentos")
 
 

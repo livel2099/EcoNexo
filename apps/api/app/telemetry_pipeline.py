@@ -20,6 +20,7 @@ import asyncpg
 import httpx
 
 from . import db
+from .open_meteo_http import customer_url, get_response
 from .config import get_settings
 from .correlation import Source
 from .pipeline import anomaly_score, create_alert
@@ -87,7 +88,7 @@ async def fetch_open_meteo_current(lat: float, lon: float) -> dict[str, float]:
     if settings.open_meteo_api_key.strip():
         params["apikey"] = settings.open_meteo_api_key.strip()
     async with httpx.AsyncClient(timeout=settings.pipeline_http_timeout_seconds) as client:
-        response = await client.get(settings.open_meteo_forecast_url, params=params)
+        response = await get_response(client, customer_url(settings.open_meteo_forecast_url, settings.open_meteo_api_key.strip()), params, ttl=60)
         if response.is_error:
             hints = {
                 429: "Limite de consultas alcanzado; reintenta mas tarde o revisa el cupo de Open-Meteo.",
