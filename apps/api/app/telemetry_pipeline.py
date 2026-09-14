@@ -84,9 +84,20 @@ async def fetch_open_meteo_current(lat: float, lon: float) -> dict[str, float]:
         "current": ",".join(OPEN_METEO_VARIABLES),
         "timezone": "UTC",
     }
+    if settings.open_meteo_api_key.strip():
+        params["apikey"] = settings.open_meteo_api_key.strip()
     async with httpx.AsyncClient(timeout=settings.pipeline_http_timeout_seconds) as client:
         response = await client.get(settings.open_meteo_forecast_url, params=params)
-        response.raise_for_status()
+        if response.is_error:
+            hints = {
+                429: "Limite de consultas alcanzado; reintenta mas tarde o revisa el cupo de Open-Meteo.",
+                401: "Revisa la clave y la URL configuradas para Open-Meteo.",
+                403: "Acceso rechazado; revisa la clave y la URL de Open-Meteo.",
+                400: "Open-Meteo rechazo los parametros de la consulta.",
+            }
+            raise RuntimeError(f"Open-Meteo HTTP {response.status_code}: " + hints.get(
+                response.status_code, "La fuente no esta disponible; reintenta mas tarde."
+            ))
         payload = response.json()
     current = payload.get("current") or {}
     result: dict[str, float] = {}
@@ -469,7 +480,7 @@ async def run_org_pipeline(
                         updated_at=now() WHERE id=$1
                     """,
                     device["id"],
-                    f"error:{exc.__class__.__name__}",
+                    f"error:{str(exc)[:240]}" if isinstance(exc, RuntimeError) else f"error:{exc.__class__.__name__}",
                 )
         status = "completed" if not errors else "partial"
         summary = {

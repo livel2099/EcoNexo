@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from uuid import UUID
 
 import asyncpg
@@ -11,7 +12,7 @@ from starlette.concurrency import run_in_threadpool
 from .. import db
 from ..audit import record_audit
 from ..deps import CurrentUser, current_user, require_role
-from ..schemas import DeviceCreatedOut, DeviceIn, DeviceOut, DeviceTypeIn, DeviceUpdateIn
+from ..schemas import DeviceCreatedOut, DeviceIn, DeviceOut, DeviceTypeIn, DeviceUpdateIn, DeviceReadingsIn
 from ..security import hash_secret, new_token
 from ..subscriptions import enforce_resource_limit
 
@@ -126,6 +127,35 @@ async def update_device(
                            resource="device", resource_id=device_id, metadata=body.model_dump(mode="json", exclude_unset=True))
     row = await db.pool().fetchrow(_DEVICE_SELECT + " WHERE d.id=$1 AND d.org_id=$2", device_id, user.org_id)
     return _device_out(row)
+
+
+@router.post("/{device_id}/readings", status_code=201)
+async def add_device_readings(
+    device_id: UUID, body: DeviceReadingsIn,
+    user: CurrentUser = Depends(require_role("admin", "operador")),
+) -> dict:
+    device = await db.pool().fetchrow(
+        "SELECT id FROM devices WHERE id=$1 AND org_id=$2", device_id, user.org_id,
+    )
+    if device is None:
+        raise HTTPException(404, "Nodo no encontrado")
+    observed = body.observed_at or datetime.now(timezone.utc)
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
+    if observed > datetime.now(timezone.utc):
+        raise HTTPException(422, "La lectura no puede tener una fecha futura")
+    async with db.pool().acquire() as conn:
+        async with conn.transaction():
+            await conn.copy_records_to_table(
+                "readings",
+                records=[(user.org_id, device_id, key, value, observed) for key, value in body.values.items()],
+                columns=["org_id", "device_id", "variable", "value", "ts"],
+            )
+            await conn.execute(
+                "UPDATE devices SET last_seen=GREATEST(last_seen,$3), updated_at=now() WHERE id=$1 AND org_id=$2",
+                device_id, user.org_id, observed,
+            )
+    return {"readings_inserted": len(body.values)}
 
 
 @router.get("/{device_id}/readings")

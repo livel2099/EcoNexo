@@ -80,6 +80,25 @@ export default function TelemetryAdminPanel({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [devicesLoaded, setDevicesLoaded] = useState(false);
+  const [readingView, setReadingView] = useState<{ name: string; rows: { variable: string; ts: string; value: number }[] } | null>(null);
+
+  async function viewReadings(device: Device) {
+    setBusy(true);
+    setError("");
+    setReadingView(null);
+    try {
+      const variables = Array.from(new Set(["temp", "humidity", "soil_moisture", "precipitation", "wind_speed", "wind_gust", "vpd", ...Object.keys(device.latest_readings || {})]));
+      const results = await Promise.all(variables.map(async (variable) => {
+        const rows = await apiGet<{ ts: string; value: number }[]>(`/devices/${device.id}/readings?variable=${encodeURIComponent(variable)}&hours=24`, token);
+        return rows.map((row) => ({ ...row, variable }));
+      }));
+      setReadingView({ name: device.name, rows: results.flat().sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()) });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudieron consultar las lecturas");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     const [nextDevices, nextSettings, nextRuns] = await Promise.allSettled([
@@ -217,7 +236,7 @@ export default function TelemetryAdminPanel({
       const [keyRaw, valueRaw] = fragment.split("=");
       const key = keyRaw?.trim();
       const value = Number(valueRaw?.trim());
-      if (!key || !Number.isFinite(value)) {
+      if (!key || !valueRaw?.trim() || fragment.split("=").length !== 2 || !Number.isFinite(value)) {
         setError(`Lectura inválida: ${fragment.trim()}`);
         return;
       }
@@ -365,13 +384,22 @@ export default function TelemetryAdminPanel({
                 <label>Forma<select disabled={busy} value={device.marker_shape} onChange={(event) => void updateNode(device, { marker_shape: event.target.value })}>{Object.entries(SHAPE_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
                 <label>Fuente<select disabled={busy} value={device.telemetry_mode} onChange={(event) => void updateNode(device, { telemetry_mode: event.target.value })}>{Object.entries(MODE_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
                 <label>Zona<select disabled={busy} value={device.zone_id || ""} onChange={(event) => void updateNode(device, { zone_id: event.target.value || null })}><option value="">Sin zona</option>{zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label>
-                <div className="telemetry-node-actions"><button type="button" disabled={busy} onClick={() => void addManualReading(device)}>Cargar lectura</button><button type="button" disabled={busy} onClick={() => void updateNode(device, { pipeline_enabled: !device.pipeline_enabled })}>{device.pipeline_enabled ? "Pausar pipeline" : "Activar pipeline"}</button><button type="button" className="danger" disabled={busy} onClick={() => void deleteNode(device)}>Eliminar</button></div>
+                <div className="telemetry-node-actions"><button type="button" disabled={busy} onClick={() => void viewReadings(device)}>Ver datos</button><button type="button" disabled={busy} onClick={() => void addManualReading(device)}>Ingresar lectura manual</button><button type="button" disabled={busy} onClick={() => void updateNode(device, { pipeline_enabled: !device.pipeline_enabled })}>{device.pipeline_enabled ? "Pausar pipeline" : "Activar pipeline"}</button><button type="button" className="danger" disabled={busy} onClick={() => void deleteNode(device)}>Eliminar</button></div>
               </div>
             ))}
             {!devices.length && <div className="empty telemetry-empty"><strong>{devicesLoaded ? "No hay nodos todavía." : "Todavía no se pudo cargar la lista de nodos."}</strong><span>{devicesLoaded ? "Creá uno manualmente o usá “Crear red inicial y ejecutar”." : "Comprobá la conexión y volvé a cargar la telemetría."}</span></div>}
           </div>
         </article>
       </div>
+
+      {readingView && <article className="admin-table-card">
+        <h3>Datos de {readingView.name} · últimas 24 horas</h3>
+        <button type="button" onClick={() => setReadingView(null)}>Cerrar datos</button>
+        {readingView.rows.length ? <div style={{ maxHeight: 400, overflow: "auto" }}><table>
+          <thead><tr><th>Fecha</th><th>Variable</th><th>Valor</th></tr></thead>
+          <tbody>{readingView.rows.map((row, index) => <tr key={`${row.variable}-${row.ts}-${index}`}><td>{new Date(row.ts).toLocaleString("es-AR")}</td><td>{row.variable}</td><td>{row.value}</td></tr>)}</tbody>
+        </table></div> : <p>No hay lecturas en las últimas 24 horas. Para nodos virtuales, ejecutá el pipeline; para dispositivos MQTT, verificá que estén enviando datos.</p>}
+      </article>}
 
       {settings && <form className="admin-form-card telemetry-settings" onSubmit={saveSettings}>
         <div className="panel-heading"><span>03</span><div><h3>Política del pipeline</h3><p>Controla actualización, caducidad y evaluación automática de reglas.</p></div></div>

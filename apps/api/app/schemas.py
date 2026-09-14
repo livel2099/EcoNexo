@@ -1,6 +1,7 @@
 """Contratos de API (Pydantic v2). Validacion estricta de entrada/salida."""
 from __future__ import annotations
 
+import math
 import re
 from datetime import date, datetime
 from typing import Any, Literal
@@ -237,6 +238,8 @@ class DeviceReadingsIn(BaseModel):
             variable = key.strip().lower().replace(" ", "_")
             if not variable or len(variable) > 80:
                 raise ValueError("Nombre de variable inválido")
+            if not math.isfinite(value):
+                raise ValueError("El valor debe ser finito")
             normalized[variable] = float(value)
         return normalized
 

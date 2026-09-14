@@ -173,3 +173,46 @@ async def test_pipeline_uses_open_meteo_and_reports_partial_failures(context, mo
     assert result["status"] == "partial"
     assert result["devices_updated"] == 0
     assert result["errors"][0]["device"] == str(context.device_id)
+
+
+@pytest.mark.asyncio
+async def test_manual_readings_persist_and_reject_unknown_device(context):
+    conn = SimpleNamespace(copy_records_to_table=AsyncMock(), execute=AsyncMock())
+
+    @asynccontextmanager
+    async def scope():
+        yield conn
+
+    conn.transaction = scope
+    context.pool.acquire = scope
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=context.app), base_url="http://test") as client:
+        response = await client.post(f"/devices/{context.device_id}/readings", json={"values": {"temp": 25}})
+        assert response.status_code == 201, response.text
+        records = conn.copy_records_to_table.await_args.kwargs["records"]
+        assert records[0][:4] == (context.user.org_id, context.device_id, "temp", 25)
+        context.pool.fetchrow.return_value = None
+        response = await client.post(f"/devices/{context.device_id}/readings", json={"values": {"temp": 25}})
+        assert response.status_code == 404
+        assert conn.copy_records_to_table.await_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [200, 429, 403])
+async def test_open_meteo_key_and_safe_http_diagnostics(monkeypatch, status):
+    real_client = httpx.AsyncClient
+
+    def handler(request):
+        assert request.url.params["apikey"] == "private-test-key"
+        return httpx.Response(status, json={"current": {"temperature_2m": 25, "soil_moisture_0_to_1cm": 0.24}})
+
+    monkeypatch.setattr(engine, "get_settings", lambda: SimpleNamespace(
+        open_meteo_api_key="private-test-key", pipeline_http_timeout_seconds=10,
+        open_meteo_forecast_url="https://example.test/forecast",
+    ))
+    monkeypatch.setattr(engine.httpx, "AsyncClient", lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
+    if status == 200:
+        assert await engine.fetch_open_meteo_current(-27, -55) == {"temp": 25, "soil_moisture": 24}
+    else:
+        with pytest.raises(RuntimeError, match=f"HTTP {status}") as error:
+            await engine.fetch_open_meteo_current(-27, -55)
+        assert "private-test-key" not in str(error.value)
