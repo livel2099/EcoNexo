@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     # el 429 llega aunque EcoNexo consulte poco. Con clave, el cupo es propio.
     # Las URL comerciales van en OPEN_METEO_*_URL; la clave se agrega sola.
     open_meteo_api_key: str = ""
+    # Respaldo gratuito cuando Open-Meteo rechaza a la IP de salida. Su ToS
+    # exige identificacion real (nombre del servicio y contacto) y prohibe
+    # cadenas inventadas: vaciar la variable desactiva el respaldo.
+    met_no_user_agent: str = "EcoNexo/1.0 econexoargentina@gmail.com"
+    met_no_fallback_enabled: bool = True
     nasa_firms_key: str = ""
     firms_inline_enabled: bool = True
     firms_source: str = "VIIRS_SNPP_NRT"

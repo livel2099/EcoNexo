@@ -97,6 +97,10 @@ export default function DevicesPanel({ token }: { token: string }) {
               <small>Último intento{d.last_pipeline_at ? ` · ${new Date(d.last_pipeline_at).toLocaleString("es-AR")}` : ""}</small>
               <div>{d.last_pipeline_status.replace(/^error:/, "").replace(/Reintentá en (\d+) segundos\./, "Espera indicada en ese intento: $1 segundos.")}</div>
             </div>}
+            {d.last_pipeline_status?.startsWith("ok:") && <div role="status">
+              <small>Último dato{d.last_pipeline_at ? ` · ${new Date(d.last_pipeline_at).toLocaleString("es-AR")}` : ""}</small>
+              <div>{d.last_pipeline_status.replace(/^ok:\s*/, "Fuente de esta lectura: ")}</div>
+            </div>}
             {d.telemetry_mode === "mqtt" && d.tags.includes("virtual") && d.tags.includes("open-meteo") && <p>Fuente configurada: MQTT. Las etiquetas indican un nodo virtual; revisá la fuente en la configuración de nodos.</p>}
             {d.telemetry_mode === "mqtt" && <div className="metrics mono">
               <span>🔋 {d.battery ?? "—"}%</span>

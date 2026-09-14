@@ -20,7 +20,7 @@ from uuid import UUID
 import asyncpg
 import httpx
 
-from . import db
+from . import db, met_no
 from .open_meteo_http import customer_url, get_response, provider_reason
 from .config import get_settings
 from .correlation import Source
@@ -45,6 +45,9 @@ OPEN_METEO_VARIABLES: dict[str, str] = {
 OPEN_METEO_CURRENT_TTL_SECONDS = 900
 # Coordenadas por consulta: acota el largo de la URL sin volver a una por nodo.
 OPEN_METEO_BATCH_SIZE = 50
+SOURCE_LABELS = {
+    "met-norway": "respaldo MET Norway, sin lluvia ni humedad de suelo (CC BY 4.0)",
+}
 
 
 def _number(value: Any) -> float | None:
@@ -152,12 +155,15 @@ async def fetch_open_meteo_current(lat: float, lon: float) -> dict[str, float]:
 
 
 async def refresh_open_meteo_device(
-    device: Any, readings: dict[str, float] | None = None
+    device: Any, readings: dict[str, float] | None = None, source: str = "open-meteo"
 ) -> tuple[int, dict[str, float]]:
     if readings is None:
         readings = await fetch_open_meteo_current(float(device["lat"]), float(device["lon"]))
     if not readings:
         raise RuntimeError("Open-Meteo no devolvio variables actuales")
+    # Que fuente produjo el dato queda en el nodo: con el respaldo faltan
+    # variables, y eso no puede parecer un sensor que dejo de reportarlas.
+    estado = "ok" if source == "open-meteo" else f"ok: {SOURCE_LABELS.get(source, source)}"
     now = datetime.now(timezone.utc)
     records = [
         (device["org_id"], device["id"], variable, value, now)
@@ -173,11 +179,12 @@ async def refresh_open_meteo_device(
             await conn.execute(
                 """
                 UPDATE devices SET status='online', last_seen=$2,
-                    last_pipeline_at=$2, last_pipeline_status='ok', updated_at=now()
+                    last_pipeline_at=$2, last_pipeline_status=$3, updated_at=now()
                 WHERE id=$1
                 """,
                 device["id"],
                 now,
+                estado,
             )
     await publish(
         f"econexo/internal/{device['org_id']}/readings",
@@ -512,23 +519,36 @@ async def run_org_pipeline(
         # el cupo gratuito de Open-Meteo se agota por cantidad de consultas.
         virtuales = [item for item in devices if item["telemetry_mode"] == "open_meteo"]
         lecturas: dict[Any, dict[str, float]] = {}
+        fuente_lecturas = "open-meteo"
         fallo_open_meteo: Exception | None = None
         if virtuales:
+            puntos = [(float(item["lat"]), float(item["lon"])) for item in virtuales]
             try:
-                lotes = await fetch_open_meteo_current_batch(
-                    [(float(item["lat"]), float(item["lon"])) for item in virtuales]
-                )
+                lotes = await fetch_open_meteo_current_batch(puntos)
                 lecturas = {item["id"]: valores for item, valores in zip(virtuales, lotes)}
             except Exception as exc:
                 # El motivo se guarda por nodo mas abajo, como cuando fallaba
                 # la consulta individual.
                 fallo_open_meteo = exc
+                if get_settings().met_no_fallback_enabled:
+                    try:
+                        lotes = await met_no.fetch_current_batch(puntos)
+                        lecturas = {item["id"]: valores for item, valores in zip(virtuales, lotes)}
+                        fuente_lecturas = "met-norway"
+                        fallo_open_meteo = None
+                        log.warning("Open-Meteo no respondio (%s); se usa MET Norway", exc)
+                    except Exception as respaldo:
+                        fallo_open_meteo = RuntimeError(
+                            f"{exc} · Respaldo MET Norway: {respaldo}"
+                        )
         for device in devices:
             try:
                 if device["telemetry_mode"] == "open_meteo":
                     if fallo_open_meteo is not None:
                         raise fallo_open_meteo
-                    inserted, _ = await refresh_open_meteo_device(device, lecturas.get(device["id"]))
+                    inserted, _ = await refresh_open_meteo_device(
+                        device, lecturas.get(device["id"]), fuente_lecturas
+                    )
                     readings_inserted += inserted
                     devices_updated += 1
                 if settings["evaluate_rules"]:
@@ -547,6 +567,7 @@ async def run_org_pipeline(
         summary = {
             "message": "Pipeline operativo actualizado",
             "virtual_sources": sum(1 for item in devices if item["telemetry_mode"] == "open_meteo"),
+            "readings_source": fuente_lecturas,
             "mqtt_sources": sum(1 for item in devices if item["telemetry_mode"] == "mqtt"),
             "manual_sources": sum(1 for item in devices if item["telemetry_mode"] == "manual"),
             "firms_configured": bool(get_settings().nasa_firms_key.strip()),

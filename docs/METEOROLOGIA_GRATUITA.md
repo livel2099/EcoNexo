@@ -25,6 +25,25 @@ actuales ni garantiza resolver el 429 del servidor. Cada corrida del pipeline
 consulta ahora una sola vez por lote de hasta 50 nodos en lugar de una vez por
 nodo, así que el consumo del cupo deja de crecer con la cantidad de nodos.
 
+## Respaldo MET Norway para nodos virtuales
+
+Si Open-Meteo rechaza la consulta de lecturas actuales, la corrida reintenta con
+MET Norway (`api.met.no`, Locationforecast 2.0), gratuito y sin clave. El nodo
+guarda en su estado qué fuente produjo el dato.
+
+Entrega temperatura, humedad, viento y ráfaga; el viento se convierte de m/s a
+km/h, que es la unidad en la que ya se guardaba. El VPD se deriva de temperatura
+y humedad con FAO-56. No publica humedad de suelo, y su lluvia es la esperada en
+la próxima hora, no la caída en la última: ninguna de las dos se guarda en lugar
+de la variable de Open-Meteo, que significa otra cosa. Un nodo servido por el
+respaldo reporta menos variables, y eso se avisa en su tarjeta.
+
+Su ToS exige identificarse: `MET_NO_USER_AGENT` lleva nombre del servicio y
+contacto real, y vaciarla desactiva el respaldo. Las coordenadas se truncan a
+cuatro decimales porque con cinco responde 403, y la caché respeta el `Expires`
+de cada respuesta (mínimo 15 minutos, máximo 1 hora). Los datos son del
+Instituto Meteorológico de Noruega bajo CC BY 4.0: la atribución es obligatoria.
+
 ## Cálculos y limitaciones
 
 NASA POWER entrega datos modelados en hora solar local (LST), distinta de la
@@ -70,3 +89,5 @@ sola no garantiza disponibilidad ni deduplicación simultánea entre varios work
 - https://www.fao.org/4/x0490e/x0490e07.htm
 - https://www.fao.org/4/x0490e/x0490e08.htm (ejemplo 18, ET0 3,88 mm/día)
 - https://open-meteo.com/en/terms (API gratuita para uso no comercial)
+- https://api.met.no/doc/TermsOfService (identificación, 4 decimales, Expires)
+- https://creativecommons.org/licenses/by/4.0/ (licencia de los datos de MET Norway)

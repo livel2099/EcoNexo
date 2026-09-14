@@ -293,7 +293,41 @@ async def test_pipeline_maps_each_node_to_its_own_reading(context, monkeypatch):
     assert result["devices_updated"] == 2 and result["status"] == "completed"
 
     lote.side_effect = RuntimeError("Open-Meteo HTTP 429: Limite de consultas alcanzado")
+    monkeypatch.setattr(engine.met_no, "fetch_current_batch",
+                        AsyncMock(side_effect=engine.met_no.MetNoError("HTTP 503")))
     result = await engine.run_org_pipeline(context.user.org_id, context.user.id)
     assert result["status"] == "partial" and result["devices_updated"] == 0
     assert len(result["errors"]) == 2
-    assert all("429" in item["error"] for item in result["errors"])
+    assert all("429" in item["error"] and "MET Norway" in item["error"] for item in result["errors"])
+
+
+@pytest.mark.asyncio
+async def test_met_norway_takes_over_when_open_meteo_rejects_the_render_ip(context, monkeypatch):
+    """El 429 de una IP compartida no puede dejar los nodos sin ninguna lectura."""
+    conn = SimpleNamespace(copy_records_to_table=AsyncMock(), execute=AsyncMock())
+
+    @asynccontextmanager
+    async def scope():
+        yield conn
+
+    conn.transaction = scope
+    context.pool.acquire = scope
+    context.pool.fetch.return_value = [{**context.row, "org_id": context.user.org_id}]
+    monkeypatch.setattr(engine, "pipeline_settings", AsyncMock(return_value={
+        "enabled": True, "stale_minutes": 30, "refresh_firms": False, "evaluate_rules": False,
+    }))
+    monkeypatch.setattr(engine, "fetch_open_meteo_current_batch",
+                        AsyncMock(side_effect=RuntimeError("Open-Meteo HTTP 429")))
+    respaldo = AsyncMock(return_value=[{"temp": 19.4, "humidity": 62.3, "vpd": 0.85}])
+    monkeypatch.setattr(engine.met_no, "fetch_current_batch", respaldo)
+    monkeypatch.setattr(engine, "publish", AsyncMock())
+
+    result = await engine.run_org_pipeline(context.user.org_id, context.user.id)
+
+    assert result["status"] == "completed" and result["devices_updated"] == 1
+    assert result["readings_inserted"] == 3
+    assert result["summary"]["readings_source"] == "met-norway"
+    assert respaldo.await_args.args[0] == [(-27.3671, -55.8961)]
+    estado = conn.execute.await_args.args[3]
+    assert estado.startswith("ok: respaldo MET Norway")
+    assert "sin lluvia ni humedad de suelo" in estado

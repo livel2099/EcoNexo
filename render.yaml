@@ -107,6 +107,10 @@ services:
         value: "1024"
       - key: COPERNICUS_CACHE_SECONDS
         value: "600"
+      # Respaldo gratuito cuando Open-Meteo rechaza la IP de salida. Su ToS
+      # exige identificacion real; vaciar la variable desactiva el respaldo.
+      - key: MET_NO_USER_AGENT
+        value: EcoNexo/1.0 econexoargentina@gmail.com
       - key: NASA_FIRMS_KEY
         sync: false
       - key: FIRMS_INLINE_ENABLED
