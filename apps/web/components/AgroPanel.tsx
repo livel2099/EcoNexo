@@ -23,9 +23,23 @@ const KIND_LABEL: Record<string, string> = {
   fenologia: "Fenología",
 };
 
+/** Un día sin hora se parsea como UTC: en Argentina eso mostraba la fecha anterior. */
+function diaLocal(valor: string): Date {
+  return new Date(/^\d{4}-\d{2}-\d{2}$/.test(valor) ? `${valor}T12:00:00` : valor);
+}
+
 function fecha(valor: string | null): string {
   if (!valor) return "—";
-  return new Date(valor).toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
+  return diaLocal(valor).toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
+}
+
+function fechaConDia(valor: string): string {
+  return diaLocal(valor).toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "short" });
+}
+
+function conSigno(valor: number | null): string {
+  if (valor == null) return "—";
+  return `${valor > 0 ? "+" : ""}${valor.toFixed(1)}`;
 }
 
 function fechaHora(valor: string | null): string {
@@ -128,6 +142,13 @@ export default function AgroPanel({ token }: { token: string }) {
     () => crops.find((c) => c.key === (loteActual?.crop_key || draft.crop_key)) || null,
     [crops, loteActual, draft.crop_key],
   );
+
+  const pronostico = useMemo(() => series.filter((d) => d.is_forecast), [series]);
+  const historico = useMemo(() => series.filter((d) => !d.is_forecast), [series]);
+
+  const lluviaPronostico = pronostico.reduce((total, d) => total + (d.precipitation_mm ?? 0), 0);
+  const etcPronostico = pronostico.reduce((total, d) => total + (d.etc_mm ?? 0), 0);
+  const balancePronostico = lluviaPronostico - etcPronostico;
 
   const avisos = useMemo(
     () => lots.flatMap((l) => l.advisories.map((a) => ({ ...a, lot_name: a.lot_name || l.name })))
@@ -374,9 +395,60 @@ export default function AgroPanel({ token }: { token: string }) {
         </div>
 
         <div className="agro-detail">
-          {loteActual && series.length > 0 && (
+          {loteActual && (
             <article className="agro-card">
-              <h3>{loteActual.name} · serie diaria</h3>
+              <h3>{loteActual.name} · próximos días</h3>
+              {pronostico.length > 0 ? (
+                <>
+                  <ul className="agro-forecast">
+                    {pronostico.map((d) => (
+                      <li key={d.day} className="agro-forecast-day">
+                        <strong>{fechaConDia(d.day)}</strong>
+                        <span className="agro-forecast-temp">
+                          {d.tmax_c?.toFixed(0) ?? "—"}° / {d.tmin_c?.toFixed(0) ?? "—"}°
+                        </span>
+                        <dl>
+                          <div><dt>Lluvia</dt><dd>{d.precipitation_mm?.toFixed(1) ?? "—"} mm</dd></div>
+                          <div><dt>ETc</dt><dd>{d.etc_mm?.toFixed(1) ?? "—"} mm</dd></div>
+                          <div>
+                            <dt>Balance</dt>
+                            <dd className={(d.balance_mm ?? 0) < 0 ? "agro-forecast-deficit" : undefined}>
+                              {conSigno(d.balance_mm)} mm
+                            </dd>
+                          </div>
+                        </dl>
+                        {d.stage_name && <small>{d.stage_name}</small>}
+                      </li>
+                    ))}
+                  </ul>
+                  {pronostico.some((d) => d.source === "open-meteo-previo") && (
+                    <p className="agro-empty">
+                      Es el pronóstico de un procesamiento anterior: Open-Meteo no respondió en el último.
+                      Se conserva para no dejar el lote sin próximos días y no genera recomendaciones.
+                    </p>
+                  )}
+                  <p className="agro-empty">
+                    {pronostico.length} días de pronóstico Open-Meteo: {lluviaPronostico.toFixed(1)} mm
+                    de lluvia contra {etcPronostico.toFixed(1)} mm de ETc, balance {conSigno(balancePronostico)} mm.
+                    ET0 calculada por Open-Meteo con FAO-56. Es un modelo, no una medición, y se reemplaza
+                    por el dato observado cuando el día pasa.
+                  </p>
+                </>
+              ) : (
+                <p className="agro-empty">
+                  Sin pronóstico guardado para este lote. {loteActual.last_refresh_status?.startsWith("partial:")
+                    ? `El último procesamiento quedó parcial: ${loteActual.last_refresh_status.replace(/^partial:\s*/, "")}`
+                    : loteActual.last_refresh_status?.startsWith("error:")
+                      ? `El último procesamiento falló: ${loteActual.last_refresh_status.replace(/^error:\s*/, "")}`
+                      : "Procesá el lote para traerlo."}
+                </p>
+              )}
+            </article>
+          )}
+
+          {loteActual && historico.length > 0 && (
+            <article className="agro-card">
+              <h3>{loteActual.name} · serie diaria observada</h3>
               <p>NASA POWER usa días en hora solar local (LST). ET0 histórica estimada con FAO-56 y humedad media. Los días sin datos completos no se rellenan.</p>
               <BalanceChart series={series} />
               <div className="agro-series-table">
@@ -385,10 +457,10 @@ export default function AgroPanel({ token }: { token: string }) {
                     <tr><th>Día</th><th>Fuente</th><th>Máx</th><th>Mín</th><th>Lluvia</th><th>ET0</th><th>ETc</th><th>GDD ac.</th><th>Balance ac.</th></tr>
                   </thead>
                   <tbody>
-                    {series.slice(-14).map((d) => (
-                      <tr key={d.day} className={d.is_forecast ? "forecast" : ""}>
-                        <td>{fecha(d.day)}{d.is_forecast && <small> pron.</small>}</td>
-                        <td>{d.source === "nasa-power" ? "NASA POWER · LST" : "Open-Meteo"}</td>
+                    {historico.slice(-14).map((d) => (
+                      <tr key={d.day}>
+                        <td>{fecha(d.day)}</td>
+                        <td>{d.source === "nasa-power" ? "NASA POWER · LST" : d.source === "open-meteo-previo" ? "Open-Meteo · previo" : "Open-Meteo"}</td>
                         <td>{d.tmax_c?.toFixed(1) ?? "—"}</td>
                         <td>{d.tmin_c?.toFixed(1) ?? "—"}</td>
                         <td>{d.precipitation_mm?.toFixed(1) ?? "—"}</td>

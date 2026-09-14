@@ -43,6 +43,21 @@ def retry_seconds(value: str | None) -> float:
     return max(1, seconds) if math.isfinite(seconds) else 300
 
 
+def provider_reason(response) -> str:
+    """Motivo textual que publica Open-Meteo junto al error.
+
+    Distingue el cupo por minuto del diario, que es la diferencia entre
+    reintentar en un minuto y haber agotado el dia. Se descarta cualquier
+    cuerpo que no sea el JSON de error documentado.
+    """
+    try:
+        payload = response.json()
+    except ValueError:
+        return ""
+    reason = payload.get("reason") if isinstance(payload, dict) else None
+    return f" Open-Meteo informó: {reason.strip()}" if isinstance(reason, str) and reason.strip() else ""
+
+
 async def get_response(client, url: str, params: dict, ttl: float):
     # Cache keys include credentials, hashed so keys never retain a plain secret.
     key = hashlib.sha256(repr((url, sorted(params.items()))).encode()).hexdigest()
@@ -76,6 +91,7 @@ async def get_response(client, url: str, params: dict, ttl: float):
             if len(_cooldowns) > 128:
                 _cooldowns.popitem(last=False)
             raise RateLimited(f"Open-Meteo HTTP 429 (límite de consultas). Reintentá en {math.ceil(delay)} segundos."
+                              + provider_reason(response)
                               + (" Configurá OPEN_METEO_API_KEY si disponés de un plan comercial." if not params.get("apikey") else ""))
         if response.status_code == 200:
             payload = response.json()  # Never cache an invalid response body.

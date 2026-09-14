@@ -167,3 +167,47 @@ async def test_persistent_cooldown_prevents_retry_after_restart(monkeypatch):
     with pytest.raises(open_meteo_http.RateLimited):
         await open_meteo_http.get_response(client, "https://api.open-meteo.com/v1/forecast", {"latitude": "-26"}, 60)
     assert client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_previous_forecast_is_reused_when_open_meteo_fails(monkeypatch):
+    """Reprocesar durante un 429 no puede dejar al lote sin proximos dias."""
+    from contextlib import asynccontextmanager
+    from datetime import datetime, timezone
+    from uuid import uuid4
+    from app.routers import agro as router
+    user = SimpleNamespace(id=uuid4(), org_id=uuid4())
+    conn = SimpleNamespace(execute=AsyncMock(), copy_records_to_table=AsyncMock())
+
+    @asynccontextmanager
+    async def scope():
+        yield conn
+
+    conn.transaction = scope
+    guardado = [
+        {"day": date(2026, 8, 3), "tmax_c": 24.0, "tmin_c": 12.0, "precipitation_mm": 0.0,
+         "et0_mm": 3.1, "created_at": datetime(2026, 8, 2, 9, 0, tzinfo=timezone.utc)},
+        {"day": date(2026, 8, 4), "tmax_c": 26.0, "tmin_c": 13.0, "precipitation_mm": 5.0,
+         "et0_mm": 3.4, "created_at": datetime(2026, 8, 2, 9, 0, tzinfo=timezone.utc)},
+    ]
+    pool = SimpleNamespace(acquire=scope, fetch=AsyncMock(side_effect=[guardado, []]), execute=AsyncMock())
+    monkeypatch.setattr(db, "pool", lambda: pool)
+    monkeypatch.setattr(router, "require_agro_module", AsyncMock())
+    monkeypatch.setattr(router, "_lot_or_404", AsyncMock(return_value={"crop_key": "maiz", "lat": -27.367,
+        "lon": -55.896, "sowing_date": date(2026, 8, 1)}))
+    monkeypatch.setattr(router, "record_audit", AsyncMock())
+    monkeypatch.setattr(agro, "today_local", lambda: date(2026, 8, 3))
+    monkeypatch.setattr(agro, "fetch_history", AsyncMock(return_value=nasa.parse_daily(payload(), -27.367)))
+    monkeypatch.setattr(agro, "fetch_forecast", AsyncMock(side_effect=agro.OpenMeteoError("HTTP 429")))
+
+    result = await router.refresh_lot(uuid4(), 90, user)
+
+    assert result.forecast_days == 2
+    assert "Pronostico reutilizado del 2026-08-02" in result.detail
+    assert any("previo del 2026-08-02" in fuente for fuente in result.sources)
+    assert result.advisories == []
+    registros = conn.copy_records_to_table.await_args.kwargs["records"]
+    fuentes = {fila[2]: fila[-2] for fila in registros}
+    assert fuentes[date(2026, 8, 1)] == "nasa-power"
+    assert fuentes[date(2026, 8, 3)] == "open-meteo-previo"
+    assert fuentes[date(2026, 8, 4)] == "open-meteo-previo"

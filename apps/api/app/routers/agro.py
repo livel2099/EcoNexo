@@ -11,7 +11,7 @@ La idea es que un agronomo pueda discutirla, no solo acatarla.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -484,6 +484,31 @@ async def refresh_lot(
             f"Falló la consulta meteorológica ({type(exc).__name__}). Reintentá en unos minutos.",
         ) from exc
 
+    # Un 429 en el pronostico no deberia borrar el que ya estaba guardado: sin
+    # esto, reprocesar durante el limite de consultas deja al lote sin proximos
+    # dias. Se reutiliza el anterior, rotulado y sin generar recomendaciones.
+    reusado: date | None = None
+    if not pron_diario:
+        previos = await db.pool().fetch(
+            """
+            SELECT day, tmax_c, tmin_c, precipitation_mm, et0_mm, created_at
+            FROM agro_lot_daily
+            WHERE lot_id=$1 AND is_forecast AND day >= $2
+            ORDER BY day
+            """,
+            lot_id, hoy,
+        )
+        pron_diario = [
+            {"day": fila["day"], "tmax": fila["tmax_c"], "tmin": fila["tmin_c"],
+             "precipitation_mm": fila["precipitation_mm"], "et0_mm": fila["et0_mm"]}
+            for fila in previos
+        ]
+        if pron_diario:
+            reusado = max(fila["created_at"] for fila in previos).date()
+            warnings.append(
+                f"Pronostico reutilizado del {reusado.isoformat()}: no genera recomendaciones."
+            )
+
     dias_archivo = {d["day"] for d in historia}
     expected_days = max(0, (hoy - desde).days)
     missing_days = expected_days - len(dias_archivo)
@@ -501,10 +526,12 @@ async def refresh_lot(
         (lot_id, user.org_id, p.day, p.tmax, p.tmin, p.precipitation_mm, p.et0_mm,
          p.kc, p.etc_mm, p.gdd, p.gdd_accum, p.balance_mm, p.balance_accum_mm,
          p.stage_key if not missing_days else None, p.stage_name if not missing_days else None,
-         "nasa-power" if p.day in dias_archivo else "open-meteo", p.day in dias_pronostico)
+         "nasa-power" if p.day in dias_archivo else ("open-meteo-previo" if reusado else "open-meteo"),
+         p.day in dias_pronostico)
         for p in serie
     ]
-    avisos = _build_advisories(crop, observado if not missing_days else [], pron_diario, pron_horario)
+    avisos = _build_advisories(crop, observado if not missing_days else [],
+                               [] if reusado else pron_diario, pron_horario)
 
     async with db.pool().acquire() as conn:
         async with conn.transaction():
@@ -564,7 +591,9 @@ async def refresh_lot(
         advisories=[_advisory_out(a) for a in vigentes],
         sources=[
             "NASA POWER · histórico diario en hora solar local (LST)",
-            "Open-Meteo Forecast · pronóstico diario y horario" if pron_diario else "Open-Meteo Forecast · no disponible en este procesamiento",
+            f"Open-Meteo Forecast · pronóstico previo del {reusado.isoformat()} reutilizado" if reusado
+            else "Open-Meteo Forecast · pronóstico diario y horario" if pron_diario
+            else "Open-Meteo Forecast · no disponible en este procesamiento",
             "ET0 histórica estimada por EcoNexo: FAO-56 Penman-Monteith con humedad media; ET0 de pronóstico por Open-Meteo",
         ],
         detail=(

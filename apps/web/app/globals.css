@@ -2499,6 +2499,24 @@ textarea:focus-visible,
 .agro-chart-forecast { stroke: var(--amber); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 .agro-chart figcaption { font-size: .74rem; color: var(--muted-2); line-height: 1.45; }
 
+.agro-forecast {
+  list-style: none; margin: 0 0 .7rem; padding: 0; display: grid; gap: .55rem;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+.agro-forecast-day {
+  display: grid; gap: .3rem; padding: .6rem .65rem; border-radius: 11px;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--panel-2) 70%, transparent);
+}
+.agro-forecast-day strong { font-size: .78rem; text-transform: capitalize; }
+.agro-forecast-temp { font-size: .95rem; color: var(--amber); }
+.agro-forecast-day dl { margin: 0; display: grid; gap: .15rem; font-size: .74rem; }
+.agro-forecast-day dl div { display: flex; justify-content: space-between; gap: .5rem; }
+.agro-forecast-day dt { color: var(--muted-2); }
+.agro-forecast-day dd { margin: 0; font-variant-numeric: tabular-nums; }
+.agro-forecast-deficit { color: var(--amber); }
+.agro-forecast-day small { font-size: .68rem; color: var(--muted-2); }
+
 .agro-series-table { overflow-x: auto; }
 .agro-series-table table { width: 100%; border-collapse: collapse; font-size: .78rem; }
 .agro-series-table th { text-align: right; padding: .3rem .45rem; color: var(--muted-2); font-weight: 500; border-bottom: 1px solid var(--border-soft); }

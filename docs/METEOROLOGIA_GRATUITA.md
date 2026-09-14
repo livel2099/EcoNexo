@@ -14,7 +14,10 @@ No configurar URLs customer de Open-Meteo si no se dispone de clave comercial:
 conservar `https://api.open-meteo.com/v1/forecast` para el pronóstico.
 La variable de archivo Open-Meteo ya no interviene en los históricos de AG.
 
-En AG, procesar un lote y abrir Ver serie. Cada día identifica su fuente.
+En AG, procesar un lote y abrir Ver serie: primero los próximos días de
+pronóstico y después la serie observada. Cada día identifica su fuente. Si al
+reprocesar Open-Meteo no responde, se conserva el pronóstico guardado antes,
+rotulado como previo, y no se generan recomendaciones a partir de él.
 Si Open-Meteo responde 429, el histórico NASA se guarda como resultado parcial;
 no se producen recomendaciones basadas en pronósticos ausentes.
 Los nodos virtuales todavía dependen de Open-Meteo: NASA no reemplaza datos
@@ -42,6 +45,13 @@ Open-Meteo: pronóstico 15 minutos; nodos actuales 15 minutos, que es cada
 cuánto Open-Meteo actualiza el bloque `current` (campo `interval`). La lectura
 guardada lleva la hora de la corrida; el dato de origen puede tener hasta 15
 minutos, como ya ocurría antes de la caché.
+Los errores conservan el motivo que publica Open-Meteo (`reason`), que es lo que
+distingue el cupo por minuto del diario.
+Según la página de precios, una consulta HTTP equivale a una llamada salvo que
+pida más de 10 variables o más de dos semanas; el cálculo de llamadas incluye
+además un factor por ubicaciones, así que agrupar coordenadas podría dejar de
+contar como una sola llamada en el futuro. Contra los límites por minuto y por
+hora, que cuentan consultas, la mejora es directa.
 Las lecturas actuales de todos los nodos virtuales de una corrida viajan en una
 sola consulta con lista de coordenadas; Open-Meteo responde una entrada por
 coordenada y se guarda la posición, no se emparejan por cercanía. Si devuelve

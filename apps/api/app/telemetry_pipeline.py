@@ -21,7 +21,7 @@ import asyncpg
 import httpx
 
 from . import db
-from .open_meteo_http import customer_url, get_response
+from .open_meteo_http import customer_url, get_response, provider_reason
 from .config import get_settings
 from .correlation import Source
 from .pipeline import anomaly_score, create_alert
@@ -133,7 +133,7 @@ async def fetch_open_meteo_current_batch(
                 }
                 raise RuntimeError(f"Open-Meteo HTTP {response.status_code}: " + hints.get(
                     response.status_code, "La fuente no esta disponible; reintenta mas tarde."
-                ))
+                ) + provider_reason(response))
             payload = response.json()
             # Una sola coordenada responde un objeto; varias, una lista ordenada.
             items = payload if isinstance(payload, list) else [payload]
