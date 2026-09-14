@@ -10,6 +10,10 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit, urlunsplit
 
+import httpx
+
+from . import weather_cache
+
 _cache: OrderedDict = OrderedDict()
 _cooldowns: OrderedDict = OrderedDict()
 _lock = asyncio.Lock()
@@ -50,6 +54,16 @@ async def get_response(client, url: str, params: dict, ttl: float):
             _cache.move_to_end(key)
             return cached[1]
         _cache.pop(key, None)
+        saved = await weather_cache.read("response:" + key)
+        # Lista: respuesta de Open-Meteo con varias coordenadas en una consulta.
+        if isinstance(saved, (dict, list)):
+            return httpx.Response(200, json=saved)
+        cooldown_key = "cooldown:" + hashlib.sha256(repr(scope).encode()).hexdigest()
+        paused = await weather_cache.read(cooldown_key)
+        if isinstance(paused, dict) and isinstance(paused.get("until"), (float, int)):
+            remaining = paused["until"] - time.time()
+            if remaining > 0:
+                raise RateLimited(f"Open-Meteo HTTP 429 (límite de consultas). Reintentá en {math.ceil(remaining)} segundos.")
         until = _cooldowns.get(scope, 0)
         if until > now:
             raise RateLimited(f"Open-Meteo HTTP 429 (límite de consultas). Reintentá en {math.ceil(until - now)} segundos.")
@@ -58,12 +72,15 @@ async def get_response(client, url: str, params: dict, ttl: float):
         if response.status_code == 429:
             delay = retry_seconds(response.headers.get("retry-after"))
             _cooldowns[scope] = time.monotonic() + delay
+            await weather_cache.write(cooldown_key, {"until": time.time() + delay}, delay)
             if len(_cooldowns) > 128:
                 _cooldowns.popitem(last=False)
             raise RateLimited(f"Open-Meteo HTTP 429 (límite de consultas). Reintentá en {math.ceil(delay)} segundos."
                               + (" Configurá OPEN_METEO_API_KEY si disponés de un plan comercial." if not params.get("apikey") else ""))
         if response.status_code == 200:
-            response.json()  # Never cache an invalid response body.
+            payload = response.json()  # Never cache an invalid response body.
+            if isinstance(payload, (dict, list)):
+                await weather_cache.write("response:" + key, payload, ttl)
             _cache[key] = (time.monotonic() + ttl, response)
             if len(_cache) > 128:
                 _cache.popitem(last=False)

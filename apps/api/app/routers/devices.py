@@ -116,6 +116,9 @@ async def update_device(
         args.append(json.dumps(value) if key == "telemetry_config" else value)
         cast = "::jsonb" if key == "telemetry_config" else ""
         assignments.append(f"{key}=${len(args)}{cast}")
+    if body.telemetry_mode is not None and body.telemetry_mode != existing["telemetry_mode"]:
+        # A previous provider's error must not describe the newly selected source.
+        assignments.extend(["last_pipeline_status=NULL", "last_pipeline_at=NULL"])
     if body.lat is not None:
         args.extend([body.lon, body.lat])
         assignments.append(f"location=ST_MakePoint(${len(args)-1},${len(args)})::geography")

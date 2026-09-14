@@ -562,6 +562,7 @@ export interface AgroDaily {
   balance_accum_mm: number | null;
   stage_key: string | null;
   stage_name: string | null;
+  source?: string;
   is_forecast: boolean;
 }
 

@@ -1041,6 +1041,7 @@ class AgroDailyOut(BaseModel):
     balance_accum_mm: float | None = None
     stage_key: str | None = None
     stage_name: str | None = None
+    source: str = "open-meteo"
     is_forecast: bool = False
 
 

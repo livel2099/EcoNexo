@@ -65,7 +65,7 @@ export default function DevicesPanel({ token }: { token: string }) {
   }, [sel, variable, token]);
 
   function sourceLabel(device: Device) {
-    return device.telemetry_mode === "open_meteo" ? "Open-Meteo · datos modelados" : device.telemetry_mode === "manual" ? "Carga manual" : "Dispositivo físico · MQTT";
+    return device.telemetry_mode === "open_meteo" ? "Open-Meteo · datos modelados" : device.telemetry_mode === "manual" ? "Carga manual" : device.telemetry_mode === "mqtt" ? "Dispositivo físico · MQTT" : "Fuente no informada";
   }
 
   function statusLabel(device: Device) {
@@ -93,7 +93,11 @@ export default function DevicesPanel({ token }: { token: string }) {
             </div>
             <div className="muted">{sourceLabel(d)}</div>
             <div>{Object.entries(d.latest_readings || {}).map(([key, value]) => `${key}: ${value}`).join(" · ") || "Sin lecturas todavía"}</div>
-            {d.last_pipeline_status?.startsWith("error:") && <div role="status">{d.last_pipeline_status}</div>}
+            {d.last_pipeline_status?.startsWith("error:") && <div role="status">
+              <small>Último intento{d.last_pipeline_at ? ` · ${new Date(d.last_pipeline_at).toLocaleString("es-AR")}` : ""}</small>
+              <div>{d.last_pipeline_status.replace(/^error:/, "").replace(/Reintentá en (\d+) segundos\./, "Espera indicada en ese intento: $1 segundos.")}</div>
+            </div>}
+            {d.telemetry_mode === "mqtt" && d.tags.includes("virtual") && d.tags.includes("open-meteo") && <p>Fuente configurada: MQTT. Las etiquetas indican un nodo virtual; revisá la fuente en la configuración de nodos.</p>}
             {d.telemetry_mode === "mqtt" && <div className="metrics mono">
               <span>🔋 {d.battery ?? "—"}%</span>
               <span>📶 {d.rssi ?? "—"} dBm</span>

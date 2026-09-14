@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -39,6 +40,11 @@ OPEN_METEO_VARIABLES: dict[str, str] = {
     "soil_moisture_0_to_1cm": "soil_moisture",
     "vapour_pressure_deficit": "vpd",
 }
+# Open-Meteo actualiza el bloque `current` cada 15 minutos (campo `interval` de
+# la respuesta). Repreguntar antes gasta cupo para recibir el mismo valor.
+OPEN_METEO_CURRENT_TTL_SECONDS = 900
+# Coordenadas por consulta: acota el largo de la URL sin volver a una por nodo.
+OPEN_METEO_BATCH_SIZE = 50
 
 
 def _number(value: Any) -> float | None:
@@ -77,30 +83,8 @@ async def pipeline_settings(org_id: UUID, user_id: UUID | None = None) -> Any:
     return row
 
 
-async def fetch_open_meteo_current(lat: float, lon: float) -> dict[str, float]:
-    settings = get_settings()
-    params = {
-        "latitude": str(lat),
-        "longitude": str(lon),
-        "current": ",".join(OPEN_METEO_VARIABLES),
-        "timezone": "UTC",
-    }
-    if settings.open_meteo_api_key.strip():
-        params["apikey"] = settings.open_meteo_api_key.strip()
-    async with httpx.AsyncClient(timeout=settings.pipeline_http_timeout_seconds) as client:
-        response = await get_response(client, customer_url(settings.open_meteo_forecast_url, settings.open_meteo_api_key.strip()), params, ttl=60)
-        if response.is_error:
-            hints = {
-                429: "Limite de consultas alcanzado; reintenta mas tarde o revisa el cupo de Open-Meteo.",
-                401: "Revisa la clave y la URL configuradas para Open-Meteo.",
-                403: "Acceso rechazado; revisa la clave y la URL de Open-Meteo.",
-                400: "Open-Meteo rechazo los parametros de la consulta.",
-            }
-            raise RuntimeError(f"Open-Meteo HTTP {response.status_code}: " + hints.get(
-                response.status_code, "La fuente no esta disponible; reintenta mas tarde."
-            ))
-        payload = response.json()
-    current = payload.get("current") or {}
+def _current_readings(payload: Any) -> dict[str, float]:
+    current = (payload or {}).get("current") or {}
     result: dict[str, float] = {}
     for source_key, target_key in OPEN_METEO_VARIABLES.items():
         value = _number(current.get(source_key))
@@ -111,8 +95,67 @@ async def fetch_open_meteo_current(lat: float, lon: float) -> dict[str, float]:
     return result
 
 
-async def refresh_open_meteo_device(device: Any) -> tuple[int, dict[str, float]]:
-    readings = await fetch_open_meteo_current(float(device["lat"]), float(device["lon"]))
+async def fetch_open_meteo_current_batch(
+    points: Sequence[tuple[float, float]]
+) -> list[dict[str, float]]:
+    """Lecturas actuales de varias coordenadas en una sola consulta.
+
+    Open-Meteo acepta listas de coordenadas y responde una entrada por punto en
+    el mismo orden. Los nodos de una zona caen en la misma celda del modelo
+    (~11 km, la API devuelve la coordenada de la celda), asi que agruparlos no
+    cambia el dato y divide por la cantidad de nodos el consumo del cupo, que es
+    lo que dispara el 429 en la IP de salida compartida de Render.
+    """
+    if not points:
+        return []
+    settings = get_settings()
+    api_key = settings.open_meteo_api_key.strip()
+    url = customer_url(settings.open_meteo_forecast_url, api_key)
+    readings: list[dict[str, float]] = []
+    async with httpx.AsyncClient(timeout=settings.pipeline_http_timeout_seconds) as client:
+        for start in range(0, len(points), OPEN_METEO_BATCH_SIZE):
+            grupo = list(points[start:start + OPEN_METEO_BATCH_SIZE])
+            params = {
+                "latitude": ",".join(f"{lat:.4f}" for lat, _ in grupo),
+                "longitude": ",".join(f"{lon:.4f}" for _, lon in grupo),
+                "current": ",".join(OPEN_METEO_VARIABLES),
+                "timezone": "UTC",
+            }
+            if api_key:
+                params["apikey"] = api_key
+            response = await get_response(client, url, params, ttl=OPEN_METEO_CURRENT_TTL_SECONDS)
+            if response.is_error:
+                hints = {
+                    429: "Limite de consultas alcanzado; reintenta mas tarde o revisa el cupo de Open-Meteo.",
+                    401: "Revisa la clave y la URL configuradas para Open-Meteo.",
+                    403: "Acceso rechazado; revisa la clave y la URL de Open-Meteo.",
+                    400: "Open-Meteo rechazo los parametros de la consulta.",
+                }
+                raise RuntimeError(f"Open-Meteo HTTP {response.status_code}: " + hints.get(
+                    response.status_code, "La fuente no esta disponible; reintenta mas tarde."
+                ))
+            payload = response.json()
+            # Una sola coordenada responde un objeto; varias, una lista ordenada.
+            items = payload if isinstance(payload, list) else [payload]
+            if len(items) != len(grupo):
+                # Emparejar por posicion una respuesta incompleta asignaria a un
+                # nodo la lectura de otra coordenada.
+                raise RuntimeError(
+                    f"Open-Meteo devolvio {len(items)} ubicaciones para {len(grupo)} nodos"
+                )
+            readings.extend(_current_readings(item) for item in items)
+    return readings
+
+
+async def fetch_open_meteo_current(lat: float, lon: float) -> dict[str, float]:
+    return (await fetch_open_meteo_current_batch([(lat, lon)]))[0]
+
+
+async def refresh_open_meteo_device(
+    device: Any, readings: dict[str, float] | None = None
+) -> tuple[int, dict[str, float]]:
+    if readings is None:
+        readings = await fetch_open_meteo_current(float(device["lat"]), float(device["lon"]))
     if not readings:
         raise RuntimeError("Open-Meteo no devolvio variables actuales")
     now = datetime.now(timezone.utc)
@@ -465,10 +508,27 @@ async def run_org_pipeline(
             except Exception as exc:  # pragma: no cover - depende de fuente externa
                 errors.append({"stage": "firms", "error": str(exc)[:300]})
                 log.warning("FIRMS inline fallo: %s", exc)
+        # Una consulta para todos los nodos virtuales en lugar de una por nodo:
+        # el cupo gratuito de Open-Meteo se agota por cantidad de consultas.
+        virtuales = [item for item in devices if item["telemetry_mode"] == "open_meteo"]
+        lecturas: dict[Any, dict[str, float]] = {}
+        fallo_open_meteo: Exception | None = None
+        if virtuales:
+            try:
+                lotes = await fetch_open_meteo_current_batch(
+                    [(float(item["lat"]), float(item["lon"])) for item in virtuales]
+                )
+                lecturas = {item["id"]: valores for item, valores in zip(virtuales, lotes)}
+            except Exception as exc:
+                # El motivo se guarda por nodo mas abajo, como cuando fallaba
+                # la consulta individual.
+                fallo_open_meteo = exc
         for device in devices:
             try:
                 if device["telemetry_mode"] == "open_meteo":
-                    inserted, _ = await refresh_open_meteo_device(device)
+                    if fallo_open_meteo is not None:
+                        raise fallo_open_meteo
+                    inserted, _ = await refresh_open_meteo_device(device, lecturas.get(device["id"]))
                     readings_inserted += inserted
                     devices_updated += 1
                 if settings["evaluate_rules"]:

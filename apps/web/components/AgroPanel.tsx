@@ -267,7 +267,7 @@ export default function AgroPanel({ token }: { token: string }) {
           <h2>Lotes y decisiones de campo</h2>
           <p>
             Fenología por grados día, balance hídrico con ET0 FAO-56 y ventanas de aplicación,
-            calculados sobre reanálisis y pronóstico meteorológico reales de Open-Meteo.
+            calculados con históricos NASA POWER y pronósticos Open-Meteo. ET0 histórica estimada con FAO-56.
           </p>
         </div>
         <div className="agro-header-actions">
@@ -345,8 +345,8 @@ export default function AgroPanel({ token }: { token: string }) {
                 </div>
                 <small>{lot.last_refresh_at ? `procesado ${fechaHora(lot.last_refresh_at)}` : "sin procesar"}</small>
               </header>
-              {lot.last_refresh_status?.startsWith("error:") && (
-                <p className="agro-lot-error">{lot.last_refresh_status.replace(/^error:\s*/, "")}</p>
+              {(lot.last_refresh_status?.startsWith("error:") || lot.last_refresh_status?.startsWith("partial:")) && (
+                <p className="agro-lot-error">{lot.last_refresh_status.replace(/^(error|partial):\s*/, "")}</p>
               )}
               <dl className="agro-lot-metrics">
                 <div><dt>Etapa</dt><dd>{lot.stage_name || "—"}</dd></div>
@@ -377,16 +377,18 @@ export default function AgroPanel({ token }: { token: string }) {
           {loteActual && series.length > 0 && (
             <article className="agro-card">
               <h3>{loteActual.name} · serie diaria</h3>
+              <p>NASA POWER usa días en hora solar local (LST). ET0 histórica estimada con FAO-56 y humedad media. Los días sin datos completos no se rellenan.</p>
               <BalanceChart series={series} />
               <div className="agro-series-table">
                 <table>
                   <thead>
-                    <tr><th>Día</th><th>Máx</th><th>Mín</th><th>Lluvia</th><th>ET0</th><th>ETc</th><th>GDD ac.</th><th>Balance ac.</th></tr>
+                    <tr><th>Día</th><th>Fuente</th><th>Máx</th><th>Mín</th><th>Lluvia</th><th>ET0</th><th>ETc</th><th>GDD ac.</th><th>Balance ac.</th></tr>
                   </thead>
                   <tbody>
                     {series.slice(-14).map((d) => (
                       <tr key={d.day} className={d.is_forecast ? "forecast" : ""}>
                         <td>{fecha(d.day)}{d.is_forecast && <small> pron.</small>}</td>
+                        <td>{d.source === "nasa-power" ? "NASA POWER · LST" : "Open-Meteo"}</td>
                         <td>{d.tmax_c?.toFixed(1) ?? "—"}</td>
                         <td>{d.tmin_c?.toFixed(1) ?? "—"}</td>
                         <td>{d.precipitation_mm?.toFixed(1) ?? "—"}</td>

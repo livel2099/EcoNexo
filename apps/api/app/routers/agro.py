@@ -1,7 +1,7 @@
 """EcoNexo AG: lotes agricolas e inteligencia agronomica sobre datos reales.
 
 El endpoint que hace el trabajo es ``POST /agro/lots/{id}/refresh``: baja la
-serie historica y el pronostico de Open-Meteo para la coordenada del lote,
+serie historica NASA POWER y el pronostico Open-Meteo para el lote,
 calcula los indicadores agronomicos y guarda tanto la serie como las
 recomendaciones que se desprenden de ella.
 
@@ -18,6 +18,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from .. import agro, db
+from ..nasa_power import NasaPowerError
 from ..audit import record_audit
 from ..deps import CurrentUser, current_user, require_role
 from ..schemas import (
@@ -456,10 +457,15 @@ async def refresh_lot(
         desde = hoy - timedelta(days=history_days)
     desde = max(desde, hoy - timedelta(days=365))
 
+    warnings: list[str] = []
     try:
         historia = await agro.fetch_history(lat, lon, desde, hoy - timedelta(days=1))
-        pron_diario, pron_horario = await agro.fetch_forecast(lat, lon, FORECAST_DAYS)
-    except agro.OpenMeteoError as exc:
+        try:
+            pron_diario, pron_horario = await agro.fetch_forecast(lat, lon, FORECAST_DAYS)
+        except agro.OpenMeteoError as exc:
+            pron_diario, pron_horario = [], []
+            warnings.append(f"Sin pronostico actualizado: {exc}")
+    except (agro.OpenMeteoError, NasaPowerError) as exc:
         # La causa concreta viaja al usuario y queda en el lote: "no se pudo"
         # no permite distinguir un limite de consultas de un corte de red.
         motivo = str(exc)
@@ -479,19 +485,26 @@ async def refresh_lot(
         ) from exc
 
     dias_archivo = {d["day"] for d in historia}
+    expected_days = max(0, (hoy - desde).days)
+    missing_days = expected_days - len(dias_archivo)
+    if missing_days:
+        warnings.append(f"Historico incompleto: faltan {missing_days} dias; acumulados parciales y sin recomendaciones retrospectivas.")
+    if not pron_diario and not any("Sin pronostico" in warning for warning in warnings):
+        warnings.append("Sin pronostico actualizado")
     serie = agro.build_daily_series(crop, historia + pron_diario)
     if not serie:
-        raise HTTPException(502, "Open-Meteo no devolvió días utilizables para este lote")
+        raise HTTPException(502, "Las fuentes meteorológicas no devolvieron días utilizables para este lote")
     observado = [p for p in serie if p.day in dias_archivo]
     dias_pronostico = {p.day for p in serie if p.day not in dias_archivo}
 
     registros = [
         (lot_id, user.org_id, p.day, p.tmax, p.tmin, p.precipitation_mm, p.et0_mm,
          p.kc, p.etc_mm, p.gdd, p.gdd_accum, p.balance_mm, p.balance_accum_mm,
-         p.stage_key, p.stage_name, "open-meteo", p.day in dias_pronostico)
+         p.stage_key if not missing_days else None, p.stage_name if not missing_days else None,
+         "nasa-power" if p.day in dias_archivo else "open-meteo", p.day in dias_pronostico)
         for p in serie
     ]
-    avisos = _build_advisories(crop, observado, pron_diario, pron_horario)
+    avisos = _build_advisories(crop, observado if not missing_days else [], pron_diario, pron_horario)
 
     async with db.pool().acquire() as conn:
         async with conn.transaction():
@@ -523,7 +536,7 @@ async def refresh_lot(
                 )
             await conn.execute(
                 "UPDATE agro_lots SET last_refresh_at=now(), last_refresh_status=$2 WHERE id=$1",
-                lot_id, f"ok: {len(serie)} días",
+                lot_id, ("partial: " + " · ".join(warnings)) if warnings else f"ok: {len(serie)} días",
             )
 
     vigentes = await db.pool().fetch(
@@ -539,7 +552,7 @@ async def refresh_lot(
     await record_audit(
         org_id=user.org_id, user_id=user.id, action="agro_refresh_lot",
         resource="agro_lot", resource_id=lot_id,
-        metadata={"dias": len(serie), "avisos": len(avisos), "fuente": "open-meteo"},
+        metadata={"dias": len(serie), "avisos": len(avisos), "fuentes": ["nasa-power", "open-meteo"], "warnings": warnings},
     )
     return AgroRefreshOut(
         lot_id=lot_id,
@@ -547,16 +560,17 @@ async def refresh_lot(
         history_days=len(observado),
         forecast_days=len(serie) - len(observado),
         gdd_accum=ultimo_real.gdd_accum,
-        stage_name=ultimo_real.stage_name,
+        stage_name=ultimo_real.stage_name if not missing_days else None,
         advisories=[_advisory_out(a) for a in vigentes],
         sources=[
-            "Open-Meteo Archive (reanálisis ERA5) · histórico diario",
-            "Open-Meteo Forecast · pronóstico diario y horario",
-            "ET0 FAO-56 Penman-Monteith calculada por Open-Meteo",
+            "NASA POWER · histórico diario en hora solar local (LST)",
+            "Open-Meteo Forecast · pronóstico diario y horario" if pron_diario else "Open-Meteo Forecast · no disponible en este procesamiento",
+            "ET0 histórica estimada por EcoNexo: FAO-56 Penman-Monteith con humedad media; ET0 de pronóstico por Open-Meteo",
         ],
         detail=(
             f"{len(serie)} días procesados para {crop.name}: "
-            f"{len(historia)} de histórico y {len(pron_diario)} de pronóstico."
+            f"{len(historia)} de histórico y {len(pron_diario)} de pronóstico. "
+            + " · ".join(warnings)
         ),
     )
 
@@ -571,7 +585,7 @@ async def lot_series(
     rows = await db.pool().fetch(
         """
         SELECT day, tmax_c, tmin_c, precipitation_mm, et0_mm, kc, etc_mm, gdd,
-               gdd_accum, balance_mm, balance_accum_mm, stage_key, stage_name, is_forecast
+               gdd_accum, balance_mm, balance_accum_mm, stage_key, stage_name, source, is_forecast
         FROM agro_lot_daily
         WHERE lot_id=$1 AND day >= current_date - $2::int
         ORDER BY day

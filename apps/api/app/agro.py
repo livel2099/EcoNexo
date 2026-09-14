@@ -1,15 +1,9 @@
 """EcoNexo AG: motor agronomico sobre datos meteorologicos reales.
 
-Todo lo que este modulo calcula sale de mediciones y reanalisis de Open-Meteo,
-no de datos sinteticos:
-
-  * historico diario -> ``archive-api.open-meteo.com`` (reanalisis ERA5).
-  * pronostico horario y diario -> ``api.open-meteo.com``.
-
-La ET0 no se estima aca: Open-Meteo la publica ya calculada por FAO-56
-Penman-Monteith, que es el metodo de referencia. Lo que agrega EcoNexo es la
-capa agronomica: grados dia, fenologia, coeficiente de cultivo, balance
-hidrico, ventanas de pulverizacion y presion de enfermedad.
+Los historicos diarios provienen de NASA POWER (hora solar local). La ET0
+historica se estima localmente con FAO-56 Penman-Monteith y humedad media.
+El pronostico diario y horario y su ET0 provienen de Open-Meteo.
+No se rellenan dias faltantes ni se presentan como lecturas de sensores.
 
 Los coeficientes del catalogo son valores de literatura (FAO-56 para Kc,
 temperaturas base de uso corriente). Son un punto de partida parametrizable,
@@ -254,7 +248,7 @@ class DailyPoint:
 
 def build_daily_series(crop: Crop, days: Sequence[dict[str, Any]],
                        gdd_inicial: float = 0.0) -> list[DailyPoint]:
-    """Procesa la serie diaria cruda de Open-Meteo a indicadores agronomicos.
+    """Procesa la serie diaria meteorologica a indicadores agronomicos.
 
     ``days`` son diccionarios con ``day``, ``tmax``, ``tmin``,
     ``precipitation_mm`` y ``et0_mm``. Los dias sin datos completos se saltean
@@ -268,7 +262,7 @@ def build_daily_series(crop: Crop, days: Sequence[dict[str, Any]],
     for crudo in days:
         tmax = crudo.get("tmax")
         tmin = crudo.get("tmin")
-        if tmax is None or tmin is None:
+        if any(crudo.get(key) is None for key in ("tmax", "tmin", "et0_mm", "precipitation_mm")):
             continue
         # Historico y pronostico pueden solaparse en el dia de hoy. Gana el
         # primero, que por orden de llamada es el dato observado.
@@ -601,17 +595,9 @@ def _parse_hourly(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 async def fetch_history(lat: float, lon: float, desde: date,
                         hasta: date) -> list[dict[str, Any]]:
-    """Serie diaria historica (reanalisis ERA5 via Open-Meteo)."""
-    params = {
-        "latitude": f"{lat:.4f}",
-        "longitude": f"{lon:.4f}",
-        "start_date": desde.isoformat(),
-        "end_date": hasta.isoformat(),
-        "daily": ",".join(DAILY_VARIABLES),
-        "timezone": TIMEZONE,
-    }
-    payload = await _consultar(get_settings().open_meteo_archive_url, params, "histórico")
-    return _parse_daily(payload)
+    """Historicos gratuitos NASA POWER con ET0 FAO-56 calculada localmente."""
+    from .nasa_power import fetch_history as nasa_history
+    return await nasa_history(lat, lon, desde, hasta)
 
 
 async def fetch_forecast(lat: float, lon: float, dias: int = 7

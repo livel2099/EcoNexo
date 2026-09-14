@@ -164,6 +164,7 @@ async def test_pipeline_uses_open_meteo_and_reports_partial_failures(context, mo
     }))
     refresh = AsyncMock(return_value=(2, {"temp": 24, "humidity": 70}))
     monkeypatch.setattr(engine, "refresh_open_meteo_device", refresh)
+    monkeypatch.setattr(engine, "fetch_open_meteo_current_batch", AsyncMock(return_value=[{"temp": 24}]))
     monkeypatch.setattr(engine, "publish", AsyncMock())
     result = await engine.run_org_pipeline(context.user.org_id, context.user.id)
     assert result["devices_updated"] == 1 and result["readings_inserted"] == 2
@@ -216,3 +217,83 @@ async def test_open_meteo_key_and_safe_http_diagnostics(monkeypatch, status):
         with pytest.raises(RuntimeError, match=f"HTTP {status}") as error:
             await engine.fetch_open_meteo_current(-27, -55)
         assert "private-test-key" not in str(error.value)
+
+
+@pytest.mark.asyncio
+async def test_source_change_clears_previous_provider_error(context):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=context.app), base_url="http://test") as client:
+        response = await client.patch(f"/devices/{context.device_id}", json={"telemetry_mode": "mqtt"})
+        assert response.status_code == 200
+        sql = context.pool.execute.await_args.args[0]
+        assert "last_pipeline_status=NULL" in sql
+        assert "last_pipeline_at=NULL" in sql
+        assert "WHERE id=$1 AND org_id=$2" in sql
+        response = await client.patch(f"/devices/{context.device_id}", json={"marker_shape": "square"})
+        assert response.status_code == 200
+        assert "last_pipeline_status=NULL" not in context.pool.execute.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_virtual_nodes_share_a_single_open_meteo_request(monkeypatch):
+    """Una consulta por corrida, no una por nodo: el cupo gratuito cuenta consultas."""
+    real_client = httpx.AsyncClient
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json=[
+            {"current": {"temperature_2m": 20.1, "soil_moisture_0_to_1cm": 0.24}},
+            {"current": {"temperature_2m": 21.4}},
+        ])
+
+    monkeypatch.setattr(engine, "get_settings", lambda: SimpleNamespace(
+        open_meteo_api_key="", pipeline_http_timeout_seconds=10,
+        open_meteo_forecast_url="https://example.test/forecast"))
+    monkeypatch.setattr(engine.httpx, "AsyncClient",
+                        lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
+    lecturas = await engine.fetch_open_meteo_current_batch([(-27.3671, -55.8961), (-27.3551, -55.8841)])
+    assert len(requests) == 1
+    assert requests[0].url.params["latitude"] == "-27.3671,-27.3551"
+    assert requests[0].url.params["longitude"] == "-55.8961,-55.8841"
+    assert lecturas == [{"temp": 20.1, "soil_moisture": 24.0}, {"temp": 21.4}]
+
+
+@pytest.mark.asyncio
+async def test_incomplete_batch_is_not_matched_by_position(monkeypatch):
+    """Faltando una ubicacion, emparejar por orden le daria a un nodo el dato de otro."""
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(engine, "get_settings", lambda: SimpleNamespace(
+        open_meteo_api_key="", pipeline_http_timeout_seconds=10,
+        open_meteo_forecast_url="https://example.test/forecast"))
+    monkeypatch.setattr(engine.httpx, "AsyncClient", lambda **kwargs: real_client(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[{"current": {"temperature_2m": 20.1}}])),
+        **kwargs))
+    with pytest.raises(RuntimeError, match="ubicaciones"):
+        await engine.fetch_open_meteo_current_batch([(-27.3671, -55.8961), (-27.3551, -55.8841)])
+
+
+@pytest.mark.asyncio
+async def test_pipeline_maps_each_node_to_its_own_reading(context, monkeypatch):
+    primero = {**context.row, "org_id": context.user.org_id}
+    segundo = {**context.row, "id": uuid4(), "org_id": context.user.org_id,
+               "lat": -27.3551, "lon": -55.8841}
+    context.pool.fetch.return_value = [primero, segundo]
+    monkeypatch.setattr(engine, "pipeline_settings", AsyncMock(return_value={
+        "enabled": True, "stale_minutes": 30, "refresh_firms": False, "evaluate_rules": False,
+    }))
+    lote = AsyncMock(return_value=[{"temp": 20.1}, {"temp": 21.4}])
+    monkeypatch.setattr(engine, "fetch_open_meteo_current_batch", lote)
+    refresh = AsyncMock(return_value=(1, {"temp": 20.1}))
+    monkeypatch.setattr(engine, "refresh_open_meteo_device", refresh)
+    monkeypatch.setattr(engine, "publish", AsyncMock())
+    result = await engine.run_org_pipeline(context.user.org_id, context.user.id)
+    assert lote.await_count == 1
+    assert lote.await_args.args[0] == [(-27.3671, -55.8961), (-27.3551, -55.8841)]
+    assert [call.args[1] for call in refresh.await_args_list] == [{"temp": 20.1}, {"temp": 21.4}]
+    assert result["devices_updated"] == 2 and result["status"] == "completed"
+
+    lote.side_effect = RuntimeError("Open-Meteo HTTP 429: Limite de consultas alcanzado")
+    result = await engine.run_org_pipeline(context.user.org_id, context.user.id)
+    assert result["status"] == "partial" and result["devices_updated"] == 0
+    assert len(result["errors"]) == 2
+    assert all("429" in item["error"] for item in result["errors"])
