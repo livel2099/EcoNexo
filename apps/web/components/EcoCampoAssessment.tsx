@@ -95,13 +95,15 @@ export default function EcoCampoAssessment({ lotId, token, areaHa }: { lotId: st
       }
       const usablePoints = (satelliteRows[0]?.result.series ?? []).filter(point => point.valid_pixel_pct >= 70);
       const bestPoint = usablePoints[usablePoints.length - 1];
+      let fallbackDate = new Date().toISOString().slice(0, 10);
       if (bestPoint) {
         patch.ndvi = String(bestPoint.ndvi);
         patch.valid_pixel_pct = String(bestPoint.valid_pixel_pct);
         const satelliteSource = satelliteRows[0].result.source;
-        setObservationDate(current => current || bestPoint.day);
+        fallbackDate = bestPoint.day;
         setSource(current => current || `${satelliteSource}; completar informe de campo y referencia estacional`);
       }
+      setObservationDate(current => current || fallbackDate);
       if (cond?.water_hint !== null && cond?.water_hint !== undefined) patch.water_suitable = String(cond.water_hint);
       if (cond?.flooding_hint !== null && cond?.flooding_hint !== undefined) patch.flooding = String(cond.flooding_hint);
       if (Object.keys(patch).length) setValues(previous => ({ ...patch, ...previous }));
@@ -156,6 +158,8 @@ export default function EcoCampoAssessment({ lotId, token, areaHa }: { lotId: st
           history.length > 0 ? "tu última evaluación guardada" : null,
         ].filter(Boolean).join(", ") || "sin lecturas previas para este lote"}. Son sugerencias editables, no reemplazan la inspección del lote: revisá cada campo antes de procesar.
       </p>}
+      {!satellite && <p className="agro-notice">Este lote todavía no tiene NDVI cargado: entrá a «Monitoreo NDVI», pegá el polígono real del lote y tocá «Consultar últimos 30 días» una vez. De ahí en adelante, la última lectura válida se va a autocompletar sola en cada evaluación nueva.</p>}
+      <p>Suelo apto, erosión y exposición a plaguicidas quedan siempre en «Sin verificar» la primera vez: la plataforma no tiene un sensor que los mida, así que nunca se completan solos. Agua suficiente, anegamiento y NDVI sí se autocompletan cuando hay una lectura reciente del nodo más cercano, el balance hídrico o el satélite.</p>
       <form className="agro-form" onSubmit={save}>
         <label>Fecha de observación<input name="observed_on" value={observationDate} onChange={e => setObservationDate(e.target.value)} type="date" required max={new Date().toISOString().slice(0, 10)} /></label>
         <label>Destino<select name="use" defaultValue="mixto"><option value="agricultura">Agricultura</option><option value="ganaderia">Ganadería</option><option value="mixto">Mixto</option></select></label>
