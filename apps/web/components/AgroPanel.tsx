@@ -12,8 +12,6 @@ import type {
   AgroSummary,
 } from "../app/lib/types";
 
-import EcoCampoAssessment from "./EcoCampoAssessment";
-
 const NIVEL_ORDEN = { alto: 0, medio: 1, bajo: 2 } as const;
 
 const KIND_LABEL: Record<string, string> = {
@@ -134,7 +132,7 @@ export default function AgroPanel({ token }: { token: string }) {
         setLocked(cause instanceof Error ? cause.message : "Módulo no habilitado");
         return;
       }
-      setError(cause instanceof Error ? cause.message : "No se pudo cargar EcoCampo");
+      setError(cause instanceof Error ? cause.message : "No se pudo cargar EcoNexo AG");
     });
   }, [load]);
 
@@ -264,18 +262,17 @@ export default function AgroPanel({ token }: { token: string }) {
     return (
       <section className="view agro-console">
         <article className="agro-locked">
-          <span className="eyebrow">ECOCAMPO · MÓDULO NO HABILITADO</span>
+          <span className="eyebrow">ECONEXO AG · MÓDULO NO HABILITADO</span>
           <h2>Inteligencia agronómica por lote</h2>
           <p>{locked}</p>
           <ul>
-            <li>NDVI Sentinel-2 por polígono, evaluación de aptitud y presupuesto forrajero.</li>
             <li>Fenología por grados día y coeficiente de cultivo por etapa.</li>
             <li>Balance hídrico con ET0 FAO-56 y demanda real del cultivo.</li>
             <li>Ventanas de pulverización por delta-T, viento y ráfagas.</li>
             <li>Riesgo de helada, estrés térmico y presión de enfermedad.</li>
           </ul>
           <p className="agro-locked-note">
-            USD 400 mensuales · Se habilita desde Admin Core &gt; Suscripción, con el plan EcoCampo · Productor
+            Se habilita desde Admin Core &gt; Suscripción, con el plan Productor · EcoNexo AG + EcoCampo
             o cualquier plan que incluya el módulo.
           </p>
         </article>
@@ -287,7 +284,7 @@ export default function AgroPanel({ token }: { token: string }) {
     <section className="view agro-console">
       <header className="agro-header">
         <div>
-          <span className="eyebrow">ECOCAMPO · INTELIGENCIA AGRONÓMICA</span>
+          <span className="eyebrow">ECONEXO AG · INTELIGENCIA AGRONÓMICA</span>
           <h2>Lotes y decisiones de campo</h2>
           <p>
             Fenología por grados día, balance hídrico con ET0 FAO-56 y ventanas de aplicación,
@@ -399,7 +396,6 @@ export default function AgroPanel({ token }: { token: string }) {
         </div>
 
         <div className="agro-detail">
-          {loteActual && <EcoCampoAssessment key={loteActual.id} lotId={loteActual.id} token={token} />}
           {loteActual && (
             <article className="agro-card">
               <h3>{loteActual.name} · próximos días</h3>
@@ -532,7 +528,7 @@ export default function AgroPanel({ token }: { token: string }) {
       </div>
 
       <p className="agro-disclaimer">
-        EcoCampo procesa datos meteorológicos reales y los traduce a indicadores agronómicos.
+        EcoNexo AG procesa datos meteorológicos reales y los traduce a indicadores agronómicos.
         Los indicadores son estimaciones: no miden lo que pasa dentro del lote ni reemplazan la
         recorrida a campo, el análisis de suelo ni la indicación de un profesional.
       </p>

@@ -1,4 +1,4 @@
-"""EcoCampo: lotes agricolas e inteligencia agronomica sobre datos reales.
+"""EcoNexo AG y EcoCampo: lotes agricolas e inteligencia agronomica sobre datos reales.
 
 El endpoint que hace el trabajo es ``POST /agro/lots/{id}/refresh``: baja la
 serie historica NASA POWER y el pronostico Open-Meteo para el lote,
@@ -40,6 +40,7 @@ from ..subscriptions import (
 )
 
 router = APIRouter(prefix="/agro", tags=["agro"])
+ecocampo_router = APIRouter(prefix="/ecocampo", tags=["ecocampo"])
 
 MODULE_KEY = "agro"
 HISTORY_DAYS_DEFAULT = 120
@@ -60,7 +61,7 @@ async def require_agro_module(user: CurrentUser = Depends(current_user)) -> Curr
     Si el plan incluye el modulo pero la fila todavia figura suspendida, se
     sincroniza en el momento. Pasa cuando la organizacion nunca paso por
     ``GET /modules/me``, que es el otro lugar donde corre ``sync_modules``: sin
-    esto, entrar directo a EcoCampo daria 402 con una licencia que si lo
+    esto, entrar directo a EcoNexo AG daria 402 con una licencia que si lo
     habilita.
     """
     await require_active_subscription(user.org_id)
@@ -71,9 +72,22 @@ async def require_agro_module(user: CurrentUser = Depends(current_user)) -> Curr
     if estado not in {"active", "trial"}:
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
-            "EcoCampo no está habilitado para tu organización. "
+            "EcoNexo AG no está habilitado para tu organización. "
             "Pedí la activación del módulo desde Admin Core > Suscripción.",
         )
+    return user
+
+
+async def require_ecocampo_module(user: CurrentUser = Depends(current_user)) -> CurrentUser:
+    await require_active_subscription(user.org_id)
+    if await module_included_by_plan(user.org_id, "ecocampo"):
+        return user
+    available = await db.pool().fetchval(
+        "SELECT EXISTS(SELECT 1 FROM organization_modules WHERE org_id=$1 AND module_key='ecocampo' AND status IN ('active','trial') AND (expires_at IS NULL OR expires_at > now()))",
+        user.org_id,
+    )
+    if not available:
+        raise HTTPException(402, "EcoCampo requiere el plan Productor de USD 400 mensuales o una habilitación específica del módulo. EcoNexo AG conserva su acceso independiente.")
     return user
 
 
@@ -224,6 +238,10 @@ async def create_lot(
     user: CurrentUser = Depends(require_role("admin", "operador")),
 ) -> AgroLotOut:
     await require_agro_module(user)
+    return await _create_shared_lot(body, user)
+
+
+async def _create_shared_lot(body: AgroLotIn, user: CurrentUser) -> AgroLotOut:
     if body.crop_key != "pastizal":
         agro.crop_or_404(body.crop_key)
     if body.zone_id is not None:
@@ -654,8 +672,9 @@ async def advisories(
     return [_advisory_out(row) for row in rows]
 
 
-@router.get("/lots/{lot_id}/ecocampo")
-async def field_history(lot_id: UUID, user: CurrentUser = Depends(require_agro_module)):
+@ecocampo_router.get("/lots/{lot_id}/assessments")
+@router.get("/lots/{lot_id}/ecocampo", include_in_schema=False)
+async def field_history(lot_id: UUID, user: CurrentUser = Depends(require_ecocampo_module)):
     await _lot_or_404(lot_id, user.org_id)
     rows = await db.pool().fetch(
         "SELECT id, evidence, result, created_at FROM ecocampo_assessments WHERE lot_id=$1 AND org_id=$2 ORDER BY created_at DESC LIMIT 50",
@@ -664,9 +683,10 @@ async def field_history(lot_id: UUID, user: CurrentUser = Depends(require_agro_m
     return [{**dict(row), "evidence": _decode(row["evidence"]), "result": _decode(row["result"])} for row in rows]
 
 
-@router.post("/lots/{lot_id}/ecocampo", status_code=201)
+@ecocampo_router.post("/lots/{lot_id}/assessments", status_code=201)
+@router.post("/lots/{lot_id}/ecocampo", status_code=201, include_in_schema=False)
 async def field_assessment(lot_id: UUID, body: FieldEvidence, user: CurrentUser = Depends(require_role("admin", "operador"))):
-    await require_agro_module(user)
+    await require_ecocampo_module(user)
     lot = await _lot_or_404(lot_id, user.org_id)
     result = assess(body, float(lot["area_ha"]))
     result.update({"area_ha": float(lot["area_ha"]), "crop_key": lot["crop_key"], "evaluated_on": date.today().isoformat()})
@@ -678,16 +698,18 @@ async def field_assessment(lot_id: UUID, body: FieldEvidence, user: CurrentUser 
     return {**dict(row), "evidence": body.model_dump(mode="json"), "result": result}
 
 
-@router.get("/lots/{lot_id}/ecocampo/ndvi")
-async def ndvi_history(lot_id: UUID, user: CurrentUser = Depends(require_agro_module)):
+@ecocampo_router.get("/lots/{lot_id}/ndvi")
+@router.get("/lots/{lot_id}/ecocampo/ndvi", include_in_schema=False)
+async def ndvi_history(lot_id: UUID, user: CurrentUser = Depends(require_ecocampo_module)):
     await _lot_or_404(lot_id, user.org_id)
     rows = await db.pool().fetch("SELECT polygon,result,created_at FROM ecocampo_satellite_runs WHERE lot_id=$1 AND org_id=$2 ORDER BY created_at DESC LIMIT 1", lot_id, user.org_id)
     return [{**dict(row), "polygon": _decode(row["polygon"]), "result": _decode(row["result"])} for row in rows]
 
 
-@router.post("/lots/{lot_id}/ecocampo/ndvi")
+@ecocampo_router.post("/lots/{lot_id}/ndvi")
+@router.post("/lots/{lot_id}/ecocampo/ndvi", include_in_schema=False)
 async def refresh_ndvi(lot_id: UUID, body: Polygon, user: CurrentUser = Depends(require_role("admin", "operador"))):
-    await require_agro_module(user)
+    await require_ecocampo_module(user)
     await _lot_or_404(lot_id, user.org_id)
     geometry = body.model_dump_json()
     valid = await db.pool().fetchval("SELECT ST_IsValid(g) AND ST_Area(g::geography)>0 FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326) g) q", geometry)
@@ -703,3 +725,19 @@ async def refresh_ndvi(lot_id: UUID, body: Polygon, user: CurrentUser = Depends(
         raise HTTPException(503, str(exc)) from exc
     await db.pool().execute("INSERT INTO ecocampo_satellite_runs(lot_id,org_id,polygon,result) VALUES($1,$2,$3::jsonb,$4::jsonb)", lot_id, user.org_id, geometry, json.dumps(result, ensure_ascii=False))
     return result
+
+
+@ecocampo_router.get("/lots", response_model=list[AgroLotOut])
+async def ecocampo_lots(user: CurrentUser = Depends(require_ecocampo_module)):
+    return await list_lots(include_inactive=False, user=user)
+
+
+@ecocampo_router.get("/crops")
+async def ecocampo_crops(user: CurrentUser = Depends(require_ecocampo_module)):
+    return agro.catalog()
+
+
+@ecocampo_router.post("/lots", response_model=AgroLotOut, status_code=201)
+async def ecocampo_create_lot(body: AgroLotIn, user: CurrentUser = Depends(require_role("admin", "operador"))):
+    await require_ecocampo_module(user)
+    return await _create_shared_lot(body, user)

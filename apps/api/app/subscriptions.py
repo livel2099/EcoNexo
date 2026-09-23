@@ -171,7 +171,7 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
         },
     },
     "agro_productor": {
-        "name": "EcoCampo · Productor",
+        "name": "Productor · EcoNexo AG + EcoCampo",
         "description": (
             "Lotes, NDVI Sentinel-2, aptitud agropecuaria, presupuesto forrajero y riesgos "
             "sobre datos meteorológicos reales."
@@ -195,7 +195,7 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "sla": False,
             "community_reports": True,
             "operational_alerts": True,
-            "included_modules": ["core", "agro"],
+            "included_modules": ["core", "agro", "ecocampo"],
         },
     },
     "academy": {
@@ -393,7 +393,8 @@ async def sync_modules(org_id: UUID, user_id: UUID | None = None) -> None:
         "core": "Plataforma EcoNexo",
         "fire_smoke": "Focos de incendio forestal y humo",
         "forestry_pests": "Vigilancia de plagas forestales",
-        "agro": "EcoCampo · inteligencia agronómica",
+        "agro": "EcoNexo AG · inteligencia agronómica",
+        "ecocampo": "EcoCampo · aptitud y producción agropecuaria",
     }.items():
         default_status = "active" if module_key in included else "suspended"
         await db.pool().execute(

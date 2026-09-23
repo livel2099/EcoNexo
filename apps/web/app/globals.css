@@ -2574,3 +2574,13 @@ textarea:focus-visible,
   border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
   background: color-mix(in srgb, var(--amber) 8%, transparent);
 }
+
+/* EcoCampo: módulo independiente, herramientas siempre visibles. */
+.ecocampo-console { display: grid; gap: 1rem; align-content: start; }
+.ecocampo-tabs { display: flex; flex-wrap: wrap; gap: .5rem; }
+.ecocampo-tabs button[aria-pressed="true"] { background: var(--green-bright); color: #071c15; font-weight: 700; }
+.ecocampo-lot-picker { display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
+.ecocampo-lot-picker label { display: grid; gap: .4rem; min-width: 260px; }
+.ecocampo-console [hidden] { display: none !important; }
+.ecocampo-console textarea { display: block; width: 100%; margin-top: .5rem; }
+.ecocampo-console .agro-form { margin-top: 1rem; }

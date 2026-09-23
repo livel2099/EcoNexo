@@ -153,6 +153,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(agro.router)
+app.include_router(agro.ecocampo_router)
 app.include_router(foi.router)
 app.include_router(orgs.router)
 app.include_router(devices.router)

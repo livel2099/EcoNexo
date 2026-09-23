@@ -431,7 +431,7 @@ class PublicImpactReportOut(BaseModel):
 
 
 # --- Licencias modulares y Alerta IA ---
-ModuleKey = Literal["core", "fire_smoke", "forestry_pests", "agro"]
+ModuleKey = Literal["core", "fire_smoke", "forestry_pests", "agro", "ecocampo"]
 ModuleStatus = Literal["trial", "active", "suspended", "expired"]
 
 

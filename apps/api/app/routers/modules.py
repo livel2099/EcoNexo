@@ -53,7 +53,7 @@ async def _ensure_defaults(org_id: UUID, user_id: UUID | None = None) -> None:
             ($1,'core','active','Plataforma EcoNexo',NULL,$2::jsonb,$6),
             ($1,'fire_smoke','suspended','Focos de incendio forestal y humo',NULL,$3::jsonb,$6),
             ($1,'forestry_pests','suspended','Vigilancia de plagas forestales',NULL,$4::jsonb,$6),
-            ($1,'agro','suspended','EcoCampo · inteligencia agronómica',NULL,$5::jsonb,$6)
+            ($1,'agro','suspended','EcoNexo AG · inteligencia agronómica',NULL,$5::jsonb,$6)
         ON CONFLICT (org_id, module_key) DO UPDATE SET
           config=CASE WHEN organization_modules.config='{}'::jsonb THEN EXCLUDED.config ELSE organization_modules.config END,
           updated_at=now()

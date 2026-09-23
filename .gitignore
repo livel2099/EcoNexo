@@ -22,6 +22,8 @@ dist/
 build/
 npm-debug.log*
 .turbo/
+test-results/
+playwright-report/
 
 # Data / volumes
 pgdata/

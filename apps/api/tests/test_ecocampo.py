@@ -87,7 +87,7 @@ async def test_foreign_lot_is_404_and_no_evidence_saved(monkeypatch):
     pool = AsyncMock()
     pool.fetchrow.return_value = None
     monkeypatch.setattr(routes.db, "pool", lambda: pool)
-    monkeypatch.setattr(routes, "require_agro_module", AsyncMock())
+    monkeypatch.setattr(routes, "require_ecocampo_module", AsyncMock())
     lot_id = uuid4()
     with pytest.raises(HTTPException) as exc:
         await routes.field_assessment(lot_id, evidence(), user)
@@ -143,3 +143,30 @@ async def test_satellite_provider_failure_is_not_fabricated(monkeypatch):
     polygon = Polygon(type="Polygon", coordinates=[[(-55.9,-27.4),(-55.9,-27.39),(-55.89,-27.39),(-55.9,-27.4)]])
     with pytest.raises(CopernicusError):
         await satellite.fetch_ndvi(polygon)
+
+@pytest.mark.asyncio
+async def test_ecocampo_plan_does_not_require_agro_module(monkeypatch):
+    user = CurrentUser(uuid4(), uuid4(), "admin")
+    monkeypatch.setattr(routes, "require_active_subscription", AsyncMock())
+    included = AsyncMock(return_value=True)
+    monkeypatch.setattr(routes, "module_included_by_plan", included)
+    assert await routes.require_ecocampo_module(user) is user
+    included.assert_awaited_once_with(user.org_id, "ecocampo")
+
+
+@pytest.mark.asyncio
+async def test_agro_only_does_not_grant_ecocampo(monkeypatch):
+    monkeypatch.setattr(routes, "require_active_subscription", AsyncMock())
+    monkeypatch.setattr(routes, "module_included_by_plan", AsyncMock(return_value=False))
+    pool = AsyncMock()
+    pool.fetchval.return_value = False
+    monkeypatch.setattr(routes.db, "pool", lambda: pool)
+    with pytest.raises(HTTPException) as exc:
+        await routes.require_ecocampo_module(CurrentUser(uuid4(), uuid4(), "admin"))
+    assert exc.value.status_code == 402
+
+
+def test_independent_routes_and_both_producer_modules():
+    paths = {route.path for route in routes.ecocampo_router.routes}
+    assert {"/ecocampo/lots", "/ecocampo/lots/{lot_id}/assessments", "/ecocampo/lots/{lot_id}/ndvi"} <= paths
+    assert {"agro", "ecocampo"} <= set(PLAN_DEFINITIONS["agro_productor"]["entitlements"]["included_modules"])

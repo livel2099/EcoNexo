@@ -322,7 +322,7 @@ export interface AuditEvent {
 
 // --- Licencias modulares y trazabilidad de Alerta IA ---
 export interface ModuleEntitlement {
-  module_key: "core" | "fire_smoke" | "forestry_pests" | "agro";
+  module_key: "core" | "fire_smoke" | "forestry_pests" | "agro" | "ecocampo";
   status: "trial" | "active" | "suspended" | "expired";
   plan_name: string;
   starts_at: string;
@@ -336,7 +336,7 @@ export interface AlertShareInput {
   audience: "medios" | "organizacion" | "laboratorio" | "emergencia" | "publico" | "otro";
   title: string;
   message: string;
-  module_key: "core" | "fire_smoke" | "forestry_pests" | "agro";
+  module_key: "core" | "fire_smoke" | "forestry_pests" | "agro" | "ecocampo";
   snapshot_id?: string | null;
   alert_id?: string | null;
   metadata?: Record<string, unknown>;
