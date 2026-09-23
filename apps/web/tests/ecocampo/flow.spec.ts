@@ -58,3 +58,28 @@ test("EcoCampo sin lotes muestra cómo comenzar", async ({page}) => {
   await expect(page.getByLabel("Nombre del lote", {exact:true})).toBeVisible();
   await expect(page.getByRole("button", {name: "Crear lote", exact:true})).toBeVisible();
 });
+
+test("EcoCampo precarga NDVI satelital y sugerencias del Centro de Comando", async ({page}) => {
+  await page.addInitScript(() => sessionStorage.setItem("econexo_session", JSON.stringify({ access_token: "test", role: "admin", name: "Prueba", account_type: "institutional" })));
+  await page.route("http://127.0.0.1:9/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = [];
+    if (path === "/ecocampo/lots" || path === "/agro/lots") body = [{ id: "lot-1", name: "Lote de prueba", area_ha: 10, crop_key: "pastizal", crop_name: "Pastizal", is_active: true, advisories: [] }];
+    if (path === "/kpis") body = { global_status: "normal" };
+    if (path === "/agro/summary") body = { lots_total: 1, lots_active: 1, area_ha: 10, advisories_high: 0, advisories_medium: 0 };
+    if (path.endsWith("/assessments")) body = [];
+    if (path.endsWith("/ndvi")) body = [{ polygon: { type: "Polygon", coordinates: [[[0, 0]]] }, result: { series: [{ day: "2026-09-20", ndvi: 0.62, valid_pixel_pct: 88 }], source: "Sentinel-2 (prueba)", note: "" } }];
+    if (path.endsWith("/conditions")) body = { as_of: "2026-09-22", precipitation_7d_mm: 10, balance_14d_mm: 5, soil_moisture_pct: 42, soil_moisture_ts: "2026-09-23T00:00:00Z", soil_moisture_source: "Nodo Norte a 1.2 km del lote", water_hint: true, flooding_hint: true, note: "Sugerencia automática" };
+    await route.fulfill({ json: body });
+  });
+  await page.goto("/dashboard");
+  await page.getByRole("button", {name: "Solo esenciales", exact:true}).click();
+  await page.getByRole("button", {name: "EcoCampo", exact: true}).click();
+  await expect(page.getByRole("heading", {name: "Procesar evaluación de aptitud"})).toBeVisible();
+  await expect(page.getByLabel("NDVI medio del lote", {exact:true})).toHaveValue("0.62");
+  await expect(page.getByLabel("Píxeles válidos del lote (%)", {exact:true})).toHaveValue("88");
+  await expect(page.getByLabel("Fecha de observación")).toHaveValue("2026-09-20");
+  await expect(page.getByRole("combobox", {name: "Agua suficiente y de calidad adecuada", exact:true})).toHaveValue("true");
+  await expect(page.getByRole("combobox", {name: "Presencia de anegamiento", exact:true})).toHaveValue("true");
+  await expect(page.getByText(/nodo norte a 1\.2 km del lote/i)).toBeVisible();
+});

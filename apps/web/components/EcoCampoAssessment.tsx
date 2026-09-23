@@ -3,12 +3,22 @@ import { useEffect, useState, type FormEvent } from "react";
 import { apiGet, apiPost } from "../app/lib/api";
 
 type Assessment = {
-  id: string; created_at: string; evidence: { observed_on: string; source: string };
+  id: string; created_at: string;
+  evidence: { observed_on: string; source: string } & Record<string, unknown>;
   result: { status: string; vegetation: string; ndvi_delta: number | null; estimated_animals: number | null;
     limitations: string; missing: string[]; risks: { factor: string; level: string; action: string }[];
     sources: { name: string; url: string; scope: string }[] };
 };
 type Satellite = { series: { day: string; ndvi: number; valid_pixel_pct: number }[]; source: string; note: string };
+type Conditions = {
+  as_of: string | null; precipitation_7d_mm: number | null; balance_14d_mm: number | null;
+  soil_moisture_pct: number | null; soil_moisture_ts: string | null; soil_moisture_source: string | null;
+  water_hint: boolean | null; flooding_hint: boolean | null; note: string;
+};
+const CARRY_FORWARD_KEYS = [
+  "baseline_ndvi", "dry_matter_kg_ha", "utilization_pct", "animal_demand_kg_day", "grazing_days", "herd_size",
+  "soil_suitable", "water_suitable", "flooding", "erosion", "pesticide_exposure", "forage_verified",
+] as const;
 const numeric = [
   ["ndvi", "NDVI medio del lote", -1, 1, "0.001"],
   ["baseline_ndvi", "NDVI de referencia estacional comparable", -1, 1, "0.001"],
@@ -42,6 +52,7 @@ export default function EcoCampoAssessment({ lotId, token, areaHa }: { lotId: st
   const [values, setValues] = useState<Record<string, string>>({});
   const [observationDate, setObservationDate] = useState("");
   const [source, setSource] = useState("");
+  const [conditions, setConditions] = useState<Conditions | null>(null);
   async function loadSatellite() {
     setSatBusy(true); setError("");
     try {
@@ -53,12 +64,48 @@ export default function EcoCampoAssessment({ lotId, token, areaHa }: { lotId: st
   }
   useEffect(() => {
     let active = true;
-    apiGet<Assessment[]>(`/ecocampo/lots/${lotId}/assessments`, token)
-      .then(rows => { if (active) { setHistory(rows); setLoaded(true); } })
-      .catch(e => { if (active) setHistoryError(e instanceof Error ? e.message : "No se pudo cargar el historial"); });
-    apiGet<{polygon: unknown; result: Satellite}[]>(`/ecocampo/lots/${lotId}/ndvi`, token)
-      .then(rows => { if (active && rows[0]) { setPolygon(JSON.stringify(rows[0].polygon)); setSatellite(rows[0].result); } })
-      .catch(e => { if (active) setError(e instanceof Error ? e.message : "No se pudo cargar NDVI"); });
+    Promise.allSettled([
+      apiGet<Assessment[]>(`/ecocampo/lots/${lotId}/assessments`, token),
+      apiGet<{ polygon: unknown; result: Satellite }[]>(`/ecocampo/lots/${lotId}/ndvi`, token),
+      apiGet<Conditions>(`/ecocampo/lots/${lotId}/conditions`, token),
+    ]).then(([historyResult, satelliteResult, conditionsResult]) => {
+      if (!active) return;
+      const historyRows = historyResult.status === "fulfilled" ? historyResult.value : [];
+      if (historyResult.status === "fulfilled") setHistory(historyRows);
+      else setHistoryError(historyResult.reason instanceof Error ? historyResult.reason.message : "No se pudo cargar el historial");
+      setLoaded(true);
+      const satelliteRows = satelliteResult.status === "fulfilled" ? satelliteResult.value : [];
+      if (satelliteResult.status === "fulfilled" && satelliteRows[0]) {
+        setPolygon(JSON.stringify(satelliteRows[0].polygon)); setSatellite(satelliteRows[0].result);
+      } else if (satelliteResult.status === "rejected") {
+        setError(satelliteResult.reason instanceof Error ? satelliteResult.reason.message : "No se pudo cargar NDVI");
+      }
+      const cond = conditionsResult.status === "fulfilled" ? conditionsResult.value : null;
+      if (cond) setConditions(cond);
+
+      // Autocompletado: última evaluación guardada como base, y encima las
+      // lecturas más recientes (NDVI satelital, humedad/lluvia del Centro de
+      // Comando) cuando son más confiables que un dato viejo. Nunca pisa lo
+      // que la persona ya haya escrito (setValues conserva `previous`).
+      const last = historyRows[0]?.evidence;
+      const patch: Record<string, string> = {};
+      for (const key of CARRY_FORWARD_KEYS) {
+        const value = last?.[key];
+        if (value !== undefined && value !== null) patch[key] = String(value);
+      }
+      const usablePoints = (satelliteRows[0]?.result.series ?? []).filter(point => point.valid_pixel_pct >= 70);
+      const bestPoint = usablePoints[usablePoints.length - 1];
+      if (bestPoint) {
+        patch.ndvi = String(bestPoint.ndvi);
+        patch.valid_pixel_pct = String(bestPoint.valid_pixel_pct);
+        const satelliteSource = satelliteRows[0].result.source;
+        setObservationDate(current => current || bestPoint.day);
+        setSource(current => current || `${satelliteSource}; completar informe de campo y referencia estacional`);
+      }
+      if (cond?.water_hint !== null && cond?.water_hint !== undefined) patch.water_suitable = String(cond.water_hint);
+      if (cond?.flooding_hint !== null && cond?.flooding_hint !== undefined) patch.flooding = String(cond.flooding_hint);
+      if (Object.keys(patch).length) setValues(previous => ({ ...patch, ...previous }));
+    });
     return () => { active = false; };
   }, [lotId, token]);
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -102,12 +149,19 @@ export default function EcoCampoAssessment({ lotId, token, areaHa }: { lotId: st
     <section hidden={section !== "aptitud" && section !== "presupuesto"}>
       <h3>{section === "presupuesto" ? "Calcular presupuesto forrajero" : "Procesar evaluación de aptitud"}</h3>
       <p>{section === "presupuesto" ? `Presupuesto de alimento para ${areaHa} ha. Ingresá materia seca, aprovechamiento, demanda animal y días; verificá las especies forrajeras.` : "Cargá evidencia y presioná Procesar evaluación. El resultado identifica restricciones y datos faltantes para este lote."}</p>
+      {(satellite || conditions || history.length > 0) && <p className="agro-notice">
+        Precargamos lo que ya sabemos del lote: {[
+          satellite ? "el último NDVI de Sentinel-2" : null,
+          conditions?.soil_moisture_source ? conditions.soil_moisture_source.toLowerCase() : conditions?.balance_14d_mm != null ? "el balance hídrico climático de EcoNexo AG" : null,
+          history.length > 0 ? "tu última evaluación guardada" : null,
+        ].filter(Boolean).join(", ") || "sin lecturas previas para este lote"}. Son sugerencias editables, no reemplazan la inspección del lote: revisá cada campo antes de procesar.
+      </p>}
       <form className="agro-form" onSubmit={save}>
         <label>Fecha de observación<input name="observed_on" value={observationDate} onChange={e => setObservationDate(e.target.value)} type="date" required max={new Date().toISOString().slice(0, 10)} /></label>
         <label>Destino<select name="use" defaultValue="mixto"><option value="agricultura">Agricultura</option><option value="ganaderia">Ganadería</option><option value="mixto">Mixto</option></select></label>
         <label className="agro-form-wide">Fuente, sensor, período de referencia e informe de campo<input name="source" value={source} onChange={e => setSource(e.target.value)} required minLength={3} maxLength={500} placeholder="Informe, responsable y método de medición" /></label>
         {numeric.map(([key, name, min, max, step], index) => <label hidden={section === "presupuesto" ? index < 3 : index >= 3} key={key}>{name}<input type="number" name={key} value={values[key] ?? ""} onChange={e => setValues(previous => ({...previous, [key]: e.target.value}))} min={min} max={max} step={step} placeholder="Sin dato" /></label>)}
-        {checks.map(([key, name]) => <label hidden={section === "presupuesto" ? key !== "forage_verified" : key === "forage_verified"} key={key}>{name}<select name={key} defaultValue=""><option value="">Sin verificar</option><option value="true">Sí</option><option value="false">No</option></select></label>)}
+        {checks.map(([key, name]) => <label hidden={section === "presupuesto" ? key !== "forage_verified" : key === "forage_verified"} key={key}>{name}<select name={key} value={values[key] ?? ""} onChange={e => setValues(previous => ({...previous, [key]: e.target.value}))}><option value="">Sin verificar</option><option value="true">Sí</option><option value="false">No</option></select></label>)}
         <p className="agro-form-wide">El NDVI no equivale a toneladas ni demuestra aptitud. Compará igual sensor, estación y cobertura. Dejá vacíos los datos desconocidos. El presupuesto ganadero usa materia seca × superficie × aprovechamiento / demanda / días.</p>
         <button disabled={busy} type="submit">{busy ? "Procesando y guardando…" : section === "presupuesto" ? "Calcular y guardar presupuesto" : "Procesar evaluación y guardar"}</button>
       </form>

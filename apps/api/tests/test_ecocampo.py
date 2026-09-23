@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 from unittest.mock import AsyncMock
 
@@ -168,5 +168,65 @@ async def test_agro_only_does_not_grant_ecocampo(monkeypatch):
 
 def test_independent_routes_and_both_producer_modules():
     paths = {route.path for route in routes.ecocampo_router.routes}
-    assert {"/ecocampo/lots", "/ecocampo/lots/{lot_id}/assessments", "/ecocampo/lots/{lot_id}/ndvi"} <= paths
+    assert {"/ecocampo/lots", "/ecocampo/lots/{lot_id}/assessments", "/ecocampo/lots/{lot_id}/ndvi", "/ecocampo/lots/{lot_id}/conditions"} <= paths
     assert {"agro", "ecocampo"} <= set(PLAN_DEFINITIONS["agro_productor"]["entitlements"]["included_modules"])
+
+
+def test_water_flooding_hints_pure_thresholds():
+    assert routes._water_flooding_hints(10.0, None, None) == (False, False)
+    assert routes._water_flooding_hints(25.0, None, None) == (True, False)
+    assert routes._water_flooding_hints(45.0, None, None) == (True, True)
+    assert routes._water_flooding_hints(None, -50.0, None) == (False, None)
+    assert routes._water_flooding_hints(None, -10.0, None) == (True, None)
+    assert routes._water_flooding_hints(None, None, None) == (None, None)
+    assert routes._water_flooding_hints(10.0, None, 150.0) == (False, True)
+
+
+@pytest.mark.asyncio
+async def test_conditions_uses_nearby_device_reading(monkeypatch):
+    monkeypatch.setattr(routes, "require_ecocampo_module", AsyncMock())
+    user = CurrentUser(uuid4(), uuid4(), "admin")
+    lot_id = uuid4()
+    pool = AsyncMock()
+    pool.fetchrow.side_effect = [
+        dict(id=lot_id, lat=-27.3, lon=-55.9),
+        dict(id=uuid4(), name="Nodo Norte", distance_km=2.345),
+        dict(value=45.0, ts=datetime.now(timezone.utc)),
+        dict(as_of=date.today(), precip_7d=10.0, balance_14d=5.0),
+    ]
+    monkeypatch.setattr(routes.db, "pool", lambda: pool)
+    result = await routes.lot_conditions(lot_id, user)
+    assert result.soil_moisture_pct == 45.0
+    assert result.water_hint is True
+    assert result.flooding_hint is True
+    assert "Nodo Norte" in (result.soil_moisture_source or "")
+
+
+@pytest.mark.asyncio
+async def test_conditions_falls_back_to_climate_balance_without_device(monkeypatch):
+    monkeypatch.setattr(routes, "require_ecocampo_module", AsyncMock())
+    user = CurrentUser(uuid4(), uuid4(), "admin")
+    lot_id = uuid4()
+    pool = AsyncMock()
+    pool.fetchrow.side_effect = [
+        dict(id=lot_id, lat=-27.3, lon=-55.9),
+        None,
+        dict(as_of=date.today(), precip_7d=5.0, balance_14d=-40.0),
+    ]
+    monkeypatch.setattr(routes.db, "pool", lambda: pool)
+    result = await routes.lot_conditions(lot_id, user)
+    assert result.soil_moisture_pct is None
+    assert result.water_hint is False
+    assert "balance hídrico" in (result.soil_moisture_source or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_conditions_lot_not_found(monkeypatch):
+    monkeypatch.setattr(routes, "require_ecocampo_module", AsyncMock())
+    user = CurrentUser(uuid4(), uuid4(), "admin")
+    pool = AsyncMock()
+    pool.fetchrow.return_value = None
+    monkeypatch.setattr(routes.db, "pool", lambda: pool)
+    with pytest.raises(HTTPException) as exc:
+        await routes.lot_conditions(uuid4(), user)
+    assert exc.value.status_code == 404

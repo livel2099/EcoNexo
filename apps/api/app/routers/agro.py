@@ -32,6 +32,7 @@ from ..schemas import (
     AgroLotUpdateIn,
     AgroRefreshOut,
     AgroSummaryOut,
+    EcoCampoConditionsOut,
 )
 from ..subscriptions import (
     module_included_by_plan,
@@ -45,6 +46,15 @@ ecocampo_router = APIRouter(prefix="/ecocampo", tags=["ecocampo"])
 MODULE_KEY = "agro"
 HISTORY_DAYS_DEFAULT = 120
 FORECAST_DAYS = 7
+
+# Umbrales operativos sobre humedad de suelo 0-1cm (Open-Meteo, % volumetrico
+# x100; para nodos reales se ingresa en la misma escala). No estan calibrados
+# por tipo de suelo: son un filtro grueso para sugerir un valor, no un
+# diagnostico. El usuario siempre puede corregirlo antes de guardar.
+SOIL_MOISTURE_DRY_PCT = 15.0
+SOIL_MOISTURE_SATURATED_PCT = 40.0
+NEARBY_DEVICE_RADIUS_M = 20000
+FLOODING_PRECIPITATION_7D_MM = 120.0
 
 
 async def _module_status(org_id: UUID) -> str | None:
@@ -725,6 +735,89 @@ async def refresh_ndvi(lot_id: UUID, body: Polygon, user: CurrentUser = Depends(
         raise HTTPException(503, str(exc)) from exc
     await db.pool().execute("INSERT INTO ecocampo_satellite_runs(lot_id,org_id,polygon,result) VALUES($1,$2,$3::jsonb,$4::jsonb)", lot_id, user.org_id, geometry, json.dumps(result, ensure_ascii=False))
     return result
+
+
+def _water_flooding_hints(
+    soil_moisture_pct: float | None, balance_14d_mm: float | None, precip_7d_mm: float | None,
+) -> tuple[bool | None, bool | None]:
+    """Traduce lecturas de humedad/lluvia en sugerencias de agua y anegamiento.
+
+    Prioriza la lectura de humedad de suelo (nodo real o virtual) sobre el
+    balance hidrico climatico porque es una medicion mas directa. Es un filtro
+    grueso, no calibrado por tipo de suelo: nunca fuerza el valor final, solo
+    sugiere uno editable.
+    """
+    water_hint = flooding_hint = None
+    if soil_moisture_pct is not None:
+        water_hint = soil_moisture_pct >= SOIL_MOISTURE_DRY_PCT
+        flooding_hint = soil_moisture_pct >= SOIL_MOISTURE_SATURATED_PCT
+    elif balance_14d_mm is not None:
+        water_hint = balance_14d_mm >= -30
+    if precip_7d_mm is not None and precip_7d_mm >= FLOODING_PRECIPITATION_7D_MM:
+        flooding_hint = True
+    return water_hint, flooding_hint
+
+
+@ecocampo_router.get("/lots/{lot_id}/conditions", response_model=EcoCampoConditionsOut)
+async def lot_conditions(lot_id: UUID, user: CurrentUser = Depends(require_ecocampo_module)) -> EcoCampoConditionsOut:
+    """Lecturas ya disponibles del Centro de Comando para sugerir aptitud de agua.
+
+    Combina el nodo mas cercano (real o virtual, via `readings`) con el balance
+    hidrico climatico que ya calcula EcoNexo AG para el lote. No reemplaza la
+    inspeccion en el lote: es un punto de partida para completar el formulario.
+    """
+    lot = await _lot_or_404(lot_id, user.org_id)
+    device = await db.pool().fetchrow(
+        """
+        SELECT d.id, d.name, ST_Distance(d.location, ST_MakePoint($3,$2)::geography)/1000.0 AS distance_km
+        FROM devices d
+        WHERE d.org_id=$1 AND ST_DWithin(d.location, ST_MakePoint($3,$2)::geography, $4)
+        ORDER BY d.location <-> ST_MakePoint($3,$2)::geography
+        LIMIT 1
+        """,
+        user.org_id, float(lot["lat"]), float(lot["lon"]), NEARBY_DEVICE_RADIUS_M,
+    )
+    soil_moisture_pct = None
+    soil_moisture_ts = None
+    soil_moisture_source = None
+    if device is not None:
+        reading = await db.pool().fetchrow(
+            "SELECT value, ts FROM readings WHERE device_id=$1 AND variable='soil_moisture' AND ts > now() - interval '6 hours' ORDER BY ts DESC LIMIT 1",
+            device["id"],
+        )
+        if reading is not None:
+            soil_moisture_pct = float(reading["value"])
+            soil_moisture_ts = reading["ts"]
+            soil_moisture_source = f"Nodo {device['name']} a {round(float(device['distance_km']), 1)} km del lote"
+    balance = await db.pool().fetchrow(
+        """
+        SELECT max(day) AS as_of,
+               round(sum(precipitation_mm) FILTER (WHERE day > current_date - 7)::numeric, 1) AS precip_7d,
+               round(sum(balance_mm) FILTER (WHERE day > current_date - 14)::numeric, 1) AS balance_14d
+        FROM agro_lot_daily WHERE lot_id=$1 AND NOT is_forecast AND day <= current_date
+        """,
+        lot_id,
+    )
+    precip_7d = float(balance["precip_7d"]) if balance and balance["precip_7d"] is not None else None
+    balance_14d = float(balance["balance_14d"]) if balance and balance["balance_14d"] is not None else None
+    water_hint, flooding_hint = _water_flooding_hints(soil_moisture_pct, balance_14d, precip_7d)
+    if soil_moisture_pct is None and balance_14d is not None:
+        soil_moisture_source = "Balance hídrico climático de EcoNexo AG (sin nodo cercano con lectura reciente)"
+    return EcoCampoConditionsOut(
+        as_of=balance["as_of"] if balance else None,
+        precipitation_7d_mm=precip_7d,
+        balance_14d_mm=balance_14d,
+        soil_moisture_pct=soil_moisture_pct,
+        soil_moisture_ts=soil_moisture_ts,
+        soil_moisture_source=soil_moisture_source,
+        water_hint=water_hint,
+        flooding_hint=flooding_hint,
+        note=(
+            "Sugerencia automática a partir de lecturas del Centro de Comando y del balance "
+            "hídrico climático. No reemplaza la inspección en el lote: confirmá o corregí "
+            "antes de guardar."
+        ),
+    )
 
 
 @ecocampo_router.get("/lots", response_model=list[AgroLotOut])

@@ -1103,6 +1103,18 @@ class AgroSummaryOut(BaseModel):
     last_refresh_at: datetime | None = None
 
 
+class EcoCampoConditionsOut(BaseModel):
+    as_of: date | None = None
+    precipitation_7d_mm: float | None = None
+    balance_14d_mm: float | None = None
+    soil_moisture_pct: float | None = None
+    soil_moisture_ts: datetime | None = None
+    soil_moisture_source: str | None = None
+    water_hint: bool | None = None
+    flooding_hint: bool | None = None
+    note: str
+
+
 # Alias de compatibilidad usados por el router de autenticación.
 RegisterIn = EmailRegisterIn
 ChangePasswordIn = PasswordChangeIn
