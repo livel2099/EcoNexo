@@ -1,4 +1,4 @@
-"""EcoNexo AG: lotes agricolas e inteligencia agronomica sobre datos reales.
+"""EcoCampo: lotes agricolas e inteligencia agronomica sobre datos reales.
 
 El endpoint que hace el trabajo es ``POST /agro/lots/{id}/refresh``: baja la
 serie historica NASA POWER y el pronostico Open-Meteo para el lote,
@@ -18,6 +18,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from .. import agro, db
+from ..ecocampo import FieldEvidence, assess
+from ..ecocampo_satellite import Polygon, fetch_ndvi
+from ..copernicus import CopernicusError
 from ..nasa_power import NasaPowerError
 from ..audit import record_audit
 from ..deps import CurrentUser, current_user, require_role
@@ -57,7 +60,7 @@ async def require_agro_module(user: CurrentUser = Depends(current_user)) -> Curr
     Si el plan incluye el modulo pero la fila todavia figura suspendida, se
     sincroniza en el momento. Pasa cuando la organizacion nunca paso por
     ``GET /modules/me``, que es el otro lugar donde corre ``sync_modules``: sin
-    esto, entrar directo a EcoNexo AG daria 402 con una licencia que si lo
+    esto, entrar directo a EcoCampo daria 402 con una licencia que si lo
     habilita.
     """
     await require_active_subscription(user.org_id)
@@ -68,7 +71,7 @@ async def require_agro_module(user: CurrentUser = Depends(current_user)) -> Curr
     if estado not in {"active", "trial"}:
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
-            "EcoNexo AG no está habilitado para tu organización. "
+            "EcoCampo no está habilitado para tu organización. "
             "Pedí la activación del módulo desde Admin Core > Suscripción.",
         )
     return user
@@ -132,7 +135,7 @@ async def _lot_out(row: Any) -> AgroLotOut:
         id=row["id"],
         name=row["name"],
         crop_key=row["crop_key"],
-        crop_name=crop.name if crop else row["crop_key"],
+        crop_name=crop.name if crop else "Pastizal / uso ganadero" if row["crop_key"] == "pastizal" else row["crop_key"],
         sowing_date=row["sowing_date"],
         area_ha=float(row["area_ha"]),
         lat=float(row["lat"]),
@@ -221,7 +224,8 @@ async def create_lot(
     user: CurrentUser = Depends(require_role("admin", "operador")),
 ) -> AgroLotOut:
     await require_agro_module(user)
-    agro.crop_or_404(body.crop_key)
+    if body.crop_key != "pastizal":
+        agro.crop_or_404(body.crop_key)
     if body.zone_id is not None:
         existe = await db.pool().fetchval(
             "SELECT EXISTS(SELECT 1 FROM risk_zones WHERE id=$1 AND org_id=$2)",
@@ -266,7 +270,7 @@ async def update_lot(
     if not body.model_fields_set:
         raise HTTPException(422, "No se recibieron cambios")
     await _lot_or_404(lot_id, user.org_id)
-    if body.crop_key is not None:
+    if body.crop_key is not None and body.crop_key != "pastizal":
         agro.crop_or_404(body.crop_key)
     await db.pool().execute(
         """
@@ -448,6 +452,8 @@ async def refresh_lot(
     """Baja datos reales, recalcula la serie y regenera las recomendaciones."""
     await require_agro_module(user)
     lote = await _lot_or_404(lot_id, user.org_id)
+    if lote["crop_key"] == "pastizal":
+        raise HTTPException(422, "Para pastizales usá el monitoreo NDVI y el presupuesto forrajero de EcoCampo. La fenología de cultivos no aplica.")
     crop = agro.crop_or_404(lote["crop_key"])
     lat, lon = float(lote["lat"]), float(lote["lon"])
     hoy = agro.today_local()
@@ -646,3 +652,54 @@ async def advisories(
         limit,
     )
     return [_advisory_out(row) for row in rows]
+
+
+@router.get("/lots/{lot_id}/ecocampo")
+async def field_history(lot_id: UUID, user: CurrentUser = Depends(require_agro_module)):
+    await _lot_or_404(lot_id, user.org_id)
+    rows = await db.pool().fetch(
+        "SELECT id, evidence, result, created_at FROM ecocampo_assessments WHERE lot_id=$1 AND org_id=$2 ORDER BY created_at DESC LIMIT 50",
+        lot_id, user.org_id,
+    )
+    return [{**dict(row), "evidence": _decode(row["evidence"]), "result": _decode(row["result"])} for row in rows]
+
+
+@router.post("/lots/{lot_id}/ecocampo", status_code=201)
+async def field_assessment(lot_id: UUID, body: FieldEvidence, user: CurrentUser = Depends(require_role("admin", "operador"))):
+    await require_agro_module(user)
+    lot = await _lot_or_404(lot_id, user.org_id)
+    result = assess(body, float(lot["area_ha"]))
+    result.update({"area_ha": float(lot["area_ha"]), "crop_key": lot["crop_key"], "evaluated_on": date.today().isoformat()})
+    row = await db.pool().fetchrow(
+        "INSERT INTO ecocampo_assessments(lot_id,org_id,evidence,result,created_by) VALUES($1,$2,$3::jsonb,$4::jsonb,$5) RETURNING id,created_at",
+        lot_id, user.org_id, body.model_dump_json(), json.dumps(result, ensure_ascii=False), user.id,
+    )
+    await record_audit(org_id=user.org_id, user_id=user.id, action="ecocampo_assessment", resource="agro_lot", resource_id=lot_id, metadata={"assessment_id": str(row["id"]), "method_version": result["method_version"]})
+    return {**dict(row), "evidence": body.model_dump(mode="json"), "result": result}
+
+
+@router.get("/lots/{lot_id}/ecocampo/ndvi")
+async def ndvi_history(lot_id: UUID, user: CurrentUser = Depends(require_agro_module)):
+    await _lot_or_404(lot_id, user.org_id)
+    rows = await db.pool().fetch("SELECT polygon,result,created_at FROM ecocampo_satellite_runs WHERE lot_id=$1 AND org_id=$2 ORDER BY created_at DESC LIMIT 1", lot_id, user.org_id)
+    return [{**dict(row), "polygon": _decode(row["polygon"]), "result": _decode(row["result"])} for row in rows]
+
+
+@router.post("/lots/{lot_id}/ecocampo/ndvi")
+async def refresh_ndvi(lot_id: UUID, body: Polygon, user: CurrentUser = Depends(require_role("admin", "operador"))):
+    await require_agro_module(user)
+    await _lot_or_404(lot_id, user.org_id)
+    geometry = body.model_dump_json()
+    valid = await db.pool().fetchval("SELECT ST_IsValid(g) AND ST_Area(g::geography)>0 FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326) g) q", geometry)
+    if not valid:
+        raise HTTPException(422, "Polígono inválido o sin superficie")
+    # Un resultado reciente evita repetir consultas costosas al proveedor.
+    cached = await db.pool().fetchval("SELECT result FROM ecocampo_satellite_runs WHERE lot_id=$1 AND org_id=$2 AND polygon=$3::jsonb AND created_at>now()-interval '1 hour' ORDER BY created_at DESC LIMIT 1", lot_id, user.org_id, geometry)
+    if cached:
+        return _decode(cached)
+    try:
+        result = await fetch_ndvi(body)
+    except CopernicusError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    await db.pool().execute("INSERT INTO ecocampo_satellite_runs(lot_id,org_id,polygon,result) VALUES($1,$2,$3::jsonb,$4::jsonb)", lot_id, user.org_id, geometry, json.dumps(result, ensure_ascii=False))
+    return result

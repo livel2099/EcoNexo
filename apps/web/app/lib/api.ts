@@ -270,7 +270,7 @@ export async function apiPost<T>(path: string, token: string, body: unknown): Pr
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
-  }, path === "/pipeline/run" || path === "/pipeline/bootstrap" || /^\/agro\/lots\/[^/]+\/refresh(?:\?|$)/.test(path) ? 180_000 : DEFAULT_TIMEOUT_MS), `POST ${path}`);
+  }, path.endsWith("/ecocampo/ndvi") || path === "/pipeline/run" || path === "/pipeline/bootstrap" || /^\/agro\/lots\/[^/]+\/refresh(?:\?|$)/.test(path) ? 180_000 : DEFAULT_TIMEOUT_MS), `POST ${path}`);
 }
 
 export async function apiPostForm<T>(path: string, token: string, form: FormData): Promise<T> {

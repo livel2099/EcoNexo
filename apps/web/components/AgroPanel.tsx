@@ -12,6 +12,8 @@ import type {
   AgroSummary,
 } from "../app/lib/types";
 
+import EcoCampoAssessment from "./EcoCampoAssessment";
+
 const NIVEL_ORDEN = { alto: 0, medio: 1, bajo: 2 } as const;
 
 const KIND_LABEL: Record<string, string> = {
@@ -132,7 +134,7 @@ export default function AgroPanel({ token }: { token: string }) {
         setLocked(cause instanceof Error ? cause.message : "Módulo no habilitado");
         return;
       }
-      setError(cause instanceof Error ? cause.message : "No se pudo cargar EcoNexo AG");
+      setError(cause instanceof Error ? cause.message : "No se pudo cargar EcoCampo");
     });
   }, [load]);
 
@@ -186,7 +188,7 @@ export default function AgroPanel({ token }: { token: string }) {
     setBusy(true);
     setError("");
     const fallos: string[] = [];
-    for (const lot of lots.filter((l) => l.is_active)) {
+    for (const lot of lots.filter((l) => l.is_active && l.crop_key !== "pastizal")) {
       try {
         await apiPost<AgroRefresh>(`/agro/lots/${lot.id}/refresh`, token, {});
       } catch {
@@ -197,7 +199,7 @@ export default function AgroPanel({ token }: { token: string }) {
     setBusy(false);
     setNotice(fallos.length
       ? `Procesados con errores en: ${fallos.join(", ")}`
-      : "Todos los lotes activos fueron procesados con datos reales.");
+      : "Lotes agrícolas procesados con datos reales. Para pastizales, consultá NDVI desde su ficha.");
   }
 
   async function crearLote(event: React.FormEvent) {
@@ -262,17 +264,18 @@ export default function AgroPanel({ token }: { token: string }) {
     return (
       <section className="view agro-console">
         <article className="agro-locked">
-          <span className="eyebrow">ECONEXO AG · MÓDULO NO HABILITADO</span>
+          <span className="eyebrow">ECOCAMPO · MÓDULO NO HABILITADO</span>
           <h2>Inteligencia agronómica por lote</h2>
           <p>{locked}</p>
           <ul>
+            <li>NDVI Sentinel-2 por polígono, evaluación de aptitud y presupuesto forrajero.</li>
             <li>Fenología por grados día y coeficiente de cultivo por etapa.</li>
             <li>Balance hídrico con ET0 FAO-56 y demanda real del cultivo.</li>
             <li>Ventanas de pulverización por delta-T, viento y ráfagas.</li>
             <li>Riesgo de helada, estrés térmico y presión de enfermedad.</li>
           </ul>
           <p className="agro-locked-note">
-            Se habilita desde Admin Core &gt; Suscripción, con el plan EcoNexo AG · Productor
+            USD 400 mensuales · Se habilita desde Admin Core &gt; Suscripción, con el plan EcoCampo · Productor
             o cualquier plan que incluya el módulo.
           </p>
         </article>
@@ -284,7 +287,7 @@ export default function AgroPanel({ token }: { token: string }) {
     <section className="view agro-console">
       <header className="agro-header">
         <div>
-          <span className="eyebrow">ECONEXO AG · INTELIGENCIA AGRONÓMICA</span>
+          <span className="eyebrow">ECOCAMPO · INTELIGENCIA AGRONÓMICA</span>
           <h2>Lotes y decisiones de campo</h2>
           <p>
             Fenología por grados día, balance hídrico con ET0 FAO-56 y ventanas de aplicación,
@@ -321,6 +324,7 @@ export default function AgroPanel({ token }: { token: string }) {
           </label>
           <label>Cultivo
             <select value={draft.crop_key} onChange={(e) => setDraft({ ...draft, crop_key: e.target.value })}>
+              <option value="pastizal">Pastizal / uso ganadero (NDVI y forraje)</option>
               {crops.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
             </select>
           </label>
@@ -385,7 +389,7 @@ export default function AgroPanel({ token }: { token: string }) {
                 </ul>
               )}
               <div className="agro-lot-actions">
-                <button disabled={busy} onClick={() => void refrescar(lot)}>Procesar</button>
+                <button disabled={busy || lot.crop_key === "pastizal"} onClick={() => void refrescar(lot)}>Procesar</button>
                 <button disabled={busy} onClick={() => void verSerie(lot.id)}>Ver serie</button>
                 <button disabled={busy} onClick={() => void alternarActivo(lot)}>{lot.is_active ? "Pausar" : "Activar"}</button>
                 <button disabled={busy} className="danger" onClick={() => void borrarLote(lot)}>Eliminar</button>
@@ -395,6 +399,7 @@ export default function AgroPanel({ token }: { token: string }) {
         </div>
 
         <div className="agro-detail">
+          {loteActual && <EcoCampoAssessment key={loteActual.id} lotId={loteActual.id} token={token} />}
           {loteActual && (
             <article className="agro-card">
               <h3>{loteActual.name} · próximos días</h3>
@@ -527,7 +532,7 @@ export default function AgroPanel({ token }: { token: string }) {
       </div>
 
       <p className="agro-disclaimer">
-        EcoNexo AG procesa datos meteorológicos reales y los traduce a indicadores agronómicos.
+        EcoCampo procesa datos meteorológicos reales y los traduce a indicadores agronómicos.
         Los indicadores son estimaciones: no miden lo que pasa dentro del lote ni reemplazan la
         recorrida a campo, el análisis de suelo ni la indicación de un profesional.
       </p>

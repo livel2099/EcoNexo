@@ -612,7 +612,7 @@ function demoPlans(): SubscriptionPlan[] {
     { plan_key: "municipal", display_name: "SaaS Municipal", description: "Un municipio, alertas base, reportes mensuales y soporte limitado.", price_min_usd: 800, price_max_usd: 1500, billing_period: "monthly", duration_days: null, entitlements: { max_users: 10, max_devices: 50, max_zones: 5, max_rules: 20, max_critical_layers: 3, municipality_limit: 1, report_frequency: "mensual", api_access: false, audit_export: false, custom_models: false, sla: false, included_modules: ["core", "agro"] } },
     { plan_key: "province_pro", display_name: "SaaS Provincia / Pro", description: "Múltiples zonas, reportes quincenales y usuarios internos.", price_min_usd: 3500, price_max_usd: 8000, billing_period: "monthly", duration_days: null, entitlements: { max_users: 50, max_devices: 500, max_zones: 30, max_rules: 100, max_critical_layers: 12, municipality_limit: 79, report_frequency: "quincenal", api_access: false, audit_export: true, custom_models: false, sla: false, included_modules: ["core", "agro"] } },
     { plan_key: "enterprise", display_name: "Enterprise minero / energético", description: "SLA, integraciones, API, auditoría y modelos personalizados.", price_min_usd: 12000, price_max_usd: null, billing_period: "monthly", duration_days: null, entitlements: { max_users: 250, max_devices: 5000, max_zones: 250, max_rules: 1000, max_critical_layers: 50, municipality_limit: 79, report_frequency: "personalizada", api_access: true, audit_export: true, custom_models: true, sla: true, included_modules: ["core", "fire_smoke", "forestry_pests", "agro"] } },
-    { plan_key: "agro_productor", display_name: "EcoNexo AG · Productor", description: "Lotes, fenología, balance hídrico y ventanas de aplicación sobre datos meteorológicos reales.", price_min_usd: 400, price_max_usd: 1200, billing_period: "monthly", duration_days: null, entitlements: { max_users: 8, max_devices: 25, max_zones: 10, max_rules: 25, max_critical_layers: 3, municipality_limit: 3, report_frequency: "quincenal", api_access: false, audit_export: true, custom_models: false, sla: false, included_modules: ["core", "agro"] } },
+    { plan_key: "agro_productor", display_name: "EcoCampo · Productor", description: "Lotes, fenología, balance hídrico y ventanas de aplicación sobre datos meteorológicos reales.", price_min_usd: 400, price_max_usd: 400, billing_period: "monthly", duration_days: null, entitlements: { max_users: 8, max_devices: 25, max_zones: 10, max_rules: 25, max_critical_layers: 3, municipality_limit: 3, report_frequency: "quincenal", api_access: false, audit_export: true, custom_models: false, sla: false, included_modules: ["core", "agro"] } },
     { plan_key: "academy", display_name: "Academia EcoNexo", description: "Capacitación, manuales, certificación interna y simulacros.", price_min_usd: 2000, price_max_usd: 6000, billing_period: "cohort", duration_days: 45, entitlements: { max_users: 40, max_devices: 0, max_zones: 1, max_rules: 0, max_critical_layers: 1, municipality_limit: 1, report_frequency: "simulación", api_access: false, audit_export: false, custom_models: false, sla: false, included_modules: ["core", "agro"] } },
   ];
 }
@@ -629,7 +629,7 @@ function demoSubscription(state: DemoState): SubscriptionMe {
 }
 
 const AGRO_SIN_DEMO =
-  "EcoNexo AG procesa datos meteorológicos reales y no tiene modo demo: mostrar " +
+  "EcoCampo procesa datos meteorológicos reales y no tiene modo demo: mostrar " +
   "indicadores agronómicos inventados sería peor que no mostrarlos. Conectá la API " +
   "productiva para usar el módulo.";
 
@@ -703,7 +703,7 @@ export async function demoGet<T>(path: string): Promise<T> {
       { module_key: "core", status: "active", plan_name: "Plataforma EcoNexo", starts_at: isoAgo(40000), expires_at: null, config: { human_approval_required: true }, available: true },
       { module_key: "fire_smoke", status: "trial", plan_name: "Focos de incendio forestal y humo", starts_at: isoAgo(1000), expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(), config: { plain_language: true, emergency_numbers: ["911", "100", "103", "105"] }, available: true },
       { module_key: "forestry_pests", status: "trial", plan_name: "Vigilancia de plagas forestales", starts_at: isoAgo(1000), expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(), config: { plain_language: true, focus_area: "San Antonio - General Manuel Belgrano" }, available: true },
-      { module_key: "agro", status: "suspended", plan_name: "EcoNexo AG · inteligencia agronómica", starts_at: isoAgo(1000), expires_at: null, config: {}, available: false },
+      { module_key: "agro", status: "suspended", plan_name: "EcoCampo · inteligencia agronómica", starts_at: isoAgo(1000), expires_at: null, config: {}, available: false },
     ];
     return copy(modules) as T;
   }

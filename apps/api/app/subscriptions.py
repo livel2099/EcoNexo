@@ -171,13 +171,13 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
         },
     },
     "agro_productor": {
-        "name": "EcoNexo AG · Productor",
+        "name": "EcoCampo · Productor",
         "description": (
-            "Lotes, fenología por grados día, balance hídrico y ventanas de aplicación "
+            "Lotes, NDVI Sentinel-2, aptitud agropecuaria, presupuesto forrajero y riesgos "
             "sobre datos meteorológicos reales."
         ),
         "price_min_usd": 400,
-        "price_max_usd": 1200,
+        "price_max_usd": 400,
         "billing_period": "monthly",
         "duration_days": None,
         "entitlements": {
@@ -393,7 +393,7 @@ async def sync_modules(org_id: UUID, user_id: UUID | None = None) -> None:
         "core": "Plataforma EcoNexo",
         "fire_smoke": "Focos de incendio forestal y humo",
         "forestry_pests": "Vigilancia de plagas forestales",
-        "agro": "EcoNexo AG · inteligencia agronómica",
+        "agro": "EcoCampo · inteligencia agronómica",
     }.items():
         default_status = "active" if module_key in included else "suspended"
         await db.pool().execute(

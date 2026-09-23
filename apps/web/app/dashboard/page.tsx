@@ -237,7 +237,7 @@ export default function Dashboard() {
             {navItem("comando", "Centro de Comando")}
             {navItem("fuego", "Fuego y humo")}
             {navItem("plagas", "Plagas forestales")}
-            {navItem("agro", "EcoNexo AG")}
+            {navItem("agro", "EcoCampo")}
             {navItem("observatorio", "Alerta IA")}
             {navItem("dispositivos", "Dispositivos")}
             {navItem("reglas", "Reglas")}
