@@ -15,6 +15,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/seguridad",
     "/accesibilidad",
     "/metodologia",
+    "/documentacion",
     "/estado",
   ].map((path) => ({
     url: `${base}${path}`,

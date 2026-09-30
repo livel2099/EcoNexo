@@ -1,0 +1,35 @@
+.wordmark { display: inline-flex; align-items: flex-start; gap: 3px; width: 192px; max-width: 100%; }
+.wordmark svg { display: block; width: calc(100% - 12px); height: auto; }
+.wordmark sup { color: #d5f5ef; font-size: 11px; line-height: 1; font-weight: 400; margin-top: 1px; }
+.scene { position: relative; isolation: isolate; width: 100%; max-width: 500px; margin: auto; }
+.aura { position: absolute; z-index: -1; inset: 5% -15% 10%; border-radius: 50%; background: radial-gradient(ellipse, #00edba21, transparent 64%); animation: auraBreathe 7s ease-in-out infinite; pointer-events: none; }
+.artwork { position: relative; aspect-ratio: 1; overflow: hidden; border: 1px solid #14e8c72b; border-radius: 12px; background: #00271e; box-shadow: 0 28px 80px #0005, 0 0 50px #04c7a10b; }
+.original { display: block; width: 100%; height: auto; margin-top: -8%; animation: constructLogo 2.8s cubic-bezier(.2,.65,.25,1) both; }
+.circuit { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.traces { stroke: #5bffdb; stroke-width: 1.1; filter: drop-shadow(0 0 4px #00eac3); }
+.traces path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: drawTrace 2.6s ease-in-out both; }
+.traces path:nth-child(2) { animation-delay: .25s; }.traces path:nth-child(3) { animation-delay: .45s; }.traces path:nth-child(4) { animation-delay: .6s; }.traces path:nth-child(5) { animation-delay: .8s; }.traces path:nth-child(6) { animation-delay: 1s; stroke: #a58aff; }
+.orbitalSignal { stroke: #7bfce7; stroke-width: 1.4; stroke-dasharray: .1 .9; animation: orbitSignal 9s linear infinite; filter: drop-shadow(0 0 5px #00eec5); }
+.packet { stroke: #dcfff8; stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: .045 .955; animation: travelPacket 5s linear infinite; filter: drop-shadow(0 0 5px #15fff0); }
+.nodes circle { fill: #d4fff1; stroke: #00e4c7; stroke-width: 1; opacity: .3; animation: nodePulse 3.8s ease-in-out infinite; animation-delay: calc(var(--node-index) * .24s); filter: drop-shadow(0 0 5px #00f5c8); }
+.nodes circle:last-child { stroke: #a78bff; }
+.scan { position: absolute; left: 5%; right: 5%; top: 0; height: 1px; background: linear-gradient(90deg, transparent, #50ffd4, #6de6fc, transparent); box-shadow: 0 0 20px 3px #00f8c54d; animation: assemblyScan 2.8s ease-out both; pointer-events: none; }
+.registered { position: absolute; right: 8.6%; top: 59.6%; font-size: clamp(12px, 1.2vw, 16px); color: #d4ede8; line-height: 1; animation: markAppear 2.8s ease-out both; }
+.caption { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 16px; color: #83b6aa; }
+.caption > span { font: 9px monospace; letter-spacing: 1px; line-height: 1.7; }.caption i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #16e3b1; margin-right: 6px; }
+.motionToggle { flex-shrink: 0; padding: 6px 8px; background: transparent; border: 1px solid #3a79695c; border-radius: 4px; color: #add9cf; font-size: 10px; cursor: pointer; }.motionToggle:hover { border-color: #21debb; color: #effff9; }.motionToggle:focus-visible { outline: 2px solid #50ffcf; outline-offset: 3px; }
+.scene[data-paused="true"] *, .scene[data-paused="true"] .nodes circle { animation-play-state: paused; }
+.scene[data-paused="true"] .original { animation: none; clip-path: inset(0); opacity: 1; }
+.scene[data-paused="true"] .registered { animation: none; opacity: 1; }
+.scene[data-paused="true"] .scan { display: none; }
+@keyframes constructLogo { 0% { clip-path: inset(0 0 100%); opacity: .15; } 35% { opacity: 1; } 100% { clip-path: inset(0); opacity: 1; } }
+@keyframes drawTrace { 0% { stroke-dashoffset: 1; opacity: .8; } 70% { opacity: .8; } 100% { stroke-dashoffset: 0; opacity: .18; } }
+@keyframes assemblyScan { 0% { top: 0; opacity: 0; } 15% { opacity: .8; } 85% { opacity: .6; } 100% { top: 100%; opacity: 0; } }
+@keyframes markAppear { 0%, 65% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes orbitSignal { to { stroke-dashoffset: -1; } }
+@keyframes travelPacket { 0% { stroke-dashoffset: 1; opacity: 0; } 15%, 85% { opacity: .8; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes nodePulse { 0%, 100% { opacity: .2; } 50% { opacity: .85; } }
+@keyframes auraBreathe { 0%, 100% { transform: scale(.94); opacity: .6; } 50% { transform: scale(1.05); opacity: 1; } }
+@media (max-width: 720px) { .wordmark { width: 162px; }.scene { max-width: 450px; }.registered { font-size: 13px; } }
+@media (max-width: 380px) { .caption { flex-wrap: wrap; }.wordmark { width: 144px; } }
+@media (prefers-reduced-motion: reduce) { .scene *, .scene .nodes circle { animation: none !important; }.original { clip-path: none; opacity: 1; }.traces path { stroke-dashoffset: 0; opacity: .12; }.scan, .packet, .orbitalSignal, .motionToggle { display: none; }.registered { opacity: 1; } }

@@ -1,13 +1,16 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
-export default function SiteFooter({ compact = false }: { compact?: boolean }) {
+export default function SiteFooter({ compact = false, brand }: { compact?: boolean; brand?: ReactNode }) {
   return (
     <footer className={`site-footer ${compact ? "compact" : ""}`}>
       <div>
-        <strong>ECO<span>NEXO</span></strong>
+        {brand || <strong>ECO<span>NEXO</span></strong>}
         <small>Inteligencia bioclimática activa</small>
       </div>
       <nav aria-label="Información legal">
+        <Link href="/">Inicio</Link>
+        <Link href="/documentacion">Documentación</Link>
         <Link href="/terminos">Términos</Link>
         <Link href="/privacidad">Privacidad</Link>
         <Link href="/cookies">Cookies</Link>
