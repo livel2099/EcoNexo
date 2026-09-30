@@ -610,8 +610,17 @@ class PlatformUserOut(BaseModel):
 
 class PlatformUserUpdateIn(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=32)
     role: Literal["admin", "operador", "visualizador"] | None = None
     is_active: bool | None = None
+
+    @field_validator("name")
+    @classmethod
+    def nonempty_name(cls, value: str | None) -> str | None:
+        if value is not None and len(value.strip()) < 2:
+            raise ValueError("El nombre debe tener al menos dos caracteres")
+        return value.strip() if value is not None else None
 
 
 class PlatformPasswordResetIn(BaseModel):

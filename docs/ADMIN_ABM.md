@@ -280,3 +280,43 @@ En `NEXT_PUBLIC_DEMO_MODE=true`, el frontend emula las operaciones en `localStor
 - informes y auditoría.
 
 Cada navegador mantiene su propio dataset. No es multiusuario ni reemplaza PostgreSQL.
+
+## 8. Consola general: contactos, licencias y Admin Core
+
+En `/plataforma`, la pestaña **Usuarios → Editar datos** permite corregir nombre,
+correo de acceso, teléfono y rol. **Organizaciones → Editar contacto** abre el mismo
+formulario para el administrador registrado, incluso con el alta pendiente.
+Restablecer clave asigna una contraseña temporal con cambio obligatorio; no reactiva
+cuentas pausadas. Cambiar correo desvincula Google e invalida las sesiones anteriores.
+No se permite asignar a otra cuenta un correo reservado para administración general,
+ni quitar el último administrador activo de una organización.
+
+**Licencias** lista también organizaciones sin suscripción asignada, permite asignar
+un plan y dar de baja una licencia con confirmación. La baja es lógica: conserva
+contrato, fechas, usuarios e historial, cancela la renovación y suspende los módulos.
+La asignación de un plan y la aprobación de acceso de la organización son operaciones
+independientes. Una licencia no habilita automáticamente una organización suspendida.
+
+Core siempre se incluye en las prestaciones, también con módulos personalizados.
+Admin Core depende del rol `admin`, no de un módulo comercial adicional. La API
+consulta los permisos actuales; el dashboard los actualiza al abrirse, recuperar el
+foco y cada 30 segundos. La gestión administrativa y la suscripción siguen accesibles
+con licencia cancelada; las rutas operativas se bloquean. El feed WebSocket revalida
+el acceso cada 15 segundos.
+
+### Despliegue y verificación
+
+Aplicar `apps/api/migrations/27_user_session_version.sql` antes de iniciar la nueva
+API. Desde `apps/api`, el comando habitual `python -m app.migrate` aplica las
+migraciones pendientes. La columna `users.token_version` permite revocar JWT tras
+cambiar correo, pausar la cuenta o restablecer/cambiar la contraseña. Los tokens
+anteriores sin versión equivalen a versión cero hasta que se revoca la cuenta.
+
+Pruebas de regresión:
+
+- API: `python -m pytest tests/test_admin_access_and_licenses.py` desde `apps/api`.
+- Navegador: `npx playwright test --config playwright.admin.config.ts` desde `apps/web`.
+  Usan una API simulada y servidor local independiente. Se puede seleccionar un
+  navegador instalado con `PLAYWRIGHT_CHANNEL=msedge` o `chrome`.
+- Landing pública en `/`, guía de uso en `/documentacion`, contacto comercial
+  `econexoargentina@gmail.com`.

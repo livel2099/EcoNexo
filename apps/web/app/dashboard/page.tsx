@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IS_DEMO, WS, apiGet, apiPost, clearSession, getSession } from "../lib/api";
+import { IS_DEMO, WS, apiGet, apiPost, clearSession, getSession, saveSession } from "../lib/api";
 import type { EarthIntel } from "../lib/earth-intel";
 import type { Alert, Detection, Device, EnvironmentalSourceSettings, Kpi, Org, PipelineRun, Report, RiskZone, Session } from "../lib/types";
 import { buildSpaceAIThreatAssessment } from "../lib/spaceai";
@@ -95,6 +95,7 @@ export default function Dashboard() {
   const [lastPipeline, setLastPipeline] = useState<PipelineRun | null>(null);
   const [pipelineBusy, setPipelineBusy] = useState(false);
   const [pipelineNotice, setPipelineNotice] = useState("");
+  const [accessNotice, setAccessNotice] = useState("");
   const [feed, setFeed] = useState<string[]>([]);
   const [earthIntel, setEarthIntel] = useState<EarthIntel | null>(null);
   const [sourceSettings, setSourceSettings] = useState<EnvironmentalSourceSettings>(DEFAULT_SOURCE_SETTINGS);
@@ -113,7 +114,14 @@ export default function Dashboard() {
       apiGet<Report[]>("/reports", accessToken),
       apiGet<RiskZone[]>("/zones", accessToken),
       apiGet<PipelineRun[]>("/pipeline/runs?limit=1", accessToken).catch(() => []),
-    ]);
+    ]).catch((cause) => {
+      if (cause?.status === 402 || cause?.status === 403) {
+        setAccessNotice(cause.message);
+        setKpi(null); setAlerts([]); setDevices([]); setDetections([]); setReports([]); setFeed([]);
+      }
+      throw cause;
+    });
+    setAccessNotice("");
     setKpi(nextKpi);
     setAlerts(nextAlerts);
     setDevices(nextDevices);
@@ -139,6 +147,23 @@ export default function Dashboard() {
     }
     setSession(session);
     setToken(session.access_token);
+    let disposed = false;
+    const refreshIdentity = async () => {
+      if (IS_DEMO) return;
+      try {
+        const identity = await apiGet<Session>("/auth/me", session.access_token);
+        if (disposed) return;
+        const updated = { ...identity, access_token: session.access_token };
+        saveSession(updated);
+        setSession(updated);
+        if (updated.must_change_password) router.replace("/cambiar-contrasena");
+        if (updated.role !== "admin") setView((current) => current === "admin" ? "comando" : current);
+      } catch { /* La API redirige al login cuando la sesión fue revocada. */ }
+    };
+    void refreshIdentity();
+    const identityTimer = window.setInterval(() => void refreshIdentity(), 30_000);
+    const onFocus = () => void refreshIdentity();
+    window.addEventListener("focus", onFocus);
     void apiGet<Org>("/orgs/me", session.access_token).then(setOrg).catch(() => undefined);
     void apiGet<EnvironmentalSourceSettings>("/environment/source-settings", session.access_token).then(setSourceSettings).catch(() => undefined);
     void refresh(session.access_token).catch(() => undefined);
@@ -179,6 +204,9 @@ export default function Dashboard() {
 
     const refreshInterval = window.setInterval(() => void refresh(session.access_token).catch(() => undefined), 15_000);
     return () => {
+      disposed = true;
+      window.clearInterval(identityTimer);
+      window.removeEventListener("focus", onFocus);
       stopLiveFeed();
       window.clearInterval(refreshInterval);
     };
@@ -247,6 +275,7 @@ export default function Dashboard() {
             {navItem("informes", "Informes")}
             <button className="foi-nav-link" onClick={() => router.push("/red-investigacion")}>EcoNexoFoI</button>
             {session?.role === "admin" && navItem("admin", "Admin Core")}
+            {session?.platform_admin && <button onClick={() => router.push("/plataforma")}>Administración general</button>}
           </nav>
         </div>
         <div className="account-area">
@@ -258,8 +287,9 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className={`banner ${globalStatus} kpirow`}>
-        <span className="dot" /> {BANNER[globalStatus]} · {localAlerts.filter((item) => !["descartada", "resuelta"].includes(item.status)).length} alertas activas en Misiones
+      {accessNotice && <div className="workspace-message error kpirow" role="alert">{accessNotice} {session?.role === "admin" && <button onClick={() => setView("admin")}>Abrir Admin Core</button>}</div>}
+      <div className={`banner ${accessNotice ? "atencion" : globalStatus} kpirow`}>
+        <span className="dot" /> {accessNotice ? "Operación no disponible · revisá el estado de acceso" : `${BANNER[globalStatus]} · ${localAlerts.filter((item) => !["descartada", "resuelta"].includes(item.status)).length} alertas activas en Misiones`}
         <small>{misionesLocationLabel(commandCenter[0], commandCenter[1])} · 17 departamentos · 79 municipios{ignoredExternalSignals ? ` · ${ignoredExternalSignals} señales externas excluidas` : ""}</small>
         <button
           type="button"

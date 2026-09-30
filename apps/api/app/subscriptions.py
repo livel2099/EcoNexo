@@ -244,7 +244,10 @@ def _json(value: Any, fallback: Any) -> Any:
 def merged_entitlements(row: Any) -> dict[str, Any]:
     base = _json(row["plan_entitlements"], {})
     custom = _json(row["custom_entitlements"], {})
-    return {**base, **custom}
+    result = {**base, **custom}
+    # Core es parte de todas las licencias, incluso contratos personalizados.
+    result["included_modules"] = list(dict.fromkeys(["core", *(result.get("included_modules") or [])]))
+    return result
 
 
 async def seed_plan_catalog(conn: Any | None = None) -> None:
@@ -385,8 +388,9 @@ async def module_included_by_plan(org_id: UUID, module_key: str) -> bool:
     return module_key in included
 
 
-async def sync_modules(org_id: UUID, user_id: UUID | None = None) -> None:
-    row = await subscription_row(org_id)
+async def sync_modules(org_id: UUID, user_id: UUID | None = None, *, conn: Any | None = None, subscription: Any = None) -> None:
+    row = subscription if subscription is not None else await subscription_row(org_id)
+    executor = conn or db.pool()
     included = set(merged_entitlements(row).get("included_modules", ["core"]))
     expiry = row["expires_at"]
     for module_key, display_name in {
@@ -396,20 +400,20 @@ async def sync_modules(org_id: UUID, user_id: UUID | None = None) -> None:
         "agro": "EcoNexo AG · inteligencia agronómica",
         "ecocampo": "EcoCampo · aptitud y producción agropecuaria",
     }.items():
-        default_status = "active" if module_key in included else "suspended"
-        await db.pool().execute(
+        default_status = "active" if is_active(row) and module_key in included else "suspended"
+        await executor.execute(
             """
             INSERT INTO organization_modules
               (org_id, module_key, status, plan_name, starts_at, expires_at, config, created_by)
             VALUES ($1,$2,$3,$4,now(),$5,'{}'::jsonb,$6)
             ON CONFLICT (org_id,module_key) DO UPDATE SET
               status=CASE
-                WHEN organization_modules.status='active' AND $2 <> 'core' THEN organization_modules.status
+                WHEN $7 AND organization_modules.status='active' AND $2 <> 'core' THEN organization_modules.status
                 ELSE EXCLUDED.status
               END,
               plan_name=EXCLUDED.plan_name,
               expires_at=CASE
-                WHEN organization_modules.status='active' AND $2 <> 'core' THEN organization_modules.expires_at
+                WHEN $7 AND organization_modules.status='active' AND $2 <> 'core' THEN organization_modules.expires_at
                 ELSE EXCLUDED.expires_at
               END,
               updated_at=now()
@@ -420,6 +424,7 @@ async def sync_modules(org_id: UUID, user_id: UUID | None = None) -> None:
             display_name,
             expiry if module_key in included else None,
             user_id,
+            is_active(row),
         )
 
 

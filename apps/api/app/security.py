@@ -53,7 +53,7 @@ def new_token(nbytes: int = 24) -> str:
 
 def create_access_token(
     subject: str, org_id: str, role: str, *, account_type: str = "institutional",
-    email: str = "", platform_admin: bool = False,
+    email: str = "", platform_admin: bool = False, token_version: int = 0,
 ) -> str:
     s = get_settings()
     now = datetime.now(timezone.utc)
@@ -64,6 +64,7 @@ def create_access_token(
         "account_type": account_type,
         "email": email,
         "platform_admin": platform_admin,
+        "token_version": token_version,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=s.jwt_expire_minutes)).timestamp()),
     }

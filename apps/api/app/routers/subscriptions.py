@@ -213,15 +213,53 @@ async def platform_organizations(
     rows = await db.pool().fetch(
         """
         SELECT o.id AS org_id, o.name AS org_name, o.municipality,
-               os.plan_key, sp.display_name, os.status, os.starts_at,
-               os.expires_at, os.updated_at
+               COALESCE(os.plan_key,'sandbox') AS plan_key,
+               COALESCE(sp.display_name,'Sin licencia asignada') AS display_name,
+               COALESCE(os.status,'pending') AS status,
+               COALESCE(os.starts_at,o.created_at) AS starts_at,
+               os.expires_at, COALESCE(os.updated_at,o.updated_at) AS updated_at
         FROM organizations o
-        JOIN organization_subscriptions os ON os.org_id=o.id
-        JOIN subscription_plans sp ON sp.plan_key=os.plan_key
+        LEFT JOIN organization_subscriptions os ON os.org_id=o.id
+        LEFT JOIN subscription_plans sp ON sp.plan_key=os.plan_key
         ORDER BY os.updated_at DESC, o.name
         """
     )
     return [PlatformSubscriptionRowOut(**dict(row)) for row in rows]
+
+
+@router.post("/platform/{org_id}/cancel")
+async def cancel_platform_subscription(
+    org_id: UUID,
+    user: CurrentUser = Depends(require_platform_admin),
+) -> dict[str, str]:
+    async with db.pool().acquire() as conn:
+        async with conn.transaction():
+            current = await conn.fetchrow(
+                "SELECT plan_key, status FROM organization_subscriptions WHERE org_id=$1 FOR UPDATE", org_id,
+            )
+            if current is None:
+                raise HTTPException(404, "La organización no tiene una licencia asignada")
+            if current["status"] == "cancelled":
+                return {"status": "cancelled"}
+            await conn.execute(
+                """UPDATE organization_subscriptions SET status='cancelled', auto_renew=false,
+                          updated_at=now(), activated_by=$2, activation_source='platform_admin'
+                   WHERE org_id=$1""", org_id, user.id,
+            )
+            await conn.execute(
+                "UPDATE organization_modules SET status='suspended', updated_at=now() WHERE org_id=$1", org_id,
+            )
+            await conn.execute(
+                """INSERT INTO subscription_events
+                     (org_id,previous_plan,next_plan,previous_status,next_status,actor_user_id,metadata)
+                   VALUES ($1,$2,$2,$3,'cancelled',$4,'{}'::jsonb)""",
+                org_id, current["plan_key"], current["status"], user.id,
+            )
+            await conn.execute(
+                """INSERT INTO audit_events (org_id,user_id,action,resource,resource_id,metadata)
+                   VALUES ($1,$2,'cancel','subscription',$1,'{}'::jsonb)""", org_id, user.id,
+            )
+    return {"status": "cancelled"}
 
 
 @router.patch("/platform/{org_id}", response_model=SubscriptionMeOut)
@@ -230,80 +268,93 @@ async def update_platform_subscription(
     body: PlatformSubscriptionUpdateIn,
     user: CurrentUser = Depends(require_platform_admin),
 ) -> SubscriptionMeOut:
+    if not await db.pool().fetchval("SELECT EXISTS(SELECT 1 FROM organizations WHERE id=$1)", org_id):
+        raise HTTPException(404, "Organización no encontrada")
     await seed_plan_catalog()
     current = await subscription_row(org_id)
     if current is None:
         raise HTTPException(404, "Organización no encontrada")
     plan = PLAN_DEFINITIONS[body.plan_key]
+    if body.active_modules is not None:
+        body.custom_entitlements["included_modules"] = list(dict.fromkeys(["core", *body.active_modules]))
     expires_at = body.expires_at
     if expires_at is None and plan["duration_days"] is not None:
         expires_at = datetime.now(timezone.utc) + timedelta(days=int(plan["duration_days"]))
-    await db.pool().execute(
-        """
-        INSERT INTO subscription_events
-          (org_id, previous_plan, next_plan, previous_status, next_status,
-           actor_user_id, metadata)
-        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)
-        """,
-        org_id,
-        current["plan_key"],
-        body.plan_key,
-        current["status"],
-        body.status,
-        user.id,
-        json.dumps({"notes": body.notes, "custom_entitlements": body.custom_entitlements}, ensure_ascii=False),
-    )
-    await db.pool().execute(
-        """
-        UPDATE organization_subscriptions SET
-          plan_key=$2, status=$3, starts_at=CASE WHEN plan_key<>$2 THEN now() ELSE starts_at END,
-          expires_at=$4, auto_renew=$5, custom_entitlements=$6::jsonb,
-          notes=NULLIF($7,''), activated_by=$8, activation_source='platform_admin'
-        WHERE org_id=$1
-        """,
-        org_id,
-        body.plan_key,
-        body.status,
-        expires_at,
-        body.auto_renew,
-        json.dumps(body.custom_entitlements, ensure_ascii=False),
-        body.notes.strip(),
-        user.id,
-    )
-    await sync_modules(org_id, user.id)
-    if body.active_modules is not None:
-        requested = set(body.active_modules)
-        for module_key in ("core", "fire_smoke", "forestry_pests", "agro"):
-            module_status = "active" if module_key in requested or module_key == "core" else "suspended"
-            await db.pool().execute(
+    async with db.pool().acquire() as conn:
+        async with conn.transaction():
+            current = await conn.fetchrow(
+                "SELECT * FROM organization_subscriptions WHERE org_id=$1 FOR UPDATE", org_id,
+            )
+            await conn.execute(
                 """
-                UPDATE organization_modules
-                SET status=$3,
-                    -- El cast es obligatorio: dentro de un CASE, Postgres
-                    -- resuelve el tipo por las ramas y no por la columna
-                    -- destino, asi que un parametro nulo se toma como text y
-                    -- la sentencia falla. Pasa con todo plan sin vencimiento
-                    -- (municipal, provincia, enterprise, agro_productor).
-                    expires_at=CASE WHEN $3='active' THEN $4::timestamptz ELSE NULL END,
-                    updated_at=now()
-                WHERE org_id=$1 AND module_key=$2
+                INSERT INTO subscription_events
+                  (org_id, previous_plan, next_plan, previous_status, next_status,
+                   actor_user_id, metadata)
+                VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)
                 """,
                 org_id,
-                module_key,
-                module_status,
-                expires_at,
+                current["plan_key"],
+                body.plan_key,
+                current["status"],
+                body.status,
+                user.id,
+                json.dumps({"notes": body.notes, "custom_entitlements": body.custom_entitlements}, ensure_ascii=False),
             )
-    if body.request_id is not None:
-        await db.pool().execute(
-            """
-            UPDATE license_requests SET status='approved', reviewed_by=$2,
-                   reviewed_at=now() WHERE id=$1 AND org_id=$3
-            """,
-            body.request_id,
-            user.id,
-            org_id,
-        )
-    org_name = await db.pool().fetchval("SELECT name FROM organizations WHERE id=$1", org_id)
+            await conn.execute(
+                """
+                UPDATE organization_subscriptions SET
+                  plan_key=$2, status=$3, starts_at=CASE WHEN plan_key<>$2 THEN now() ELSE starts_at END,
+                  expires_at=$4, auto_renew=$5, custom_entitlements=$6::jsonb,
+                  notes=NULLIF($7,''), activated_by=$8, activation_source='platform_admin'
+                WHERE org_id=$1
+                """,
+                org_id,
+                body.plan_key,
+                body.status,
+                expires_at,
+                body.auto_renew,
+                json.dumps(body.custom_entitlements, ensure_ascii=False),
+                body.notes.strip(),
+                user.id,
+            )
+            updated = await conn.fetchrow(
+                """SELECT os.*, sp.entitlements AS plan_entitlements, now() AS database_now
+                   FROM organization_subscriptions os JOIN subscription_plans sp USING (plan_key)
+                   WHERE os.org_id=$1""", org_id,
+            )
+            await sync_modules(org_id, user.id, conn=conn, subscription=updated)
+            if body.active_modules is not None:
+                requested = set(body.active_modules)
+                for module_key in ("core", "fire_smoke", "forestry_pests", "agro", "ecocampo"):
+                    module_status = "active" if is_active(updated) and (module_key in requested or module_key == "core") else "suspended"
+                    await conn.execute(
+                        """
+                        UPDATE organization_modules
+                        SET status=$3,
+                            -- El cast es obligatorio: dentro de un CASE, Postgres
+                            -- resuelve el tipo por las ramas y no por la columna
+                            -- destino, asi que un parametro nulo se toma como text y
+                            -- la sentencia falla. Pasa con todo plan sin vencimiento
+                            -- (municipal, provincia, enterprise, agro_productor).
+                            expires_at=CASE WHEN $3='active' THEN $4::timestamptz ELSE NULL END,
+                            updated_at=now()
+                        WHERE org_id=$1 AND module_key=$2
+                        """,
+                        org_id,
+                        module_key,
+                        module_status,
+                        expires_at,
+                    )
+            if body.request_id is not None:
+                await conn.execute(
+                    """
+                    UPDATE license_requests SET status='approved', reviewed_by=$2,
+                           reviewed_at=now() WHERE id=$1 AND org_id=$3
+                    """,
+                    body.request_id,
+                    user.id,
+                    org_id,
+                )
     await create_notification(
         org_id=org_id,
         kind="subscription_updated",

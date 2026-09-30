@@ -11,7 +11,7 @@ import contextlib
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -42,6 +42,7 @@ from .routers import (
 )
 from .platform_admin import ensure_platform_admin
 from .security import decode_token
+from .deps import current_user
 from .telemetry_pipeline import pipeline_scheduler
 from .ws import manager, mqtt_bridge
 
@@ -230,10 +231,27 @@ async def ws_endpoint(websocket: WebSocket, token: str = Query(default="")) -> N
     if not org_id:
         await websocket.close(code=4401)
         return
+    async def validate_access():
+        actor = await current_user(authorization=f"Bearer {token}")
+        if actor.account_type != "community" and not actor.platform_admin:
+            from .subscriptions import require_active_subscription
+            await require_active_subscription(actor.org_id)
+
+    try:
+        await validate_access()
+    except HTTPException:
+        await websocket.close(code=4401)
+        return
     await manager.connect(org_id, websocket)
     try:
         while True:
-            await websocket.receive_text()  # keepalive; el server solo emite
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=15)
+            except asyncio.TimeoutError:
+                pass
+            await validate_access()
+    except HTTPException:
+        await websocket.close(code=4401)
     except WebSocketDisconnect:
         pass
     finally:

@@ -44,6 +44,7 @@ export default function SubscriptionPanel({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [planChoices, setPlanChoices] = useState<Record<string, SubscriptionPlanKey>>({});
 
   const load = useCallback(async () => {
     const [me, catalog, mine] = await Promise.all([
@@ -93,7 +94,29 @@ export default function SubscriptionPanel({ token }: { token: string }) {
     finally { setBusy(false); }
   }
 
-  if (!subscription) return <div className="admin-form-card"><p>Cargando suscripción…</p></div>;
+  async function cancelLicense(item: PlatformSubscriptionRow) {
+    if (!window.confirm(`¿Dar de baja la licencia de ${item.org_name}? Se bloquearán los módulos licenciados y se conservará el historial.`)) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiPost(`/subscriptions/platform/${item.org_id}/cancel`, token, {});
+      await load(); setNotice(`Licencia de ${item.org_name} dada de baja.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo dar de baja la licencia"); }
+    finally { setBusy(false); }
+  }
+
+  async function activateLicense(item: PlatformSubscriptionRow) {
+    const planKey = planChoices[item.org_id] || item.plan_key;
+    const plan = plans.find((entry) => entry.plan_key === planKey);
+    if (!plan || !window.confirm(`¿Asignar ${plan.display_name} a ${item.org_name}? Se aplicarán las prestaciones y el plazo del plan seleccionado. La aprobación de acceso de la organización se gestiona por separado.`)) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiPatch(`/subscriptions/platform/${item.org_id}`, token, { plan_key: planKey, status: "active", active_modules: plan.entitlements.included_modules || ["core"], notes: "Asignación desde administración general" });
+      await load(); setNotice(`Licencia asignada a ${item.org_name}. Revisá también que su acceso esté aprobado en Organizaciones.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo asignar la licencia"); }
+    finally { setBusy(false); }
+  }
+
+  if (!subscription) return <div className="admin-form-card">{error ? <><p role="alert">{error}</p><button onClick={() => void load().catch((cause) => setError(String(cause)))}>Reintentar</button></> : <p>Cargando suscripción…</p>}</div>;
 
   return <section className="subscription-panel">
     {error && <div className="workspace-message error">{error}</div>}
@@ -153,7 +176,8 @@ export default function SubscriptionPanel({ token }: { token: string }) {
         {platformRequests.map((item) => <article key={item.id}><div><strong>{item.org_name}</strong><span>{item.requester_email}</span><small>{item.message || "Sin comentario"}</small></div><b>{plans.find((plan) => plan.plan_key === item.requested_plan)?.display_name || item.requested_plan}</b><button type="button" disabled={busy} onClick={() => void approve(item)}>Aprobar y activar</button></article>)}
         {!platformRequests.length && <div className="empty">No hay solicitudes pendientes.</div>}
       </div>
-      <div className="platform-org-table"><div className="head"><span>Organización</span><span>Plan</span><span>Estado</span><span>Vencimiento</span></div>{organizations.slice(0, 30).map((item) => <div key={item.org_id}><span><strong>{item.org_name}</strong><small>{item.municipality || "Misiones"}</small></span><span>{item.display_name}</span><span>{statusLabel(item.status)}</span><span>{item.expires_at ? new Date(item.expires_at).toLocaleDateString("es-AR") : "continuo"}</span></div>)}</div>
+      <p>Admin Core está incluido para el rol administrador en todas las organizaciones. La baja conserva los datos y la gestión de la suscripción.</p>
+      <div className="platform-org-table platform-license-table"><div className="head"><span>Organización</span><span>Plan</span><span>Estado</span><span>Vencimiento</span><span>Acciones</span></div>{organizations.map((item) => <div key={item.org_id}><span><strong>{item.org_name}</strong><small>{item.municipality || "Misiones"}</small></span><span><select aria-label={`Plan de ${item.org_name}`} disabled={busy} value={planChoices[item.org_id] || item.plan_key} onChange={(event) => setPlanChoices({ ...planChoices, [item.org_id]: event.target.value as SubscriptionPlanKey })}>{plans.map((plan) => <option key={plan.plan_key} value={plan.plan_key}>{plan.display_name}</option>)}</select></span><span>{statusLabel(item.status)}</span><span>{item.expires_at ? new Date(item.expires_at).toLocaleDateString("es-AR") : "continuo"}</span><span className="platform-edit-actions"><button disabled={busy} onClick={() => void activateLicense(item)}>Asignar plan</button><button className="danger" disabled={busy || item.status === "cancelled" || item.status === "pending"} onClick={() => void cancelLicense(item)}>Dar de baja</button></span></div>)}</div>
     </section>}
   </section>;
 }

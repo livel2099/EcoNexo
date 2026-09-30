@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
+import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .. import db
@@ -202,17 +203,45 @@ async def update_user(
     ):
         raise HTTPException(409, "Un administrador general configurado debe permanecer activo y con rol admin")
 
-    await db.pool().execute(
-        """
-        UPDATE users SET name=COALESCE($2,name), role=COALESCE($3::user_role,role),
-                         is_active=COALESCE($4,is_active), updated_at=now()
-        WHERE id=$1
-        """,
-        target_id,
-        body.name.strip() if body.name else None,
-        body.role,
-        body.is_active,
-    )
+    next_email = str(body.email).lower() if body.email is not None else target_email
+    email_changed = next_email != target_email
+    if email_changed and (target_id == user.id or target_email in get_settings().platform_admin_list):
+        raise HTTPException(409, "El correo del administrador general está protegido por la configuración de la plataforma")
+    if email_changed and next_email in get_settings().platform_admin_list:
+        raise HTTPException(409, "Ese correo está reservado para administración general")
+    try:
+        async with db.pool().acquire() as conn:
+            async with conn.transaction():
+                # Serializa las bajas/cambios de rol de esta organización.
+                await conn.fetchval("SELECT id FROM organizations WHERE id=$1 FOR UPDATE", current["org_id"])
+                if not next_active or next_role != "admin":
+                    remaining = await conn.fetchval(
+                        "SELECT count(*) FROM users WHERE org_id=$1 AND id<>$2 AND role='admin' AND is_active",
+                        current["org_id"], target_id,
+                    )
+                    if not remaining and current["role"] == "admin" and current["is_active"]:
+                        raise HTTPException(409, "La organización debe conservar al menos un administrador activo para Admin Core")
+                if email_changed and await conn.fetchval(
+                    "SELECT EXISTS(SELECT 1 FROM users WHERE lower(email)=$1 AND id<>$2)", next_email, target_id,
+                ):
+                    raise HTTPException(409, "El correo ya está registrado")
+                await conn.execute(
+                    """
+                    UPDATE users SET name=COALESCE($2,name), role=COALESCE($3::user_role,role),
+                        is_active=COALESCE($4,is_active), email=$5,
+                        phone=CASE WHEN $6 THEN NULLIF($7,'') ELSE phone END,
+                        email_verified=CASE WHEN $8 THEN false ELSE email_verified END,
+                        google_sub=CASE WHEN $8 THEN NULL ELSE google_sub END,
+                        auth_provider=CASE WHEN $8 THEN 'password' ELSE auth_provider END,
+                        token_version=token_version + CASE WHEN $8 OR $4=false THEN 1 ELSE 0 END,
+                        updated_at=now()
+                    WHERE id=$1
+                    """,
+                    target_id, body.name, body.role, body.is_active, next_email,
+                    "phone" in body.model_fields_set, (body.phone or "").strip(), email_changed,
+                )
+    except asyncpg.UniqueViolationError as exc:
+        raise HTTPException(409, "El correo ya está registrado") from exc
     await record_audit(
         org_id=current["org_id"],
         user_id=user.id,
@@ -240,8 +269,9 @@ async def reset_password(
         raise HTTPException(404, "Usuario no encontrado")
     await db.pool().execute(
         """
-        UPDATE users SET password_hash=$2, auth_provider='password', is_active=true,
-            must_change_password=true, password_changed_at=NULL, updated_at=now()
+        UPDATE users SET password_hash=$2, auth_provider='password', google_sub=NULL,
+            must_change_password=true, password_changed_at=NULL, updated_at=now(),
+            token_version=token_version+1
         WHERE id=$1
         """,
         target_id,

@@ -46,7 +46,7 @@ def _validate_password(password: str) -> None:
 def _session(row, *, is_new_user: bool = False) -> TokenOut:
     account_type = row.get("account_type") or "institutional"
     email = str(row.get("email") or "")
-    platform_admin = bool(row.get("platform_admin") or email.lower() in get_settings().platform_admin_list)
+    platform_admin = str(row["role"]) == "admin" and email.lower() in get_settings().platform_admin_list
     token = create_access_token(
         str(row["id"]),
         str(row["org_id"]),
@@ -54,6 +54,7 @@ def _session(row, *, is_new_user: bool = False) -> TokenOut:
         account_type=account_type,
         email=email,
         platform_admin=platform_admin,
+        token_version=int(row.get("token_version") or 0),
     )
     return TokenOut(
         access_token=token,
@@ -81,7 +82,7 @@ async def login(body: LoginIn, request: Request) -> TokenOut:
         """
         SELECT u.id, u.org_id, u.role::text AS role, u.name, u.email,
                u.password_hash, u.avatar_url, u.auth_provider, u.account_type,
-               u.must_change_password, u.is_active,
+               u.must_change_password, u.is_active, u.token_version,
                COALESCE(o.is_active, true) AS organization_active,
                COALESCE(o.access_status, 'approved') AS access_status,
                false AS platform_admin
@@ -262,7 +263,7 @@ async def google_auth(body: GoogleAuthIn, request: Request) -> TokenOut:
             row = await conn.fetchrow(
                 """
                 SELECT u.id,u.org_id,u.role::text AS role,u.name,u.email,u.avatar_url,
-                       u.auth_provider,u.account_type,u.must_change_password,
+                       u.auth_provider,u.account_type,u.must_change_password,u.token_version,
                        false AS platform_admin,o.is_active AS organization_active,
                        COALESCE(o.access_status,'approved') AS access_status
                 FROM users u JOIN organizations o ON o.id=u.org_id
@@ -303,6 +304,18 @@ async def google_auth(body: GoogleAuthIn, request: Request) -> TokenOut:
             )
 
 
+@router.get("/me", response_model=TokenOut)
+async def me(user: CurrentUser = Depends(current_user)) -> TokenOut:
+    row = await db.pool().fetchrow(
+        """SELECT id, org_id, role::text AS role, name, email, avatar_url,
+                  auth_provider, account_type, must_change_password, token_version
+           FROM users WHERE id=$1""", user.id,
+    )
+    if row is None:
+        raise HTTPException(401, "Usuario no encontrado")
+    return _session(row)
+
+
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def change_password(body: ChangePasswordIn, request: Request, user: CurrentUser = Depends(current_user)) -> Response:
     await enforce_rate_limit(request, bucket="auth-change-password", limit=8, window_seconds=15 * 60)
@@ -313,7 +326,8 @@ async def change_password(body: ChangePasswordIn, request: Request, user: Curren
     await db.pool().execute(
         """
         UPDATE users SET password_hash=$2,auth_provider='password',
-                         must_change_password=false,password_changed_at=now(),updated_at=now()
+                         must_change_password=false,password_changed_at=now(),updated_at=now(),
+                         token_version=token_version+1
         WHERE id=$1
         """,
         user.id, hash_secret(body.new_password),

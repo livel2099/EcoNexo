@@ -52,6 +52,8 @@ export default function PlatformAdminPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [editingUser, setEditingUser] = useState<PlatformUser | null>(null);
+  const [editDraft, setEditDraft] = useState({ name: "", email: "", phone: "", role: "admin" as UserRole });
   const [userDraft, setUserDraft] = useState({ org_id: "", name: "", email: "", role: "operador" as UserRole, temporary_password: "" });
 
   const token = session?.access_token || "";
@@ -133,21 +135,39 @@ export default function PlatformAdminPanel() {
     finally { setBusy(false); }
   }
 
-  async function updateUser(item: PlatformUser, changes: { name?: string; role?: UserRole; is_active?: boolean }) {
-    if (!token) return;
+  async function updateUser(item: PlatformUser, changes: { name?: string; email?: string; phone?: string; role?: UserRole; is_active?: boolean }) {
+    if (!token) return false;
     setBusy(true); setError("");
     try {
       await apiPatch(`/platform/users/${item.id}`, token, changes);
       await load(token, search);
       flash("Usuario actualizado en la auditoría global.");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo actualizar el usuario"); }
+      return true;
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo actualizar el usuario"); return false; }
     finally { setBusy(false); }
   }
 
-  async function renameUser(item: PlatformUser) {
-    const name = window.prompt("Nombre visible del usuario", item.name)?.trim();
-    if (!name || name === item.name) return;
-    await updateUser(item, { name });
+  function editUser(item: PlatformUser) {
+    setEditingUser(item);
+    setEditDraft({ name: item.name, email: item.email, phone: item.phone || "", role: item.role });
+  }
+
+  async function saveUser(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editingUser) return;
+    if (await updateUser(editingUser, { ...editDraft, name: editDraft.name.trim(), email: editDraft.email.trim() })) setEditingUser(null);
+  }
+
+  async function editContact(item: PlatformOrganization) {
+    if (!item.contact_email) return;
+    setBusy(true); setError("");
+    try {
+      const matches = await apiGet<PlatformUser[]>(`/platform/users?search=${encodeURIComponent(item.contact_email)}`, token);
+      const contact = matches.find((entry) => entry.org_id === item.id && entry.email === item.contact_email);
+      if (!contact) throw new Error("No se encontró el contacto. Buscalo desde Usuarios.");
+      editUser(contact);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo cargar el contacto"); }
+    finally { setBusy(false); }
   }
 
   async function resetPassword(item: PlatformUser) {
@@ -220,6 +240,15 @@ export default function PlatformAdminPanel() {
       {error && <div className="workspace-message error" role="alert">{error}</div>}
       {notice && <div className="workspace-message success">{notice}</div>}
 
+      {editingUser && <form className="platform-user-create platform-edit-user" onSubmit={saveUser} aria-label="Editar usuario">
+        <div><span className="eyebrow">{editingUser.org_name}</span><h2>Editar usuario y contacto</h2><p>El rol Administrador habilita Admin Core. Cambiar el correo cierra las sesiones anteriores y desvincula el acceso anterior con Google.</p></div>
+        <label>Nombre del usuario<input required minLength={2} maxLength={120} value={editDraft.name} onChange={(event) => setEditDraft({ ...editDraft, name: event.target.value })} /></label>
+        <label>Correo de acceso<input required type="email" value={editDraft.email} onChange={(event) => setEditDraft({ ...editDraft, email: event.target.value })} /></label>
+        <label>Teléfono de contacto<input type="tel" maxLength={32} value={editDraft.phone} onChange={(event) => setEditDraft({ ...editDraft, phone: event.target.value })} /></label>
+        <label>Permisos<select value={editDraft.role} onChange={(event) => setEditDraft({ ...editDraft, role: event.target.value as UserRole })}><option value="admin">Administrador · Admin Core</option><option value="operador">Operador</option><option value="visualizador">Visualizador</option></select></label>
+        <div className="platform-edit-actions"><button className="primary" disabled={busy}>Guardar cambios</button><button type="button" disabled={busy} onClick={() => setEditingUser(null)}>Cancelar</button><button type="button" disabled={busy} onClick={() => void resetPassword(editingUser)}>Restablecer clave</button></div>
+      </form>}
+
       {tab === "overview" && <>
         <section className="platform-metrics">
           <article><span>Organizaciones</span><strong>{summary?.organizations_active ?? "—"}<small> / {summary?.organizations_total ?? "—"}</small></strong><i><b style={{ width: `${summary?.organizations_total ? summary.organizations_active / summary.organizations_total * 100 : 0}%` }} /></i></article>
@@ -256,11 +285,11 @@ export default function PlatformAdminPanel() {
         <div className="platform-user-table">
           <div className="head"><span>Identidad</span><span>Organización</span><span>Rol</span><span>Estado</span><span>Acciones</span></div>
           {users.map((item) => <div key={item.id} className={!item.is_active || !item.organization_active ? "inactive" : ""}>
-            <span><strong>{item.name}</strong><small>{item.email}</small><small>{item.auth_provider} · {dateLabel(item.last_login_at)}</small></span>
+            <span><strong>{item.name}</strong><small>{item.email}</small><small>{item.phone || "Sin teléfono"}</small><small>{item.auth_provider} · {dateLabel(item.last_login_at)}</small></span>
             <span><strong>{item.org_name}</strong><small>{item.organization_active ? "organización activa" : "organización suspendida"}</small></span>
             <span><select value={item.role} disabled={busy} onChange={(event) => void updateUser(item, { role: event.target.value as UserRole })}><option value="admin">admin</option><option value="operador">operador</option><option value="visualizador">visualizador</option></select></span>
             <span><b className={item.is_active ? "status-on" : "status-off"}>{item.is_active ? "Activo" : "Pausado"}</b>{item.must_change_password && <small className="status-warn">cambio de clave pendiente</small>}</span>
-            <span className="actions"><button disabled={busy} onClick={() => void renameUser(item)}>Editar nombre</button><button disabled={busy} onClick={() => void updateUser(item, { is_active: !item.is_active })}>{item.is_active ? "Pausar" : "Reactivar"}</button><button disabled={busy} onClick={() => void resetPassword(item)}>Restablecer clave</button></span>
+            <span className="actions"><button disabled={busy} onClick={() => editUser(item)}>Editar datos</button><button disabled={busy} onClick={() => void updateUser(item, { is_active: !item.is_active })}>{item.is_active ? "Pausar" : "Reactivar"}</button><button disabled={busy} onClick={() => void resetPassword(item)}>Restablecer clave</button></span>
           </div>)}
         </div>
         </div>
@@ -285,7 +314,7 @@ export default function PlatformAdminPanel() {
             </div>
             <div><strong>{item.users_active}/{item.users_total}</strong><span>usuarios activos</span></div>
             <div><strong>{item.plan_name || "Sin licencia"}</strong><span>{item.subscription_status || "sin estado"}</span></div>
-            <div className="platform-org-actions"><button disabled={busy} onClick={() => void renameOrganization(item)}>Renombrar</button><button disabled={busy} className={item.is_active ? "danger" : ""} onClick={() => void toggleOrganization(item)}>{item.is_active ? "Suspender" : item.access_status === "pending" ? "Aprobar acceso" : "Reactivar"}</button></div>
+            <div className="platform-org-actions"><button disabled={busy} onClick={() => void renameOrganization(item)}>Renombrar</button><button disabled={busy || !item.contact_email} onClick={() => void editContact(item)}>Editar contacto</button><button disabled={busy} className={item.is_active ? "danger" : ""} onClick={() => void toggleOrganization(item)}>{item.is_active ? "Suspender" : item.access_status === "pending" ? "Aprobar acceso" : "Reactivar"}</button></div>
           </article>)}
         </div>
       </section>}

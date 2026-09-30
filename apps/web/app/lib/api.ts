@@ -125,7 +125,7 @@ async function checked<T>(response: Response, fallback: string, redirectUnauthor
   if (response.status === 401 && redirectUnauthorized) {
     clearSession();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/informe")) {
-      window.location.assign("/");
+      window.location.assign("/login");
     }
   }
   if (!response.ok) throw await responseError(response, fallback);

@@ -2584,3 +2584,19 @@ textarea:focus-visible,
 .ecocampo-console [hidden] { display: none !important; }
 .ecocampo-console textarea { display: block; width: 100%; margin-top: .5rem; }
 .ecocampo-console .agro-form { margin-top: 1rem; }
+
+/* Edición global y licencias: las acciones permanecen visibles en móvil. */
+.platform-user-create.platform-edit-user { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 20px; }
+.platform-edit-user > div:first-child, .platform-edit-user > .platform-edit-actions { grid-column: 1 / -1; }
+.platform-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.platform-license-table > div { grid-template-columns: 1.2fr 1.3fr .6fr .7fr 1fr; align-items: center; }
+.platform-license-table select { width: 100%; min-width: 0; }
+.platform-license-table > div > span { min-width: 0; overflow-wrap: anywhere; }
+.platform-license-table > div > .platform-edit-actions { display: flex; }
+@media (max-width: 800px) {
+  .platform-license-table > div { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .platform-license-table > div.head { display: none; }
+  .platform-license-table > div > span:nth-child(n+3) { display: grid; }
+  .platform-license-table > div > .platform-edit-actions { display: flex; grid-column: 1 / -1; }
+  .platform-user-create.platform-edit-user { grid-template-columns: 1fr; }
+}

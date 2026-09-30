@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { changePassword, clearSession, getSession, saveSession } from "../lib/api";
+import { changePassword, clearSession, getSession } from "../lib/api";
 import type { Session } from "../lib/types";
 import CircuitBackdrop from "../../components/CircuitBackdrop";
 import TechLogo from "../../components/TechLogo";
@@ -52,9 +52,8 @@ export default function ChangePasswordPage() {
     setBusy(true);
     try {
       await changePassword(session.access_token, currentPassword, newPassword);
-      const updated = { ...session, must_change_password: false };
-      saveSession(updated);
-      router.replace(destination(updated));
+      clearSession();
+      router.replace("/login");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo cambiar la contraseña");
     } finally {
@@ -69,7 +68,7 @@ export default function ChangePasswordPage() {
         <TechLogo className="platform-gate-logo" showTagline />
         <span className="eyebrow">SEGURIDAD OBLIGATORIA</span>
         <h1>Cambiá la contraseña temporal</h1>
-        <p>La cuenta administrativa fue creada con una credencial inicial. Definí una contraseña privada antes de abrir la consola general.</p>
+        <p>Definí una contraseña privada para tu cuenta. Al guardar, vas a iniciar sesión nuevamente con la nueva clave.</p>
         <form onSubmit={submit} className="platform-password-form">
           <label>Contraseña temporal
             <input required type="password" autoComplete="current-password" minLength={6} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
