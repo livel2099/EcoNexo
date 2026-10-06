@@ -22,9 +22,17 @@ from ..schemas import (
     PlatformUserUpdateIn,
 )
 from ..security import hash_secret
+from ..platform_operations import PlatformOperationsOut, operations_snapshot
 from ..subscriptions import enforce_resource_limit
 
 router = APIRouter(prefix="/platform", tags=["platform-admin"], include_in_schema=False)
+
+
+@router.get("/operations", response_model=PlatformOperationsOut)
+async def operations(
+    user: CurrentUser = Depends(require_platform_admin),
+) -> PlatformOperationsOut:
+    return await operations_snapshot()
 
 
 async def _user_out(target_id: UUID) -> PlatformUserOut:

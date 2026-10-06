@@ -27,6 +27,7 @@ from .correlation import Source
 from .pipeline import anomaly_score, create_alert
 from .rules_engine import Condition, Rule, evaluate_rule
 from .ws import publish
+from .predictive_service import issue_forecasts
 
 log = logging.getLogger("econexo.telemetry_pipeline")
 
@@ -563,9 +564,19 @@ async def run_org_pipeline(
                     device["id"],
                     f"error:{str(exc)[:240]}" if isinstance(exc, RuntimeError) else f"error:{exc.__class__.__name__}",
                 )
+        prediction_result = {"created": 0, "errors": []}
+        if get_settings().predictive_enabled:
+            try:
+                prediction_result = await issue_forecasts(org_id, actor_user_id)
+                if prediction_result["errors"]:
+                    errors.append({"stage": "predictions", "error": "Pronósticos incompletos; revisar cobertura futura"})
+            except Exception:
+                log.exception("No se pudieron emitir pronósticos de la organización %s", org_id)
+                errors.append({"stage": "predictions", "error": "No se pudo emitir el pronóstico; revisar fuente y migraciones"})
         status = "completed" if not errors else "partial"
         summary = {
             "message": "Pipeline operativo actualizado",
+            "predictions_created": prediction_result["created"],
             "virtual_sources": sum(1 for item in devices if item["telemetry_mode"] == "open_meteo"),
             "readings_source": fuente_lecturas,
             "mqtt_sources": sum(1 for item in devices if item["telemetry_mode"] == "mqtt"),

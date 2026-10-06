@@ -13,8 +13,9 @@ import type {
 } from "../app/lib/types";
 import CircuitBackdrop from "./CircuitBackdrop";
 import SubscriptionPanel from "./SubscriptionPanel";
+import PlatformOperationsPanel from "./PlatformOperationsPanel";
 
-type Tab = "overview" | "users" | "organizations" | "subscriptions" | "audit";
+type Tab = "overview" | "users" | "organizations" | "subscriptions" | "audit" | "operations";
 
 function dateLabel(value: string | null): string {
   if (!value) return "sin ingreso";
@@ -78,7 +79,7 @@ export default function PlatformAdminPanel() {
   useEffect(() => {
     const current = getSession();
     if (!current) {
-      router.replace("/login");
+      router.replace("/plataforma/ingreso");
       return;
     }
     if (current.must_change_password) {
@@ -226,19 +227,21 @@ export default function PlatformAdminPanel() {
         </div>
         <div className="platform-admin-account">
           <strong>{session.name}</strong><span>{session.email}</span>
-          <div><button onClick={() => router.push("/dashboard")}>Centro operativo</button><button onClick={() => { clearSession(); router.replace("/login"); }}>Salir</button></div>
+          <div><button onClick={() => router.push("/dashboard")}>Centro operativo</button><button onClick={() => { clearSession(); router.replace("/plataforma/ingreso"); }}>Salir</button></div>
         </div>
       </header>
 
       <nav className="platform-console-tabs" aria-label="Consola general">
         {([
           ["overview", "Resumen"], ["users", "Usuarios"], ["organizations", "Organizaciones"],
-          ["subscriptions", "Licencias"], ["audit", "Auditoría"],
+          ["subscriptions", "Licencias"], ["audit", "Auditoría"], ["operations", "Operación y predicción"],
         ] as Array<[Tab, string]>).map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{label}</button>)}
       </nav>
 
       {error && <div className="workspace-message error" role="alert">{error}</div>}
       {notice && <div className="workspace-message success">{notice}</div>}
+
+      {tab === "operations" && <PlatformOperationsPanel token={token} />}
 
       {editingUser && <form className="platform-user-create platform-edit-user" onSubmit={saveUser} aria-label="Editar usuario">
         <div><span className="eyebrow">{editingUser.org_name}</span><h2>Editar usuario y contacto</h2><p>El rol Administrador habilita Admin Core. Cambiar el correo cierra las sesiones anteriores y desvincula el acceso anterior con Google.</p></div>

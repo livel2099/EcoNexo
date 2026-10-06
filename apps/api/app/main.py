@@ -33,6 +33,7 @@ from .routers import (
     orgs,
     pipeline,
     platform,
+    predictions,
     reports,
     rules,
     satellite,
@@ -174,6 +175,7 @@ app.include_router(subscriptions.router)
 app.include_router(admin.router)
 app.include_router(notifications.router)
 app.include_router(platform.router)
+app.include_router(predictions.router)
 
 
 @app.exception_handler(Exception)

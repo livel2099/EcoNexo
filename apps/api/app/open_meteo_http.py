@@ -26,6 +26,7 @@ class RateLimited(RuntimeError):
 def customer_url(url: str, api_key: str) -> str:
     parts = urlsplit(url)
     hosts = {"api.open-meteo.com": "customer-api.open-meteo.com",
+             "air-quality-api.open-meteo.com": "customer-air-quality-api.open-meteo.com",
              "archive-api.open-meteo.com": "customer-archive-api.open-meteo.com"}
     if api_key and parts.netloc in hosts:
         return urlunsplit(parts._replace(netloc=hosts[parts.netloc]))

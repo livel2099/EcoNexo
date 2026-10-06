@@ -1649,6 +1649,25 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
 .platform-console-tabs button:hover,
 .platform-user-table button:hover { border-color: #82eeae; }
 .platform-console-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.predictive-panel { padding: 24px; min-width: 0; width: 100%; max-width: 1440px; margin: auto; }
+.predictive-panel h1 { margin: 8px 0; }
+.predictive-panel p { line-height: 1.6; overflow-wrap: anywhere; }
+.predictive-header, .predictive-actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+.predictive-header > div { flex: 1; min-width: 220px; }
+.predictive-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,320px),1fr)); gap: 16px; margin-bottom: 24px; }
+.predictive-card { padding: 20px; border: 1px solid rgba(91,207,164,.25); background: rgba(3,18,19,.92); border-radius: 16px; margin-bottom: 16px; min-width: 0; }
+.predictive-card h3 { overflow-wrap: anywhere; }
+.predictive-panel button { border: 1px solid rgba(91,207,164,.4); border-radius: 8px; padding: 10px 14px; background: #10392e; color: #dffff0; cursor: pointer; margin: 4px; }
+.predictive-panel button:disabled { opacity: .45; cursor: default; }
+.predictive-panel label { display: grid; gap: 8px; }
+.predictive-panel input:not([type=checkbox]), .predictive-panel select, .predictive-panel textarea { width: 100%; min-width: 0; color: #effff8; background: #00150f; border: 1px solid #326550; border-radius: 8px; padding: 10px; }
+.predictive-check { display: flex !important; align-items: flex-start; margin: 16px 0; line-height: 1.6; }
+.predictive-check input { margin-top: 6px; flex: 0 0 auto; }
+.predictive-form { display: grid; gap: 16px; max-width: 850px; }
+.predictive-metrics > div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.predictive-metrics dd { margin: 0; font-variant-numeric: tabular-nums; }
+.predictive-model { border-top: 1px solid #326550; margin-top: 18px; padding-top: 12px; }
+@media(max-width:720px) { .predictive-panel { padding: 12px; } .predictive-card { padding: 16px; } }
 .platform-console-tabs button.active { color: #00150c; background: #83ef67; border-color: #83ef67; font-weight: 800; }
 
 .platform-metrics { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 12px; }

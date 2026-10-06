@@ -9,6 +9,7 @@ fuentes, y publica en el bus MQTT para el feed WebSocket y notify-service.
 from __future__ import annotations
 
 import logging
+import math
 from uuid import UUID
 
 import httpx
@@ -41,7 +42,15 @@ async def anomaly_score(device_id: str, variable: str, value: float) -> float:
                 "device_id": device_id, "variable": variable, "value": value,
             })
             r.raise_for_status()
-            return float(r.json()["score"])
+            payload = r.json()
+            if payload.get("trained") is not True:
+                log.warning("anomaly-service sin modelo entrenado; se usa score neutro")
+                return NEUTRAL_ANOMALY_SCORE
+            score = float(payload["score"])
+            if not math.isfinite(score) or not 0 <= score <= 1:
+                log.warning("anomaly-service devolvió un score fuera de contrato")
+                return NEUTRAL_ANOMALY_SCORE
+            return score
     except Exception as exc:
         log.warning("anomaly-service no disponible: %s", exc)
         return NEUTRAL_ANOMALY_SCORE

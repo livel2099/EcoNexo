@@ -16,6 +16,7 @@ import ImpactReportsPanel from "../../components/ImpactReportsPanel";
 import RulesPanel from "../../components/RulesPanel";
 import ObservatoryPanel from "../../components/ObservatoryPanel";
 import AdminPanel from "../../components/AdminPanel";
+import PredictivePanel from "../../components/PredictivePanel";
 import CircuitBackdrop from "../../components/CircuitBackdrop";
 import FireSmokePanel from "../../components/FireSmokePanel";
 import ForestryPestPanel from "../../components/ForestryPestPanel";
@@ -62,7 +63,7 @@ const DEFAULT_SOURCE_SETTINGS: EnvironmentalSourceSettings = {
   updated_at: new Date(0).toISOString(),
 };
 
-type View = "comando" | "fuego" | "plagas" | "agro" | "ecocampo" | "observatorio" | "dispositivos" | "reglas" | "reportes" | "informes" | "admin";
+type View = "comando" | "fuego" | "plagas" | "agro" | "ecocampo" | "observatorio" | "dispositivos" | "reglas" | "reportes" | "informes" | "admin" | "prediccion";
 
 function pct(value: number | null) {
   return value == null ? "—" : `${Math.round(value * 100)}%`;
@@ -265,6 +266,7 @@ export default function Dashboard() {
           <nav className="nav" aria-label="Navegación principal">
             {navItem("comando", "Centro de Comando")}
             {navItem("fuego", "Fuego y humo")}
+            {navItem("prediccion", "Predicción")}
             {navItem("plagas", "Plagas forestales")}
             {navItem("agro", "EcoNexo AG")}
             {navItem("ecocampo", "EcoCampo")}
@@ -382,6 +384,7 @@ export default function Dashboard() {
           </aside>
         </>
       ) : token && view === "fuego" ? <FireSmokePanel token={token} org={org} devices={localDevices} alerts={localAlerts} detections={localDetections} zones={localZones} earth={earthIntel} center={commandCenter} sourceSettings={sourceSettings} />
+        : token && view === "prediccion" ? <PredictivePanel token={token} role={session?.role || "visualizador"} />
         : token && view === "ecocampo" ? <EcoCampoPanel token={token} />
         : token && view === "agro" ? <AgroPanel token={token} />
         : token && view === "plagas" ? <ForestryPestPanel token={token} devices={localDevices} alerts={localAlerts} detections={localDetections} zones={localZones} sourceSettings={sourceSettings} />

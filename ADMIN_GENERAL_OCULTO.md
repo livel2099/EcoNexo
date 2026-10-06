@@ -12,6 +12,8 @@ https://TU-FRONTEND/plataforma
 
 No se publica en el menú, el sitemap ni Swagger. La seguridad no depende de que la URL sea difícil de adivinar: todos los endpoints `/platform/*` requieren JWT válido, rol `admin`, organización activa y correo incluido en `PLATFORM_ADMIN_EMAILS`.
 
+Ingreso exclusivo: `/plataforma/ingreso`. No ofrece registro ni acceso demo y solo conserva sesiones de administradores de plataforma. Desde la consola, la pestaña **Operación y predicción** consulta `/platform/operations`: nodos sin datos recientes, alertas pendientes, ejecuciones degradadas y configuración de integraciones. Configuración no equivale a disponibilidad verificada. El plan de producto y las brechas predictivas están en `docs/REVISION_PRODUCTO_PREDICTIVO_2026-10-06.md`.
+
 Funciones incluidas:
 
 - resumen global de organizaciones y usuarios;

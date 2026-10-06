@@ -27,6 +27,14 @@ async function mockConsole(page: Page) {
     if (url.pathname === "/platform/users") data = [user];
     if (url.pathname === "/platform/organizations") data = [org];
     if (url.pathname === "/platform/audit") data = [];
+    if (url.pathname === "/platform/operations") data = {
+      generated_at: "2026-10-06T12:00:00Z", stale_after_minutes: 30,
+      metrics: { devices_total: 10, devices_stale: 3, latest_reading_at: null,
+        alerts_pending: 2, alerts_confirmed: 5, alerts_discarded: 1,
+        pipeline_degraded_24h: 1, latest_pipeline_at: null },
+      integrations: [{ name: "MQTT", configured: true, detail: "Configuración sin prueba de disponibilidad." }],
+      predictive_status: "not_validated", predictive_gaps: ["Validar anticipación con eventos independientes."],
+    };
     if (url.pathname === "/subscriptions/me") data = { plan, entitlements: plan.entitlements, status: "active", available: true, usage: { users: 1, devices: 0, zones: 0, rules: 0, reports_this_month: 0 }, platform_admin: true, expiry_label: "sin vencimiento" };
     if (url.pathname === "/subscriptions/plans") data = [plan];
     if (url.pathname.includes("/requests")) data = [];
@@ -35,6 +43,40 @@ async function mockConsole(page: Page) {
   });
   return changes;
 }
+
+test("diagnóstico operativo visible y sin desbordamiento en móvil", async ({ page }) => {
+  await mockConsole(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/plataforma");
+  await page.getByRole("button", { name: "Operación y predicción", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Predicción de incidentes pendiente de validación" })).toBeVisible();
+  await expect(page.getByText("Validar anticipación con eventos independientes.")).toBeVisible();
+  await expect(page.getByText("Configuración sin prueba de disponibilidad.")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+});
+
+test("ingreso privado rechaza administrador de organización sin guardar sesión", async ({ page }) => {
+  await page.route("http://localhost:3108/auth/login", (route) => route.fulfill({
+    json: { ...session, platform_admin: false }, headers: { "Access-Control-Allow-Origin": "*" },
+  }));
+  await page.goto("/plataforma/ingreso");
+  await page.getByLabel("Correo", { exact: true }).fill("admin@example.com");
+  await page.getByLabel("Contraseña", { exact: true }).fill("TemporarySecure2026!");
+  await page.getByRole("button", { name: "Ingresar", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Acceso reservado" })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("econexo_session"))).toBeNull();
+});
+
+test("ingreso privado exige cambiar la contraseña temporal", async ({ page }) => {
+  await page.route("http://localhost:3108/auth/login", (route) => route.fulfill({
+    json: { ...session, must_change_password: true }, headers: { "Access-Control-Allow-Origin": "*" },
+  }));
+  await page.goto("/plataforma/ingreso");
+  await page.getByLabel("Correo", { exact: true }).fill(session.email);
+  await page.getByLabel("Contraseña", { exact: true }).fill("TemporarySecure2026!");
+  await page.getByRole("button", { name: "Ingresar", exact: true }).click();
+  await expect(page).toHaveURL(/\/cambiar-contrasena$/);
+});
 
 test("portada pública, documentación y contacto en escritorio y móvil", async ({ page }) => {
   await page.goto("/");

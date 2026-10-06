@@ -82,6 +82,7 @@ class Settings(BaseSettings):
     econexo_web_origin: str = ""
 
     open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
+    open_meteo_air_quality_url: str = "https://air-quality-api.open-meteo.com/v1/air-quality"
     open_meteo_archive_url: str = "https://archive-api.open-meteo.com/v1/archive"
     # El archivo devuelve cientos de dias por consulta: necesita mas aire que
     # el pronostico, sobre todo desde una IP de salida compartida.
@@ -103,6 +104,8 @@ class Settings(BaseSettings):
     pipeline_max_devices_per_run: int = 100
     pipeline_http_timeout_seconds: float = 20.0
     pipeline_scheduler_enabled: bool = True
+    # Automatización global apagada; además cada tenant debe habilitar la fuente.
+    predictive_enabled: bool = False
 
     copernicus_enabled_by_default: bool = True
     copernicus_mode: str = "process_api"
