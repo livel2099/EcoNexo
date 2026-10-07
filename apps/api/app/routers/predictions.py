@@ -75,10 +75,12 @@ async def list_predictions(horizon_hours: int = Depends(checked_horizon), limit:
 
 
 @router.post("/run")
-async def run(request: Request, hazard: Hazard | None = None, user: CurrentUser = Depends(require_role("admin", "operador"))):
+async def run(request: Request, hazard: Hazard | None = None, horizon_hours: int | None = Query(None), user: CurrentUser = Depends(require_role("admin", "operador"))):
+    if horizon_hours is not None and horizon_hours not in (6, 24, 72):
+        raise HTTPException(422, "El horizonte debe ser 6, 24 o 72 horas")
     await enforce_rate_limit(request, bucket=f"predictive-run:{user.org_id}", limit=10, window_seconds=3600)
     try:
-        return await issue_forecasts(user.org_id, user.id, hazard)
+        return await issue_forecasts(user.org_id, user.id, hazard, horizon_hours)
     except (RuntimeError, TimeoutError, httpx.HTTPError) as exc:
         raise HTTPException(503, "No se pudo emitir el pronóstico. Revisá la fuente meteorológica y reintentá.") from exc
 

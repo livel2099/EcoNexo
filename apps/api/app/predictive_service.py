@@ -55,12 +55,13 @@ async def forecasts_for_points(devices: list[dict], hazard: str = "fire") -> lis
     return results
 
 
-async def issue_forecasts(org_id: UUID, actor_id: UUID | None, hazard: str | None = None) -> dict:
+async def issue_forecasts(org_id: UUID, actor_id: UUID | None, hazard: str | None = None, horizon: int | None = None) -> dict:
     """Emite solo horizontes habilitados mediante consentimiento administrativo."""
     # La consulta externa ocurre sin reservar una conexión: el cache compartido
     # también usa Postgres y una transacción abierta agotaría pools pequeños.
     settings_rows = await db.pool().fetch("SELECT s.*,m.version,m.artifact FROM predictive_settings s LEFT JOIN predictive_models m ON m.id=s.active_model_id WHERE s.org_id=$1 AND s.enabled", org_id)
-    settings_rows = [row for row in settings_rows if hazard is None or row.get("hazard", "fire") == hazard]
+    settings_rows = [row for row in settings_rows if (hazard is None or row.get("hazard", "fire") == hazard)
+                     and (horizon is None or row["horizon_hours"] == horizon)]
     if not settings_rows:
         return dict(created=0, skipped=0, errors=[], message="Pronósticos deshabilitados; requieren habilitación de la organización")
     horizon_settings = {(row.get("hazard", "fire"), row["horizon_hours"]): decode(row) for row in settings_rows}
@@ -72,6 +73,8 @@ async def issue_forecasts(org_id: UUID, actor_id: UUID | None, hazard: str | Non
           AND NOT (d.tags && ARRAY['demo','simulator','fixture','simulated']::text[])
         ORDER BY d.id LIMIT $2
     """, org_id, get_settings().pipeline_max_devices_per_run)
+    if not targets:
+        return dict(created=0, skipped=0, errors=[], message="No hay nodos aptos para pronosticar. Activá el pipeline de un nodo dentro de Misiones, sin etiquetas de simulación.")
     existing = await db.pool().fetch("SELECT device_id,horizon_hours,model_version,hazard FROM predictions WHERE org_id=$1 AND issuance_day=$2", org_id, clock.date())
     existing_keys = {(row["device_id"], row["horizon_hours"], row["model_version"], row.get("hazard", "fire")) for row in existing}
     todo = []

@@ -1649,7 +1649,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c
 .platform-console-tabs button:hover,
 .platform-user-table button:hover { border-color: #82eeae; }
 .platform-console-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
-.predictive-panel { padding: 24px; min-width: 0; width: 100%; max-width: 1440px; margin: auto; }
+.predictive-panel { grid-column: 1 / -1; grid-row: 6; align-self: stretch; min-height: 0; overflow-y: scroll; scrollbar-gutter: stable; scrollbar-width: auto; scrollbar-color: #4c987e #071b17; padding: 24px; min-width: 0; width: 100%; max-width: 1440px; margin: 0 auto; }
+.predictive-panel::-webkit-scrollbar { width: 12px; }
+.predictive-panel::-webkit-scrollbar-thumb { background: #4c987e; border: 2px solid #071b17; border-radius: 10px; }
+.predictive-panel::-webkit-scrollbar-track { background: #071b17; }
+.predictive-hourly { max-height: 320px; overflow: auto; }
 .predictive-panel h1 { margin: 8px 0; }
 .predictive-panel p { line-height: 1.6; overflow-wrap: anywhere; }
 .predictive-header, .predictive-actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }

@@ -3,7 +3,8 @@ import { test, expect, type Page } from "@playwright/test";
 const session = { access_token: "predictive-test", org_id: "00000000-0000-4000-8000-000000000001", role: "admin", name: "Operaciones", email: "owner@example.com", account_type: "institutional", platform_admin: false };
 const node = { id: "00000000-0000-4000-8000-000000000002", name: "Nodo Norte", lat: -26.92, lon: -54.78, tags: [], status: "online", latest_readings: {}, telemetry_mode: "open_meteo", pipeline_enabled: true };
 
-async function mockPrediction(page: Page, role = "admin") {
+async function mockPrediction(page: Page, role = "admin", scenario = "normal") {
+  let emitted = scenario !== "empty";
   const enabled = new Set<string>();
   const changes: { path: string; body: Record<string, unknown> }[] = [];
   await page.addInitScript((value) => sessionStorage.setItem("econexo_session", JSON.stringify(value)), { ...session, role });
@@ -14,6 +15,7 @@ async function mockPrediction(page: Page, role = "admin") {
     const method = route.request().method();
     const headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*" };
     if (method === "OPTIONS") return route.fulfill({ status: 204, headers });
+    if (scenario === "partial" && path === "/predictions/evaluation") return route.fulfill({ status: 503, json: { detail: "Evaluación temporalmente no disponible" }, headers });
     let data: unknown = [];
     if (path === "/auth/me") data = { ...session, role };
     if (path === "/orgs/me") data = { id: session.org_id, name: "Territorio de prueba", vertical: "forestal", primary_color: "#2E7D5B" };
@@ -25,10 +27,16 @@ async function mockPrediction(page: Page, role = "admin") {
     if (method === "POST") {
       const body = route.request().postDataJSON();
       changes.push({ path, body });
+      if (path === "/predictions/run") {
+        emitted = true;
+        return route.fulfill({ json: { created: 1, skipped: 0, errors: [], message: "Pronósticos generados" }, headers });
+      }
       if (path === "/predictions/models/deploy") body.enabled ? enabled.add(body.hazard) : enabled.delete(body.hazard);
       if (path === "/predictions/models/train") return route.fulfill({ status: 409, json: { detail: "Se necesitan al menos 120 pronósticos maduros" }, headers });
       data = { message: path === "/predictions/observations" ? "Resultado independiente registrado." : "Pronósticos archivados" };
     }
+    if (path === "/predictions") (data as Record<string, unknown>[])[0].provenance = { hourly: Array.from({ length: 24 }, (_, index) => ({ time: new Date(Date.UTC(2026, 9, 6, 13 + index)).toISOString(), temperature_2m: 35, relative_humidity_2m: 20, wind_speed_10m: 40, precipitation: 0 })) };
+    if (path === "/predictions" && !emitted) data = [];
     await route.fulfill({ json: data, headers });
   });
   await page.goto("/dashboard");
@@ -99,7 +107,7 @@ test("hídrico y sanitario tienen consentimiento y entrenamiento independientes"
   await expect(page.getByRole("button", { name: "Actualizar", exact: true })).toBeEnabled();
   await expect(page.getByRole("heading", { name: "Predicción de riesgo sanitario por PM2.5", exact: true })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: /Calidad del Aire/ })).not.toBeChecked();
-  await expect(page.getByRole("button", { name: "Emitir pronósticos", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Generar pronóstico", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Entrenar candidato", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "120 pronósticos maduros" })).toBeVisible();
   expect(changes[1].body.hazard).toBe("health_air");
@@ -107,4 +115,40 @@ test("hídrico y sanitario tienen consentimiento y entrenamiento independientes"
   await expect(page.getByRole("button", { name: "Actualizar", exact: true })).toBeEnabled();
   await expect(page.getByRole("heading", { name: "Predicción de riesgo sanitario por calor", exact: true })).toBeVisible();
   await expect(page.getByRole("option", { name: "Incidente sanitario asociado al calor verificado", exact: true })).toHaveCount(1);
+});
+
+test("genera el primer pronóstico con consentimiento sin entrenar un modelo", async ({ page }) => {
+  const changes = await mockPrediction(page, "admin", "empty");
+  await expect(page.getByRole("button", { name: "Actualizar", exact: true })).toBeEnabled();
+  await expect(page.getByText(/No hay pronósticos archivados para este riesgo/)).toBeVisible();
+  await page.getByRole("checkbox", { name: /Autorizo consultar/ }).check();
+  await page.getByRole("button", { name: "Generar pronóstico", exact: true }).click();
+  await expect(page.getByText("Índice meteorológico 80/100", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "1 pronóstico generado para 24 horas" })).toBeVisible();
+  await page.getByText("Pronóstico hora por hora", { exact: true }).click();
+  await expect(page.getByRole("table").getByRole("row")).toHaveCount(25);
+  await expect(page.getByRole("columnheader", { name: "Temperatura (°C)", exact: true })).toBeVisible();
+  expect(changes.map((item) => item.path)).toEqual(["/predictions/models/deploy", "/predictions/run"]);
+});
+
+test("un error de evaluación no oculta los pronósticos disponibles", async ({ page }) => {
+  await mockPrediction(page, "admin", "partial");
+  await expect(page.getByRole("alert").filter({ hasText: "Evaluación temporalmente no disponible" })).toBeVisible();
+  await expect(page.getByText("Índice meteorológico 80/100", { exact: true })).toBeVisible();
+});
+
+test("panel ocupa ambas columnas y permite llegar al final con barra vertical", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockPrediction(page);
+  const panel = page.getByRole("region", { name: "Ciclo predictivo" });
+  const metrics = await panel.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { overflow: style.overflowY, scrollable: element.scrollHeight > element.clientHeight,
+      row: style.gridRowStart, column: style.gridColumnStart };
+  });
+  expect(metrics).toEqual({ overflow: "scroll", scrollable: true, row: "6", column: "1" });
+  await panel.focus();
+  await page.keyboard.press("End");
+  await expect.poll(() => panel.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(page.getByText("Últimos resultados verificados", { exact: true })).toBeInViewport();
 });

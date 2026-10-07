@@ -16,6 +16,7 @@ type Forecast = {
   issued_at: string; valid_from: string; valid_to: string; model_version: string;
   risk_index: number; probability: number | null; warning: boolean;
   explanation: string[]; action: string;
+  provenance?: { hourly?: Record<string, number | string>[] };
 };
 type Metric = {
   model_version: string; evaluated: number; pending_labels: number; tp: number; fp: number; fn: number;
@@ -57,17 +58,30 @@ export default function PredictivePanel({ token, role }: { token: string; role: 
   const canOperate = role === "admin" || role === "operador";
 
   const load = useCallback(async () => {
-    const [nextForecasts, nextEvaluation, nextSettings, nextObservations, nextNodes] = await Promise.all([
+    const results = await Promise.allSettled([
       apiGet<Forecast[]>(`/predictions?hazard=${hazard}&horizon_hours=${horizon}`, token),
       apiGet<Evaluation>(`/predictions/evaluation?hazard=${hazard}&horizon_hours=${horizon}&days=90`, token),
       apiGet<Settings[]>("/predictions/settings", token),
       apiGet<Observation[]>(`/predictions/observations?hazard=${hazard}`, token),
       apiGet<Node[]>("/devices", token),
     ]);
-    setForecasts(nextForecasts); setEvaluation(nextEvaluation); setSettings(nextSettings);
-    setObservations(nextObservations); setNodes(nextNodes);
-    setConsent(nextSettings.find((item) => item.horizon_hours === horizon && (item.hazard ?? "fire") === hazard)?.enabled ?? false);
-    setDraft((current) => current.device_id || !nextNodes.length ? current : { ...current, device_id: nextNodes[0].id });
+    const [predictions, metrics, config, evidence, devices] = results;
+    if (predictions.status === "fulfilled") setForecasts(predictions.value as Forecast[]);
+    if (metrics.status === "fulfilled") setEvaluation(metrics.value as Evaluation);
+    if (evidence.status === "fulfilled") setObservations(evidence.value as Observation[]);
+    if (config.status === "fulfilled") {
+      const nextSettings = config.value as Settings[];
+      setSettings(nextSettings);
+      setConsent(nextSettings.find((item) => item.horizon_hours === horizon && (item.hazard ?? "fire") === hazard)?.enabled ?? false);
+    }
+    if (devices.status === "fulfilled") {
+      const nextNodes = devices.value as Node[];
+      setNodes(nextNodes);
+      setDraft((current) => current.device_id || !nextNodes.length ? current : { ...current, device_id: nextNodes[0].id });
+    }
+    const labels = ["Pronósticos", "Evaluación", "Configuración predictiva", "Evidencia", "Nodos"];
+    const failures = results.flatMap((result, index) => result.status === "rejected" ? [`${labels[index]}: ${result.reason instanceof Error ? result.reason.message : "consulta no disponible"}`] : []);
+    if (failures.length) throw new Error(failures.join(" · "));
   }, [token, horizon, hazard]);
 
   const refresh = useCallback(async () => {
@@ -92,6 +106,23 @@ export default function PredictivePanel({ token, role }: { token: string; role: 
     finally { setBusy(false); }
   }
 
+  async function generate() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      if (!enabled) {
+        if (role !== "admin" || !consent) throw new Error("Un administrador debe autorizar la fuente para este riesgo y horizonte.");
+        await apiPost("/predictions/models/deploy", token, { hazard, horizon_hours: horizon, enabled: true, external_weather_consent: true });
+      }
+      const result = await apiPost<{ created: number; skipped: number; message: string; errors: { detail: string; device_id?: string; horizon_hours?: number }[] }>(`/predictions/run?hazard=${hazard}&horizon_hours=${horizon}`, token, {});
+      await load();
+      if (result.errors?.length) {
+        setError(result.errors.map((item) => `${item.device_id ? `Nodo ${item.device_id}: ` : ""}${item.detail}`).join(" · "));
+      }
+      setNotice(result.created > 0 ? `${result.created} ${result.created === 1 ? "pronóstico generado" : "pronósticos generados"} para ${horizon} horas.` : result.message || "No se generaron nuevos pronósticos.");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo generar el pronóstico."); }
+    finally { setBusy(false); }
+  }
+
   async function verify(event: React.FormEvent) {
     event.preventDefault();
     if (!coverage) return;
@@ -100,9 +131,9 @@ export default function PredictivePanel({ token, role }: { token: string; role: 
     await mutate("/predictions/observations", { ...draft, hazard, start_at: start, end_at: end, coverage_verified: true }, "Resultado independiente registrado.");
   }
 
-  if (IS_DEMO) return <section className="predictive-panel"><h1>Predicción de {risk.title}</h1><p>El ciclo predictivo necesita fuentes y resultados reales. Abrí una sesión conectada a la API para utilizarlo.</p></section>;
+  if (IS_DEMO) return <section className="view predictive-panel" tabIndex={0}><h1>Predicción de {risk.title}</h1><p>El ciclo predictivo necesita fuentes y resultados reales. Abrí una sesión conectada a la API para utilizarlo.</p></section>;
 
-  return <section className="predictive-panel" aria-label="Ciclo predictivo">
+  return <section className="view predictive-panel" aria-label="Ciclo predictivo" tabIndex={0}>
     <header className="predictive-header"><div><span className="eyebrow">ECO/NEXO · ANTICIPACIÓN</span><h1>Predicción de {risk.title}</h1><p>Pronósticos archivados, evidencia independiente y aprendizaje por territorio.</p></div>
       <label>Riesgo<select aria-label="Riesgo predictivo" disabled={busy} value={hazard} onChange={(event) => setHazard(event.target.value as Hazard)}>{(Object.keys(risks) as Hazard[]).map((id) => <option key={id} value={id}>{risks[id].title}</option>)}</select></label>
       <label>Horizonte<select disabled={busy} value={horizon} onChange={(event) => setHorizon(Number(event.target.value) as Horizon)}><option value={6}>6 horas</option><option value={24}>24 horas</option><option value={72}>72 horas</option></select></label>
@@ -120,17 +151,20 @@ export default function PredictivePanel({ token, role }: { token: string; role: 
         <div className="predictive-actions"><button disabled={busy || !consent || enabled} onClick={() => void mutate("/predictions/models/deploy", { hazard, horizon_hours: horizon, enabled: true, external_weather_consent: true }, "Fuente habilitada para este horizonte.")}>Habilitar fuente</button>
           <button disabled={busy || !enabled} onClick={() => void mutate("/predictions/models/deploy", { hazard, horizon_hours: horizon, model_id: activeId ?? null, enabled: false }, "Pronósticos pausados.")}>Pausar pronósticos</button></div>
       </>}
-      {canOperate && <button className="primary" disabled={busy || !enabled} onClick={() => void mutate(`/predictions/run?hazard=${hazard}`, {}, "Pronósticos emitidos.")}>Emitir pronósticos</button>}
+      <p>Podés generar un pronóstico ambiental futuro sin entrenar un modelo. El entrenamiento agrega probabilidades cuando hay evidencia verificada suficiente.</p>
+      {canOperate && <button className="primary" disabled={busy || (!enabled && (role !== "admin" || !consent))} onClick={() => void generate()}>{busy ? "Procesando…" : "Generar pronóstico"}</button>}
+      {!enabled && role !== "admin" && <p>Pedí al administrador que habilite este riesgo y horizonte.</p>}
       <p>Una emisión por día UTC, nodo, horizonte y versión. La ejecución programada requiere habilitar el motor en el despliegue y esta fuente por organización.</p>
     </article>
 
     <h2>Qué puede ocurrir y qué hacer</h2>
-    {!forecasts.length && <p>No hay pronósticos archivados para este horizonte. Sin datos no se puede concluir riesgo bajo.</p>}
+    {!forecasts.length && <p>No hay pronósticos archivados para este riesgo y horizonte. {enabled ? "Pulsá Generar pronóstico para consultar la fuente." : "Autorizá la fuente y pulsá Generar pronóstico."} Sin datos no se puede concluir riesgo bajo.</p>}
     <div className="predictive-grid">{forecasts.slice(0, 30).map((item) => <article className="predictive-card" key={item.id}>
       <span className="eyebrow">{item.device_name} · {new Date(item.valid_to) <= new Date() ? "Ventana finalizada" : "Ventana futura"}</span>
       <h3>{item.warning ? "Preparar vigilancia" : "Mantener monitoreo"}</h3>
       <strong>{item.probability == null ? `Índice ${hazard === "fire" ? "meteorológico" : "ambiental"} ${(item.risk_index * 100).toFixed(0)}/100` : `Probabilidad estimada ${pct(item.probability)}`}</strong>
       <p>{date(item.valid_from)} → {date(item.valid_to)}</p><p>{item.action}</p>
+      {!!item.provenance?.hourly?.length && <details><summary>Pronóstico hora por hora</summary><div className="predictive-hourly"><table><thead><tr><th>Hora local</th><th>{hazard === "hydric" ? "Lluvia (mm/h)" : hazard === "health_heat" ? "Sensación térmica (°C)" : hazard === "health_air" ? "PM2.5 (μg/m³)" : "Temperatura (°C)"}</th>{hazard === "fire" && <><th>Humedad (%)</th><th>Viento (km/h)</th><th>Lluvia (mm)</th></>}</tr></thead><tbody>{item.provenance.hourly.map((hour) => <tr key={String(hour.time)}><td>{date(String(hour.time))}</td><td>{Number(hour[hazard === "hydric" ? "precipitation" : hazard === "health_heat" ? "apparent_temperature" : hazard === "health_air" ? "pm2_5" : "temperature_2m"]).toFixed(1)}</td>{hazard === "fire" && <><td>{Number(hour.relative_humidity_2m).toFixed(0)}</td><td>{Number(hour.wind_speed_10m).toFixed(1)}</td><td>{Number(hour.precipitation).toFixed(1)}</td></>}</tr>)}</tbody></table></div></details>}
       <details><summary>Fuentes y explicación</summary><ul>{item.explanation.map((reason) => <li key={reason}>{reason}</li>)}</ul><p>Open-Meteo · datos modelados. Área de vigilancia de 5 km del nodo; requiere verificación local. {risk.scope}</p><p>Versión: {item.model_version}<br />Emitido: {date(item.issued_at)}</p><p>{item.probability == null ? "Este índice no es una probabilidad de incidente." : "Estimación local en modo sombra; requiere validación prospectiva."}</p></details>
     </article>)}</div>
     {forecasts.length > 30 && <p>Se muestran las 30 emisiones más recientes de las {forecasts.length} consultadas.</p>}

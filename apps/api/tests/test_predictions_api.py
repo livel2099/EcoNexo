@@ -43,6 +43,26 @@ def test_get_horizon_and_tenant_scope(context):
     assert context.client.get("/predictions?horizon_hours=48").status_code == 422
 
 
+def test_manual_run_filters_selected_horizon_and_rejects_invalid_value(context, monkeypatch):
+    issue = AsyncMock(return_value=dict(created=0, skipped=0, errors=[], message="Sin nodos"))
+    monkeypatch.setattr(routes, "issue_forecasts", issue)
+    assert context.client.post("/predictions/run?hazard=hydric&horizon_hours=6", json={}).status_code == 200
+    issue.assert_awaited_once_with(context.actor.org_id, context.actor.id, "hydric", 6)
+    assert context.client.post("/predictions/run?horizon_hours=48", json={}).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_no_eligible_nodes_returns_actionable_diagnostic(context, monkeypatch):
+    context.pool.fetch.side_effect = [[dict(horizon_hours=6, enabled=True, active_model_id=None)], []]
+    context.pool.fetchval.return_value = datetime(2026, 10, 6, tzinfo=timezone.utc)
+    monkeypatch.setattr(service, "get_settings", lambda: SimpleNamespace(pipeline_max_devices_per_run=10))
+    provider = AsyncMock()
+    monkeypatch.setattr(service, "forecasts_for_points", provider)
+    result = await service.issue_forecasts(context.actor.org_id, context.actor.id, "fire", 6)
+    assert result["created"] == 0 and "No hay nodos aptos" in result["message"]
+    provider.assert_not_awaited()
+
+
 def test_enabling_requires_explicit_external_source_consent(context):
     result = context.client.post("/predictions/models/deploy", json={"enabled": True})
     assert result.status_code == 422
