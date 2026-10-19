@@ -11,7 +11,7 @@ type Operations = {
     alerts_pending: number; alerts_confirmed: number; alerts_discarded: number;
     pipeline_degraded_24h: number; latest_pipeline_at: string | null;
   };
-  integrations: { name: string; configured: boolean; detail: string }[];
+  integrations: { name: string; configured: boolean; detail: string;state?:string;verified?:boolean;required_for?:string;setup_steps?:string[] }[];
   predictive_status: string;
   predictive_gaps: string[];
 };
@@ -45,7 +45,7 @@ export default function PlatformOperationsPanel({ token }: { token: string }) {
       </section>
       <p>Última lectura: {date(data.metrics.latest_reading_at)}. Última ejecución terminada: {date(data.metrics.latest_pipeline_at)}.</p>
       <section className="platform-overview-grid">
-        {data.integrations.map((item) => <article key={item.name}><h3>{item.name}</h3><strong className={item.configured ? "status-on" : "status-warn"}>{item.configured ? "Configurada" : "Sin configurar / deshabilitada"}</strong><p>{item.detail}</p></article>)}
+        {data.integrations.map((item) => <article key={item.name}><h3>{item.name}</h3><strong className={item.configured ? "status-on" : "status-warn"}>{item.configured ? "Configurada · conexión por verificar" : "Pendiente de habilitación o configuración"}</strong><p>{item.required_for || item.detail}</p><details><summary>Qué falta revisar</summary><p>{item.detail}</p><ol>{item.setup_steps?.map(step=><li key={step}>{step}</li>)}</ol><p>Este diagnóstico revisa configuración. No confirma disponibilidad del servicio ni activa funciones automáticamente.</p></details></article>)}
       </section>
       <div className="platform-table-card" style={{ marginTop: 24, padding: 24 }}>
         <span className="eyebrow">MADUREZ PREDICTIVA</span><h2>Predicción de incidentes pendiente de validación</h2>

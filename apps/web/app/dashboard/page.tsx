@@ -17,13 +17,14 @@ import RulesPanel from "../../components/RulesPanel";
 import ObservatoryPanel from "../../components/ObservatoryPanel";
 import AdminPanel from "../../components/AdminPanel";
 import PredictivePanel from "../../components/PredictivePanel";
-import CircuitBackdrop from "../../components/CircuitBackdrop";
+import WorkspaceHome from "../../components/WorkspaceHome";
 import FireSmokePanel from "../../components/FireSmokePanel";
 import ForestryPestPanel from "../../components/ForestryPestPanel";
 
 import EcoCampoPanel from "../../components/EcoCampoPanel";
 import AgroPanel from "../../components/AgroPanel";
 import ParaguaySoyPanel from "../../components/ParaguaySoyPanel";
+import "../../components/workspace.css";
 
 const MapView = dynamic(() => import("../../components/MapView"), { ssr: false });
 const COMMAND_CENTER: [number, number] = MISIONES_CENTER;
@@ -64,7 +65,7 @@ const DEFAULT_SOURCE_SETTINGS: EnvironmentalSourceSettings = {
   updated_at: new Date(0).toISOString(),
 };
 
-type View = "paraguay" | "comando" | "fuego" | "plagas" | "agro" | "ecocampo" | "observatorio" | "dispositivos" | "reglas" | "reportes" | "informes" | "admin" | "prediccion";
+type View = "inicio" | "paraguay" | "comando" | "fuego" | "plagas" | "agro" | "ecocampo" | "observatorio" | "dispositivos" | "reglas" | "reportes" | "informes" | "admin" | "prediccion";
 
 function pct(value: number | null) {
   return value == null ? "—" : `${Math.round(value * 100)}%`;
@@ -87,7 +88,9 @@ export default function Dashboard() {
   const [token, setToken] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [org, setOrg] = useState<Org | null>(null);
-  const [view, setView] = useState<View>("comando");
+  const [view, setView] = useState<View>("inicio");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = (target: View) => { setView(target); setMenuOpen(false); window.scrollTo(0, 0); };
   const [kpi, setKpi] = useState<Kpi | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -103,7 +106,6 @@ export default function Dashboard() {
   const [sourceSettings, setSourceSettings] = useState<EnvironmentalSourceSettings>(DEFAULT_SOURCE_SETTINGS);
   // Paneles plegables. El mapa recupera el espacio liberado por si solo: su
   // ResizeObserver detecta el cambio de contenedor y reencuadra.
-  const [kpisOpen, toggleKpis] = useCollapsible("kpis");
   const [earthOpen, toggleEarth] = useCollapsible("earth");
   const [alertsOpen, toggleAlerts] = useCollapsible("alerts");
 
@@ -253,61 +255,67 @@ export default function Dashboard() {
     + (detections.length - localDetections.length) + (reports.length - localReports.length);
   const commandAssessment = useMemo(() => buildSpaceAIThreatAssessment(earthIntel, localDetections, { fireRadiusKm: sourceSettings.fire_radius_km, firmsEnabled: sourceSettings.firms_enabled }), [earthIntel, localDetections, sourceSettings.fire_radius_km, sourceSettings.firms_enabled]);
   const navItem = (target: View, label: string) => (
-    <button className={view === target ? "active" : ""} onClick={() => setView(target)}>{label}</button>
+    <button className={view === target ? "active" : ""} aria-current={view === target ? "page" : undefined} onClick={() => navigate(target)}>{label}</button>
   );
 
+  const viewNames: Record<View, [string,string]> = {
+    inicio:["Inicio","Un lugar para organizar tu día y decidir el próximo paso."],
+    comando:["Mapa y alertas","Monitoreo territorial de Misiones."],
+    agro:["Mis cultivos","Seguimiento de lotes agrícolas con EcoNexo AG."],
+    ecocampo:["Mi campo y forraje","Evaluación de terreno y planificación con EcoCampo."],
+    paraguay:["Paraguay · Soja","El clima, tu lote y sus recomendaciones, paso a paso."],
+    informes:["Informes","Información para revisar y compartir con tu equipo."],
+    prediccion:["Pronósticos de riesgo","Señales anticipadas para planificar el seguimiento."],
+    fuego:["Fuego y humo","Vigilancia y verificación de señales territoriales."],
+    plagas:["Sanidad forestal","Seguimiento y revisión de riesgos forestales."],
+    observatorio:["Análisis ambiental","Detalle de fuentes e indicadores ambientales."],
+    dispositivos:["Dispositivos","Administrá las fuentes de medición de tu organización."],
+    reglas:["Reglas de alertas","Definí qué señales requieren atención."],
+    reportes:["Reportes ciudadanos","Revisá los avisos recibidos desde el territorio."],
+    admin:["Configuración","Usuarios, acceso y fuentes de la organización."],
+  };
   return (
-    <main className={`shell tech-shell${kpisOpen ? "" : " kpis-collapsed"}${earthOpen ? "" : " earth-collapsed"}${alertsOpen ? "" : " alerts-collapsed"}`}>
-      <CircuitBackdrop dense />
-      <header className="topbar">
-        <div className="topbar-main">
-          <img className="topbar-official-logo" src="/brand/econexo-lockup.jpg" alt="EcoNexo" />
-          <span className="topbar-org">{org?.name || "conectando…"}<small>{view === "paraguay" ? "Paraguay · Soja" : <>{org?.municipality ? `${org.municipality} · ` : ""}Misiones</>}</small></span>
-          <span className="orbital-status"><i /> órbita activa</span>
-          <nav className="nav" aria-label="Navegación principal">
-            {navItem("comando", "Centro de Comando")}
+    <main className={`shell workspace-shell${menuOpen ? " nav-open" : ""}`}>
+      <aside className="workspace-sidebar" aria-label="Menú de Econexo">
+        <a className="workspace-brand" href="/dashboard"><img src="/brand/econexo-lockup.jpg" alt="Econexo" /></a>
+        <div className="workspace-org"><small>ESPACIO DE TRABAJO</small><strong>{org?.name || "Tu organización"}</strong></div>
+        <nav className="workspace-nav" aria-label="Navegación principal">
+          {navItem("inicio", "Inicio")}
+          <span className="workspace-nav-label">EL CAMPO</span>
+          {navItem("agro", "Mis cultivos")}
+          {navItem("ecocampo", "Campo y forraje")}
+          {navItem("paraguay", "Paraguay · Soja")}
+          <span className="workspace-nav-label">SEGUIMIENTO</span>
+          {navItem("comando", "Mapa y alertas")}
+          {navItem("prediccion", "Pronósticos de riesgo")}
+          {navItem("informes", "Informes")}
+          <details className="workspace-more" open={["fuego","plagas","observatorio","reportes","dispositivos","reglas","admin"].includes(view) || undefined}>
+            <summary>Más herramientas</summary>
             {navItem("fuego", "Fuego y humo")}
-            {navItem("prediccion", "Predicción")}
-            {navItem("plagas", "Plagas forestales")}
-            {navItem("agro", "EcoNexo AG")}
-            {navItem("ecocampo", "EcoCampo")}
-            {navItem("paraguay", "Econexo Paraguay")}
-            {navItem("observatorio", "Alerta IA")}
-            {navItem("dispositivos", "Dispositivos")}
-            {navItem("reglas", "Reglas")}
+            {navItem("plagas", "Sanidad forestal")}
+            {navItem("observatorio", "Análisis ambiental")}
             {navItem("reportes", "Reportes ciudadanos")}
-            {navItem("informes", "Informes")}
-            <button className="foi-nav-link" onClick={() => router.push("/red-investigacion")}>EcoNexoFoI</button>
-            {session?.role === "admin" && navItem("admin", "Admin Core")}
+            {navItem("dispositivos", "Dispositivos")}
+            {navItem("reglas", "Reglas de alertas")}
+            <button onClick={() => router.push("/red-investigacion")}>Comunidad EcoNexoFoI</button>
+            {session?.role === "admin" && navItem("admin", "Configuración")}
             {session?.platform_admin && <button onClick={() => router.push("/plataforma")}>Administración general</button>}
-          </nav>
-        </div>
-        <div className="account-area">
-          <div className="account-chip">
-            {session?.avatar_url ? <img src={session.avatar_url} alt="" referrerPolicy="no-referrer" /> : <span>{session?.name?.slice(0, 1).toUpperCase() || "E"}</span>}
-            <div><strong>{session?.name || "Usuario"}</strong><small>{session?.auth_provider === "google" ? "Google · " : ""}{session?.role || ""}</small></div>
-          </div>
-          <button className="logout" onClick={() => { clearSession(); router.replace("/"); }}>Salir</button>
-        </div>
-      </header>
-
+          </details>
+        </nav>
+        <div className="workspace-account"><strong>{session?.name || "Usuario"}</strong><small>{session?.role || ""}</small><button onClick={() => { clearSession(); router.replace("/"); }}>Cerrar sesión</button></div>
+      </aside>
+      <div className={`workspace-content${view === "comando" ? " command-view" : ""}`}>
+        <header className="workspace-heading"><div><button className="workspace-menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}>Menú</button><span className="workspace-eyebrow">ECONEXO / {view === "paraguay" ? "PARAGUAY" : "TU ORGANIZACIÓN"}</span><h1>{viewNames[view][0]}</h1><p>{viewNames[view][1]}</p></div>{view !== "inicio" && <button className="workspace-back" onClick={()=>navigate("inicio")}>Volver al inicio</button>}</header>
       {accessNotice && <div className="workspace-message error kpirow" role="alert">{accessNotice} {session?.role === "admin" && <button onClick={() => setView("admin")}>Abrir Admin Core</button>}</div>}
-      {view !== "paraguay" && <>
+      {view === "comando" && <>
       <div className={`banner ${accessNotice ? "atencion" : globalStatus} kpirow`}>
         <span className="dot" /> {accessNotice ? "Operación no disponible · revisá el estado de acceso" : `${BANNER[globalStatus]} · ${localAlerts.filter((item) => !["descartada", "resuelta"].includes(item.status)).length} alertas activas en Misiones`}
         <small>{misionesLocationLabel(commandCenter[0], commandCenter[1])} · 17 departamentos · 79 municipios{ignoredExternalSignals ? ` · ${ignoredExternalSignals} señales externas excluidas` : ""}</small>
-        <button
-          type="button"
-          className="panel-pill banner-pill"
-          onClick={toggleKpis}
-          aria-expanded={kpisOpen}
-          aria-controls="kpi-row"
-        >
-          <span aria-hidden="true">{kpisOpen ? "▾" : "▸"}</span> Indicadores
-        </button>
+
       </div>
 
-      <section className="kpis kpirow" id="kpi-row" aria-label="Indicadores principales" hidden={!kpisOpen}>
+      <details className="workspace-technical"><summary>Ver indicadores de operación</summary>
+      <section className="kpis kpirow" id="kpi-row" aria-label="Indicadores principales" >
         <KpiCard title="Tiempo de detección" val={kpi?.detection_time_s != null ? `${kpi.detection_time_s}s` : "—"}
           target="< 5 min" good={(kpi?.detection_time_s ?? 1e9) < 300} ratio={kpi?.detection_time_s != null ? Math.min(1, 300 / Math.max(kpi.detection_time_s, 1)) : 0} />
         <KpiCard title="Precisión motor IA" val={pct(kpi?.model_precision ?? null)}
@@ -318,6 +326,7 @@ export default function Dashboard() {
           target="-40%" good={(kpi?.response_time_reduction ?? 0) >= 0.4} ratio={kpi?.response_time_reduction ?? 0} />
       </section>
 
+      </details>
       <EarthIntelBar lat={commandCenter[0]} lon={commandCenter[1]} onUpdate={setEarthIntel} collapsed={!earthOpen} onToggle={toggleEarth} />
 
       <div className="feedbar kpirow command-pipeline-bar">
@@ -328,7 +337,7 @@ export default function Dashboard() {
       </div>
 
       </>}
-      {token && view === "paraguay" ? <ParaguaySoyPanel token={token} role={session?.role || "visualizador"} /> : view === "comando" ? (
+      {view === "inicio" ? <WorkspaceHome name={org?.name || "Tu organización"} connected={kpi !== null && !accessNotice} alerts={localAlerts.filter(a=>!["descartada","resuelta"].includes(a.status)).length} devices={localDevices.length} onOpen={navigate} /> : token && view === "paraguay" ? <ParaguaySoyPanel token={token} role={session?.role || "visualizador"} /> : view === "comando" ? (
         <>
           <section className="mapwrap" aria-label="Mapa operacional">
             <MapView token={token} devices={localDevices} alerts={localAlerts} detections={localDetections} reports={localReports} zones={localZones} center={commandCenter} earth={earthIntel} sourceSettings={sourceSettings} initialSatelliteMode="TRUE_COLOR" />
@@ -398,6 +407,7 @@ export default function Dashboard() {
             : token && view === "reportes" ? <ReportsPanel token={token} />
               : token && view === "informes" ? <ImpactReportsPanel token={token} />
                 : token && view === "admin" && session?.role === "admin" ? <AdminPanel token={token} org={org} onOrgUpdate={setOrg} onSourceSettingsUpdate={setSourceSettings} /> : null}
+      </div>
     </main>
   );
 }

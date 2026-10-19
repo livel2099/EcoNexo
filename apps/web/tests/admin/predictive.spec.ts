@@ -42,7 +42,7 @@ async function mockPrediction(page: Page, role = "admin", scenario = "normal") {
   await page.goto("/dashboard");
   const cookies = page.getByRole("button", { name: "Solo esenciales", exact: true });
   if (await cookies.count()) await cookies.click();
-  await page.getByRole("button", { name: "Predicción", exact: true }).click();
+  await page.getByRole("button", { name: "Pronósticos de riesgo", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Predicción de incendios", exact: true })).toBeVisible();
   return changes;
 }

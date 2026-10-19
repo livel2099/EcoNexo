@@ -24,6 +24,10 @@ class IntegrationStatus(BaseModel):
     name: str
     configured: bool
     detail: str
+    state: str = 'unverified'
+    verified: bool = False
+    required_for: str = ''
+    setup_steps: list[str] = []
 
 
 class PlatformOperationsOut(BaseModel):
@@ -65,11 +69,23 @@ async def operations_snapshot() -> PlatformOperationsOut:
         ("Copernicus Process API", settings.copernicus_mode == "process_api" and bool(settings.copernicus_client_id.strip() and settings.copernicus_client_secret.strip()), "Modo y credenciales presentes; cada organización controla su activación."),
         ("Archivos S3", settings.s3_enabled, "Almacenamiento habilitado; no prueba disponibilidad."),
     ]
+    guidance = {
+        'Ingesta programada': ('Actualización automática de nodos y fuentes', ['Configurar PIPELINE_SCHEDULER_ENABLED y verificar una ejecución reciente con lecturas.']),
+        'MQTT': ('Sensores físicos conectados al broker; no es necesario para consultar clima o satélite', ['Disponer de un broker accesible desde los servicios.', 'Revisar MQTT_ENABLED, MQTT_HOST y MQTT_PORT; configurar autenticación y TLS según el broker.', 'Publicar una lectura real y verificar recepción, organización y hora del nodo.']),
+        'Detección de anomalías': ('Análisis adicional de telemetría; no es necesario para el pronóstico meteorológico', ['Desplegar el servicio de anomalías y configurar ANOMALY_SERVICE_URL.', 'Habilitar ANOMALY_ENABLED después de verificar conectividad.', 'Verificar entrenamiento y contrastar resultados antes de atribuir precisión al modelo.']),
+        'NASA FIRMS': ('Consulta de focos de calor', ['Revisar FIRMS_INLINE_ENABLED y NASA_FIRMS_KEY.', 'Consultar una detección real y comprobar fecha y cobertura.']),
+        'Copernicus Process API': ('Imágenes Sentinel-2 y estadísticas de vegetación', ['Revisar COPERNICUS_MODE, COPERNICUS_CLIENT_ID y COPERNICUS_CLIENT_SECRET.', 'Habilitar la fuente de la organización y consultar un polígono real.', 'Comprobar cuota y fecha de las observaciones.']),
+        'Archivos S3': ('Fotografías y evidencias adjuntas; no es necesario para generar informes HTML', ['Disponer de bucket privado S3 o compatible R2 con permisos mínimos.', 'Configurar S3_ENDPOINT, S3_BUCKET, S3_REGION, S3_ACCESS_KEY y S3_SECRET_KEY.', 'Revisar S3_PUBLIC_ENDPOINT y S3_SERVER_SIDE_ENCRYPTION para producción.', 'Habilitar S3_ENABLED y comprobar carga y lectura autorizada de un archivo.']),
+    }
+    integrations = []
+    for name, enabled, detail in configured:
+        purpose, steps = guidance[name]
+        integrations.append(IntegrationStatus(name=name,configured=bool(enabled),detail=detail,
+            state='configured_unverified' if enabled else 'disabled_or_missing',required_for=purpose,setup_steps=steps))
     return PlatformOperationsOut(
         generated_at=row["generated_at"], stale_after_minutes=30,
         metrics=OperationsMetrics(**{key: row[key] for key in OperationsMetrics.model_fields}),
-        integrations=[IntegrationStatus(name=name, configured=bool(enabled), detail=detail)
-                      for name, enabled, detail in configured],
+        integrations=integrations,
         predictive_gaps=[
             "Habilitar cada riesgo por organización y reunir pronósticos reales a 6/24/72 horas: incendio, anegamiento pluvial, calor y PM2.5.",
             "Verificar incidentes y períodos sin incidente, incluidos eventos no alertados.",

@@ -21,15 +21,15 @@ async function setup(page: Page, empty = false) {
   });
   await page.goto("/dashboard");
   await page.getByRole("button", {name: "Solo esenciales", exact:true}).click();
-  await expect(page.getByRole("button", { name: "EcoCampo", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Campo y forraje", exact: true })).toBeVisible();
 }
 
 test("AG y EcoCampo separados; aptitud, presupuesto e historial visibles y utilizables", async ({page}) => {
   await setup(page);
-  await page.getByRole("button", {name: "EcoNexo AG", exact: true}).click();
+  await page.getByRole("button", {name: "Mis cultivos", exact: true}).click();
   await expect(page.getByRole("heading", {name: "Lotes y decisiones de campo"})).toBeVisible();
   await expect(page.getByRole("navigation", {name: "Herramientas EcoCampo"})).toHaveCount(0);
-  await page.getByRole("button", {name: "EcoCampo", exact: true}).click();
+  await page.getByRole("button", {name: "Campo y forraje", exact: true}).click();
   await expect(page.getByRole("heading", {name: "Procesar evaluación de aptitud"})).toBeVisible();
   await expect(page.getByLabel("Lote a evaluar")).toHaveValue("lot-1");
   await page.getByLabel("Fecha de observación").fill(new Date().toISOString().slice(0,10));
@@ -53,7 +53,7 @@ test("AG y EcoCampo separados; aptitud, presupuesto e historial visibles y utili
 
 test("EcoCampo sin lotes muestra cómo comenzar", async ({page}) => {
   await setup(page, true);
-  await page.getByRole("button", {name: "EcoCampo", exact:true}).click();
+  await page.getByRole("button", {name: "Campo y forraje", exact:true}).click();
   await page.getByRole("button", {name: "Crear primer lote"}).click();
   await expect(page.getByLabel("Nombre del lote", {exact:true})).toBeVisible();
   await expect(page.getByRole("button", {name: "Crear lote", exact:true})).toBeVisible();
@@ -74,7 +74,7 @@ test("EcoCampo precarga NDVI satelital y sugerencias del Centro de Comando", asy
   });
   await page.goto("/dashboard");
   await page.getByRole("button", {name: "Solo esenciales", exact:true}).click();
-  await page.getByRole("button", {name: "EcoCampo", exact: true}).click();
+  await page.getByRole("button", {name: "Campo y forraje", exact: true}).click();
   await expect(page.getByRole("heading", {name: "Procesar evaluación de aptitud"})).toBeVisible();
   await expect(page.getByLabel("NDVI medio del lote", {exact:true})).toHaveValue("0.62");
   await expect(page.getByLabel("Píxeles válidos del lote (%)", {exact:true})).toHaveValue("88");

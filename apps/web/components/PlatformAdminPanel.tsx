@@ -11,7 +11,7 @@ import type {
   Session,
   UserRole,
 } from "../app/lib/types";
-import CircuitBackdrop from "./CircuitBackdrop";
+import "./workspace.css";
 import SubscriptionPanel from "./SubscriptionPanel";
 import PlatformOperationsPanel from "./PlatformOperationsPanel";
 
@@ -218,7 +218,7 @@ export default function PlatformAdminPanel() {
 
   return (
     <main className="platform-console">
-      <CircuitBackdrop dense />
+
       <header className="platform-console-header">
         <div>
           <span className="eyebrow">ECO/NEXO · CONSOLA PRIVADA</span>

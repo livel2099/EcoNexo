@@ -144,7 +144,8 @@ test("el rol actualizado habilita Admin Core aun con licencia cancelada", async 
   }
   await page.route("http://localhost:3108/kpis", (route) => route.fulfill({ status: 402, json: { detail: "La licencia no está activa. Revisá Admin Core → Suscripción" }, headers: { "Access-Control-Allow-Origin": "*" } }));
   await page.goto("/dashboard");
-  await expect(page.getByRole("button", { name: "Admin Core", exact: true })).toBeVisible();
+  await page.getByText("Más herramientas", { exact: true }).click();
+  await expect(page.getByRole("button", { name: "Configuración", exact: true })).toBeVisible();
   await expect(page.getByRole("alert").filter({ hasText: "La licencia no está activa" })).toBeVisible();
   await page.getByRole("button", { name: "Abrir Admin Core", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Gobierno de la plataforma" })).toBeVisible();

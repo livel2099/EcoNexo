@@ -32,7 +32,7 @@ test.describe("EcoNexo · smoke", () => {
     await expect(page.getByRole("button", { name: /enviar reporte para validación/i })).toBeVisible();
   });
 
-  test("login demo lleva al Centro de Comando", async ({ page }) => {
+  test("login demo lleva al inicio y permite abrir el mapa", async ({ page }) => {
     await page.goto("/login");
     // Este flujo requiere modo demo (autónomo). En una config con API real
     // (p. ej. .env.local con NEXT_PUBLIC_DEMO_MODE=false) se omite en vez de
@@ -48,6 +48,8 @@ test.describe("EcoNexo · smoke", () => {
       await submit.click();
       await expect(page).toHaveURL(/\/dashboard/, { timeout: 2000 });
     }).toPass({ timeout: 15_000 });
-    await expect(page.getByRole("button", { name: /centro de comando/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "¿Qué necesitás revisar hoy?" })).toBeVisible();
+    await page.getByRole("button", { name: "Mapa y alertas", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Mapa y alertas", exact: true })).toBeVisible();
   });
 });

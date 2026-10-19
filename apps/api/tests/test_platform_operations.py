@@ -39,3 +39,8 @@ async def test_empty_data_does_not_claim_prediction_or_integration_health(monkey
     assert not result.integrations[4].configured  # Credenciales sin Process API.
     assert "private" not in result.model_dump_json()
     assert len(result.predictive_gaps) == 5
+
+    assert all(not item.verified for item in result.integrations)
+    assert result.integrations[2].state == "configured_unverified"
+    assert result.integrations[1].state == "disabled_or_missing"
+    assert all(item.required_for and item.setup_steps for item in result.integrations)
