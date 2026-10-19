@@ -20,6 +20,7 @@ from .config import get_settings
 from .routers import (
     admin,
     agro,
+    paraguay,
     alerts,
     auth,
     copernicus,
@@ -156,6 +157,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(agro.router)
 app.include_router(agro.ecocampo_router)
+app.include_router(paraguay.router)
 app.include_router(foi.router)
 app.include_router(orgs.router)
 app.include_router(devices.router)

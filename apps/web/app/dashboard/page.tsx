@@ -23,6 +23,7 @@ import ForestryPestPanel from "../../components/ForestryPestPanel";
 
 import EcoCampoPanel from "../../components/EcoCampoPanel";
 import AgroPanel from "../../components/AgroPanel";
+import ParaguaySoyPanel from "../../components/ParaguaySoyPanel";
 
 const MapView = dynamic(() => import("../../components/MapView"), { ssr: false });
 const COMMAND_CENTER: [number, number] = MISIONES_CENTER;
@@ -63,7 +64,7 @@ const DEFAULT_SOURCE_SETTINGS: EnvironmentalSourceSettings = {
   updated_at: new Date(0).toISOString(),
 };
 
-type View = "comando" | "fuego" | "plagas" | "agro" | "ecocampo" | "observatorio" | "dispositivos" | "reglas" | "reportes" | "informes" | "admin" | "prediccion";
+type View = "paraguay" | "comando" | "fuego" | "plagas" | "agro" | "ecocampo" | "observatorio" | "dispositivos" | "reglas" | "reportes" | "informes" | "admin" | "prediccion";
 
 function pct(value: number | null) {
   return value == null ? "—" : `${Math.round(value * 100)}%`;
@@ -261,7 +262,7 @@ export default function Dashboard() {
       <header className="topbar">
         <div className="topbar-main">
           <img className="topbar-official-logo" src="/brand/econexo-lockup.jpg" alt="EcoNexo" />
-          <span className="topbar-org">{org?.name || "conectando…"}<small>{org?.municipality ? `${org.municipality} · ` : ""}Misiones</small></span>
+          <span className="topbar-org">{org?.name || "conectando…"}<small>{view === "paraguay" ? "Paraguay · Soja" : <>{org?.municipality ? `${org.municipality} · ` : ""}Misiones</>}</small></span>
           <span className="orbital-status"><i /> órbita activa</span>
           <nav className="nav" aria-label="Navegación principal">
             {navItem("comando", "Centro de Comando")}
@@ -270,6 +271,7 @@ export default function Dashboard() {
             {navItem("plagas", "Plagas forestales")}
             {navItem("agro", "EcoNexo AG")}
             {navItem("ecocampo", "EcoCampo")}
+            {navItem("paraguay", "Econexo Paraguay")}
             {navItem("observatorio", "Alerta IA")}
             {navItem("dispositivos", "Dispositivos")}
             {navItem("reglas", "Reglas")}
@@ -290,6 +292,7 @@ export default function Dashboard() {
       </header>
 
       {accessNotice && <div className="workspace-message error kpirow" role="alert">{accessNotice} {session?.role === "admin" && <button onClick={() => setView("admin")}>Abrir Admin Core</button>}</div>}
+      {view !== "paraguay" && <>
       <div className={`banner ${accessNotice ? "atencion" : globalStatus} kpirow`}>
         <span className="dot" /> {accessNotice ? "Operación no disponible · revisá el estado de acceso" : `${BANNER[globalStatus]} · ${localAlerts.filter((item) => !["descartada", "resuelta"].includes(item.status)).length} alertas activas en Misiones`}
         <small>{misionesLocationLabel(commandCenter[0], commandCenter[1])} · 17 departamentos · 79 municipios{ignoredExternalSignals ? ` · ${ignoredExternalSignals} señales externas excluidas` : ""}</small>
@@ -324,7 +327,8 @@ export default function Dashboard() {
         <button type="button" className="pipeline-run-button" disabled={pipelineBusy || !token} onClick={() => void runCommandPipeline()}>{pipelineBusy ? "Actualizando…" : devices.length ? "Ejecutar pipeline" : session?.role === "admin" ? "Crear red y ejecutar" : "Ejecutar pipeline"}</button>
       </div>
 
-      {view === "comando" ? (
+      </>}
+      {token && view === "paraguay" ? <ParaguaySoyPanel token={token} role={session?.role || "visualizador"} /> : view === "comando" ? (
         <>
           <section className="mapwrap" aria-label="Mapa operacional">
             <MapView token={token} devices={localDevices} alerts={localAlerts} detections={localDetections} reports={localReports} zones={localZones} center={commandCenter} earth={earthIntel} sourceSettings={sourceSettings} initialSatelliteMode="TRUE_COLOR" />

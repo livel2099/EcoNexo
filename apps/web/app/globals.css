@@ -2623,3 +2623,6 @@ textarea:focus-visible,
   .platform-license-table > div > .platform-edit-actions { display: flex; grid-column: 1 / -1; }
   .platform-user-create.platform-edit-user { grid-template-columns: 1fr; }
 }
+
+/* Centro de comando Paraguay */
+.py-soy-console{grid-column:1/-1;min-width:0}.py-soy-map{height:430px;width:100%;border-radius:16px;z-index:0}.py-soy-satellite{display:block;width:100%;max-width:768px;height:auto;margin:20px 0}.py-soy-console textarea{width:100%;font:inherit}.py-soy-console .agro-card{margin:24px 0}.py-soy-console button{margin:6px}.py-soy-console a{margin-right:16px}@media(max-width:700px){.py-soy-map{height:320px}}

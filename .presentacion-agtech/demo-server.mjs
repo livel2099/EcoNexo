@@ -1,0 +1,15 @@
+import http from 'node:http';
+const session={access_token:'presentation-local-demo',role:'admin',name:'Demostración Agtech',account_type:'institutional',email:'demo@example.test'};
+const lots=[{id:'demo-1',name:'Lote demostrativo · Yerba mate',area_ha:20,crop_key:'yerba_mate',crop_name:'Yerba mate',is_active:true,stage_name:'Brotación',gdd_accum:420,balance_14d_mm:-28,last_refresh_at:'2026-10-19T11:00:00Z',last_refresh_status:'ok',advisories:[{id:'a1',kind:'riego',level:'medio',title:'Revisar el agua disponible',detail:'Ejemplo ilustrativo: contrastar el balance estimado con la observación del lote.',lot_name:'Lote demostrativo · Yerba mate'},{id:'a2',kind:'pulverizacion',level:'bajo',title:'Ventana para evaluar una aplicación',detail:'Ejemplo ilustrativo: martes de 07:00 a 10:00. Verificar condiciones en campo y criterio profesional.',lot_name:'Lote demostrativo · Yerba mate'}]},{id:'demo-2',name:'Potrero demostrativo',area_ha:10,crop_key:'pastizal',crop_name:'Pastizal / uso ganadero',is_active:true,advisories:[]}];
+const history=[];
+http.createServer(async(req,res)=>{res.setHeader('Access-Control-Allow-Origin','*');res.setHeader('Access-Control-Allow-Headers','*');res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');if(req.method==='OPTIONS'){res.writeHead(204);res.end();return;}let raw='';for await(const c of req)raw+=c;let u=new URL(req.url,'http://localhost'),b=[];
+if(u.pathname==='/auth/login'||u.pathname==='/auth/me')b=session;
+if(u.pathname==='/orgs/me')b={id:'demo',name:'Demostración Agtech',slug:'demo',vertical:'agro',province:'Misiones'};
+if(u.pathname==='/kpis')b={global_status:'normal',alerts_open:0,devices_online:0,devices_total:0};
+if(u.pathname.endsWith('/lots'))b=u.pathname.startsWith('/ecocampo')?[lots[1],lots[0]]:lots;
+if(u.pathname.endsWith('/crops'))b=[];
+if(u.pathname==='/agro/summary')b={lots_total:2,lots_active:2,area_ha:30,advisories_high:0,advisories_medium:1,last_refresh_at:'2026-10-19T11:00:00Z'};
+if(u.pathname.endsWith('/series'))b=Array.from({length:21},(_,i)=>({day:`2026-10-${String(i+6).padStart(2,'0')}`,is_forecast:i>=14,tmax_c:26+i%5,tmin_c:16+i%3,precipitation_mm:i%5===0?9:0,etc_mm:3,et0_mm:3.5,balance_mm:i%5===0?6:-3,balance_accum_mm:6-i*2,gdd_accum:210+i*15,stage_name:'Brotación',source:i>=14?'open-meteo':'nasa-power'}));
+if(u.pathname.endsWith('/conditions'))b={as_of:null,water_hint:null,flooding_hint:null,note:'Entorno de demostración sin mediciones reales'};
+if(u.pathname.endsWith('/assessments')){if(req.method==='POST'){const e=JSON.parse(raw);history.unshift({id:'demo-assessment',created_at:'2026-10-19T12:00:00Z',evidence:e,result:{status:'datos_insuficientes',vegetation:'sin_referencia',ndvi_delta:null,estimated_animals:5,limitations:'Ejemplo de cálculo con datos de demostración. No representa una recomendación de carga real.',missing:['Verificar evidencia de campo'],risks:[],sources:[]}})}b=history;}
+res.setHeader('Content-Type','application/json');res.end(JSON.stringify(b));}).listen(3102,'127.0.0.1',()=>console.log('Demo local 3102'));
