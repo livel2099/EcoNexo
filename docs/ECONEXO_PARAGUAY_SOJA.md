@@ -10,6 +10,10 @@ Pronóstico real Open-Meteo con America/Asuncion. Informe consultable, exportabl
 
 ## Satélite
 
+Desde py-soja-v2, la selección de coordenadas carga automáticamente clima, pronóstico de 7 días, temperatura a 6 cm y humedad volumétrica de suelo en dos profundidades, cuando el modelo los ofrece. Cada variable identifica fuente, unidad y fecha. Las mediciones declaradas no se sobrescriben con estimaciones. El informe vuelve a consultar estas fuentes y guarda el contexto junto al resultado; si hay polígono, consulta NDVI automáticamente en paralelo. Una falla de Copernicus no elimina el pronóstico y viceversa. El tiempo máximo de consulta por proveedor es 18 segundos para evitar que agote el tiempo de espera de la interfaz.
+
+Los informes históricos v1 mantienen sus datos originales; no se agregan valores actuales a un informe pasado. Para incluir los datos automáticos se genera una evaluación nueva. pH, calidad de semilla, sanidad observada y manejo requieren evidencia de campo. La procedencia puede dejarse vacía para una evaluación inicial; valores como `---` se rechazan. La pantalla muestra el pronóstico antes de completar el relevamiento y distingue cero de ausencia de datos.
+
 Sentinel-2 L2A mediante Copernicus Process API, color natural, NDVI e índice de humedad. Consulta independiente por polígono de hasta 0,2 grados por lado y vértices dentro del límite orientativo de Paraguay. Estadísticas NDVI reutilizan el proveedor de EcoCampo. No se infiere rendimiento de NDVI. El límite de baja resolución puede rechazar lotes próximos a fronteras; confirmar coordenadas y reemplazar por una cartografía más precisa antes de uso catastral.
 
 Se requiere OAuth Copernicus CDSE configurado en el servidor y cuota disponible. Las imágenes son composiciones de menor nubosidad de los últimos 30 días, no una toma en vivo; no se certifica despeje ni fecha única de adquisición. La pantalla informa errores sin reemplazar imágenes por simulaciones. Consulta manual, sin vigilancia programada.

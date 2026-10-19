@@ -3,6 +3,7 @@ import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Literal
+from .ecocampo_satellite import Polygon
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -36,7 +37,8 @@ class SoyEvidence(BaseModel):
     sowing_date: date | None = None
     stage: Literal['pre-siembra', 'vegetativo', 'floracion', 'llenado', 'madurez'] = 'pre-siembra'
     cultivar: str = Field(default='', max_length=120)
-    source: str = Field(min_length=3, max_length=1000)
+    source: str = Field(default='', max_length=1000)
+    polygon: Polygon | None = None
     ph: float | None = Field(default=None, ge=0, le=14)
     soil_temperature_c: float | None = Field(default=None, ge=-20, le=70)
     soil_analysis_ok: bool | None = None
@@ -50,12 +52,16 @@ class SoyEvidence(BaseModel):
 
     @model_validator(mode='after')
     def validate_evidence(self):
-        if not self.name.strip() or not self.source.strip():
-            raise ValueError('Nombre y procedencia de campo obligatorios')
+        if not self.name.strip():
+            raise ValueError('Nombre del lote obligatorio')
+        if self.source and not any(c.isalnum() for c in self.source):
+            raise ValueError('Ingresá una procedencia válida o dejala vacía si no hay relevamiento de campo')
         if not in_paraguay(self.lat, self.lon):
             raise ValueError('El lote debe ubicarse dentro de Paraguay (límite cartográfico aproximado)')
         if self.observed_on > date.today():
             raise ValueError('La observación no puede ser futura')
+        if self.polygon and any(not in_paraguay(lat,lon) for lon,lat in self.polygon.coordinates[0]):
+            raise ValueError('El polígono debe estar dentro de Paraguay')
         return self
 
 
@@ -70,6 +76,7 @@ def evaluate(body: SoyEvidence, daily: list, weather_error: str | None = None) -
         if getattr(body, key) is None: missing.append(title)
     if not body.cultivar.strip(): missing.append('Cultivar y grupo de madurez validados para la zona y fecha')
     if body.sowing_date is None: missing.append('Fecha de siembra prevista o realizada')
+    if not body.source.strip(): missing.append('Procedencia de las mediciones y observaciones de campo')
     if body.ph is not None and not 5.5 <= body.ph <= 7.5:
         risk('Reacción del suelo', f'pH declarado {body.ph}; fuera del rango bibliográfico orientativo 5,5–7,5.', 'Revisar pH, aluminio y nutrición con análisis y asesor local; definir corrección según laboratorio.')
     for key, bad, title, action in [

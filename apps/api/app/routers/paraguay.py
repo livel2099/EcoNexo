@@ -1,5 +1,6 @@
 """Centro de comando Paraguay, exclusivo soja, con informes por organización."""
 import json
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -14,21 +15,48 @@ from ..copernicus import access_token, EVALSCRIPTS, CopernicusError
 from ..ecocampo_satellite import Polygon, fetch_ndvi
 from ..rate_limit import enforce_rate_limit
 from ..config import get_settings
+from ..paraguay_context import load_context
 
 router = APIRouter(prefix='/paraguay/soja', tags=['paraguay-soja'])
+
+
+class Location(BaseModel):
+    lat: float
+    lon: float
+
+
+@router.post('/context')
+async def context(body: Location, request: Request, user: CurrentUser = Depends(require_agro_module)):
+    if not in_paraguay(body.lat,body.lon): raise HTTPException(422,'La ubicación debe estar en Paraguay')
+    await enforce_rate_limit(request,bucket='py-soja-context',limit=12,window_seconds=60)
+    return await load_context(body.lat,body.lon)
+
+
+async def report_satellite(polygon):
+    if polygon is None: return {'status':'sin_poligono','error':'Faltan los límites del lote para incorporar NDVI.','series':[]}
+    validate_polygon(polygon)
+    try:
+        data=await asyncio.wait_for(fetch_ndvi(polygon),timeout=18)
+        return {**data,'status':'disponible' if data.get('series') else 'sin_observaciones','error':None,'queried_at':datetime.now(timezone.utc).isoformat()}
+    except (TimeoutError,CopernicusError,httpx.HTTPError):
+        return {'status':'no_disponible','error':'Copernicus no disponible o consulta agotada. Revisar credenciales, cuota y cobertura.','series':[]}
 
 
 @router.post('/evaluate')
 async def assessment(body: SoyEvidence, request: Request, user: CurrentUser = Depends(require_agro_module)):
     await enforce_rate_limit(request, bucket='py-soja-evaluate', limit=12, window_seconds=60)
-    daily, error = [], None
-    try:
-        params = {'latitude':str(body.lat), 'longitude':str(body.lon), 'forecast_days':'7', 'timezone':'America/Asuncion', 'daily':','.join(agro.DAILY_VARIABLES)}
-        payload = await agro._consultar(get_settings().open_meteo_forecast_url, params, 'pronóstico Paraguay')
-        daily = agro._parse_daily(payload)
-    except (httpx.HTTPError, ValueError, RuntimeError) as exc:
-        error = 'Pronóstico no disponible. Volvé a consultar; la evaluación conserva los datos de campo.'
-    return evaluate(body, daily, error)
+    automatic,satellite=await asyncio.gather(load_context(body.lat,body.lon),report_satellite(body.polygon))
+    result=evaluate(body,automatic['forecast'],automatic['error'])
+    result.update(method='py-soja-v2',automatic=automatic,satellite=satellite)
+    modeled_temperature=automatic.get('variables',{}).get('soil_temperature_6cm',{}).get('value')
+    if body.stage=='pre-siembra' and body.soil_temperature_c is None and modeled_temperature is not None and modeled_temperature<20:
+        action='Contrastar la temperatura modelada con una medición a profundidad de siembra antes de iniciar la labor.'
+        result['risks'].append({'factor':'Suelo frío estimado por modelo','detail':f'Open-Meteo estima {modeled_temperature} °C a 6 cm. No es una medición del lote; filtro operativo de 20 °C.','action':action})
+        result['recommendations'].append(action)
+        result['status']='condicionado'
+    if satellite['status']!='disponible': result['missing'].append(satellite.get('error') or 'Sin observaciones satelitales válidas')
+    if result['missing'] and result['status']=='potencial_favorable':result['status']='datos_insuficientes'
+    return result
 
 
 class SaveReport(BaseModel):
