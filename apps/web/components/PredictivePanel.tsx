@@ -16,7 +16,7 @@ type Forecast = {
   issued_at: string; valid_from: string; valid_to: string; model_version: string;
   risk_index: number; probability: number | null; warning: boolean;
   explanation: string[]; action: string;
-  provenance?: { hourly?: Record<string, number | string>[] };
+  provenance?: { attribution?: string; provider?: string; hourly?: Record<string, number | string>[] };
 };
 type Metric = {
   model_version: string; evaluated: number; pending_labels: number; tp: number; fp: number; fn: number;
@@ -113,7 +113,7 @@ export default function PredictivePanel({ token, role }: { token: string; role: 
         if (role !== "admin" || !consent) throw new Error("Un administrador debe autorizar la fuente para este riesgo y horizonte.");
         await apiPost("/predictions/models/deploy", token, { hazard, horizon_hours: horizon, enabled: true, external_weather_consent: true });
       }
-      const result = await apiPost<{ created: number; skipped: number; message: string; errors: { detail: string; device_id?: string; horizon_hours?: number }[] }>(`/predictions/run?hazard=${hazard}&horizon_hours=${horizon}`, token, {});
+      const result = await apiPost<{ created: number; skipped: number; message: string; errors: { detail: string; device_id?: string; horizon_hours?: number }[] }>(`/predictions/run?hazard=${hazard}&horizon_hours=${horizon}`, token, {}, 120_000);
       await load();
       if (result.errors?.length) {
         setError(result.errors.map((item) => `${item.device_id ? `Nodo ${item.device_id}: ` : ""}${item.detail}`).join(" · "));
@@ -147,7 +147,7 @@ export default function PredictivePanel({ token, role }: { token: string; role: 
       {hazard === "health_air" && <p>Fuente: <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noreferrer">Open-Meteo</a> y <a href="https://atmosphere.copernicus.eu/" target="_blank" rel="noreferrer">Copernicus CAMS</a>.</p>}
       <p>El índice ambiental inicial es heurístico. Un modelo propio entrenado emite probabilidades estimadas con evaluación temporal local. Los avisos permanecen en modo sombra para revisión humana.</p>
       {role === "admin" && <>
-        <label className="predictive-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />Autorizo consultar Open-Meteo {hazard === "health_air" ? "Calidad del Aire (CAMS)" : "Pronóstico Meteorológico"} para este riesgo y horizonte enviando latitud y longitud de los nodos de mi organización.</label>
+        <label className="predictive-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />Autorizo consultar {hazard === "health_air" ? "Open-Meteo Calidad del Aire (CAMS)" : "Open-Meteo y MET Norway como respaldo meteorológico"} para este riesgo y horizonte enviando latitud y longitud de los nodos de mi organización.</label>
         <div className="predictive-actions"><button disabled={busy || !consent || enabled} onClick={() => void mutate("/predictions/models/deploy", { hazard, horizon_hours: horizon, enabled: true, external_weather_consent: true }, "Fuente habilitada para este horizonte.")}>Habilitar fuente</button>
           <button disabled={busy || !enabled} onClick={() => void mutate("/predictions/models/deploy", { hazard, horizon_hours: horizon, model_id: activeId ?? null, enabled: false }, "Pronósticos pausados.")}>Pausar pronósticos</button></div>
       </>}
@@ -165,7 +165,7 @@ export default function PredictivePanel({ token, role }: { token: string; role: 
       <strong>{item.probability == null ? `Índice ${hazard === "fire" ? "meteorológico" : "ambiental"} ${(item.risk_index * 100).toFixed(0)}/100` : `Probabilidad estimada ${pct(item.probability)}`}</strong>
       <p>{date(item.valid_from)} → {date(item.valid_to)}</p><p>{item.action}</p>
       {!!item.provenance?.hourly?.length && <details><summary>Pronóstico hora por hora</summary><div className="predictive-hourly"><table><thead><tr><th>Hora local</th><th>{hazard === "hydric" ? "Lluvia (mm/h)" : hazard === "health_heat" ? "Sensación térmica (°C)" : hazard === "health_air" ? "PM2.5 (μg/m³)" : "Temperatura (°C)"}</th>{hazard === "fire" && <><th>Humedad (%)</th><th>Viento (km/h)</th><th>Lluvia (mm)</th></>}</tr></thead><tbody>{item.provenance.hourly.map((hour) => <tr key={String(hour.time)}><td>{date(String(hour.time))}</td><td>{Number(hour[hazard === "hydric" ? "precipitation" : hazard === "health_heat" ? "apparent_temperature" : hazard === "health_air" ? "pm2_5" : "temperature_2m"]).toFixed(1)}</td>{hazard === "fire" && <><td>{Number(hour.relative_humidity_2m).toFixed(0)}</td><td>{Number(hour.wind_speed_10m).toFixed(1)}</td><td>{Number(hour.precipitation).toFixed(1)}</td></>}</tr>)}</tbody></table></div></details>}
-      <details><summary>Fuentes y explicación</summary><ul>{item.explanation.map((reason) => <li key={reason}>{reason}</li>)}</ul><p>Open-Meteo · datos modelados. Área de vigilancia de 5 km del nodo; requiere verificación local. {risk.scope}</p><p>Versión: {item.model_version}<br />Emitido: {date(item.issued_at)}</p><p>{item.probability == null ? "Este índice no es una probabilidad de incidente." : "Estimación local en modo sombra; requiere validación prospectiva."}</p></details>
+      <details><summary>Fuentes y explicación</summary><ul>{item.explanation.map((reason) => <li key={reason}>{reason}</li>)}</ul><p>{item.provenance?.attribution || "Open-Meteo"} · datos modelados. Área de vigilancia de 5 km del nodo; requiere verificación local. {risk.scope}</p><p>Versión: {item.model_version}<br />Emitido: {date(item.issued_at)}</p><p>{item.probability == null ? "Este índice no es una probabilidad de incidente." : "Estimación local en modo sombra; requiere validación prospectiva."}</p></details>
     </article>)}</div>
     {forecasts.length > 30 && <p>Se muestran las 30 emisiones más recientes de las {forecasts.length} consultadas.</p>}
 

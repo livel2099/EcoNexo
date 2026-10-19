@@ -264,13 +264,13 @@ export async function apiGet<T>(path: string, token: string): Promise<T> {
   }), `GET ${path}`);
 }
 
-export async function apiPost<T>(path: string, token: string, body: unknown): Promise<T> {
+export async function apiPost<T>(path: string, token: string, body: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   if (IS_DEMO) return demoPost<T>(path, body);
   return checked<T>(await request(`${API}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
-  }, (path.startsWith("/ecocampo/") && path.endsWith("/ndvi")) || path.endsWith("/ecocampo/ndvi") || path === "/pipeline/run" || path === "/pipeline/bootstrap" || /^\/agro\/lots\/[^/]+\/refresh(?:\?|$)/.test(path) ? 180_000 : DEFAULT_TIMEOUT_MS), `POST ${path}`);
+  }, (path.startsWith("/ecocampo/") && path.endsWith("/ndvi")) || path.endsWith("/ecocampo/ndvi") || path === "/pipeline/run" || path === "/pipeline/bootstrap" || /^\/agro\/lots\/[^/]+\/refresh(?:\?|$)/.test(path) ? 180_000 : timeoutMs), `POST ${path}`);
 }
 
 export async function apiPostForm<T>(path: string, token: string, form: FormData): Promise<T> {

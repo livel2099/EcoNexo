@@ -152,7 +152,7 @@ async def deploy(body: DeploymentIn, user: CurrentUser = Depends(require_role("a
                 VALUES($1,$2,$3,$4,$5) ON CONFLICT(org_id,horizon_hours,hazard) DO UPDATE
                 SET active_model_id=EXCLUDED.active_model_id,enabled=EXCLUDED.enabled""",
                 user.org_id, body.horizon_hours, body.model_id, body.enabled, body.hazard)
-            await conn.execute("INSERT INTO audit_events(org_id,user_id,action,resource,resource_id,metadata) VALUES($1,$2,'predictive_deploy','predictive_model',$3,jsonb_build_object('horizon_hours',$4::int,'enabled',$5::boolean,'external_weather_consent',$6::boolean,'provider','open-meteo','hazard',$7::text))",
+            await conn.execute("INSERT INTO audit_events(org_id,user_id,action,resource,resource_id,metadata) VALUES($1,$2,'predictive_deploy','predictive_model',$3,jsonb_build_object('horizon_hours',$4::int,'enabled',$5::boolean,'external_weather_consent',$6::boolean,'provider','open-meteo','fallback_provider',CASE WHEN $7::text='health_air' THEN NULL ELSE 'met-no' END,'hazard',$7::text))",
                                user.org_id, user.id, body.model_id, body.horizon_hours, body.enabled, body.external_weather_consent, body.hazard)
     return dict(hazard=body.hazard, model_id=body.model_id, horizon_hours=body.horizon_hours, enabled=body.enabled,
                 mode="shadow", automatic_response=False)

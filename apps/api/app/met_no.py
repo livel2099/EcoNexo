@@ -98,38 +98,41 @@ def cache_ttl(expires: str | None) -> float:
     return min(MAX_TTL_SECONDS, max(MIN_TTL_SECONDS, restante))
 
 
-async def fetch_current_batch(points: Sequence[tuple[float, float]]) -> list[dict[str, float]]:
-    """Una consulta por coordenada: la API no acepta listas de ubicaciones."""
+async def fetch_forecast_batch(points: Sequence[tuple[float, float]]) -> list[dict]:
+    """Serie original compartida por telemetría, soja y predicciones; sin interpolar."""
     if not points:
         return []
     settings = get_settings()
     agente = settings.met_no_user_agent.strip()
     if not agente:
-        # Su ToS bloquea sin identificacion, y prohibe cadenas inventadas.
         raise MetNoError("Falta MET_NO_USER_AGENT con nombre y contacto del servicio")
     cabeceras = {"User-Agent": agente, "Accept": "application/json"}
-    resultado: list[dict[str, float]] = []
+    resultado = []
+    consulted = {}
     async with httpx.AsyncClient(timeout=settings.pipeline_http_timeout_seconds,
                                  headers=cabeceras, follow_redirects=True) as client:
         for lat, lon in points:
-            # Su ToS rechaza con 403 las coordenadas de 5 o mas decimales.
             params = {"lat": f"{lat:.4f}", "lon": f"{lon:.4f}"}
             clave = "metno:" + hashlib.sha256(repr(sorted(params.items())).encode()).hexdigest()
-            payload = await weather_cache.read(clave)
-            if payload is not None:
-                resultado.append(parse_current(payload))
-                continue
-            try:
-                response = await client.get(URL, params=params)
-            except httpx.HTTPError as exc:
-                raise MetNoError(f"No se pudo consultar MET Norway ({type(exc).__name__})") from exc
-            if response.status_code != 200:
-                raise MetNoError(f"MET Norway respondio HTTP {response.status_code}")
-            try:
-                payload = response.json()
-            except ValueError as exc:
-                raise MetNoError("MET Norway devolvio un cuerpo que no es JSON") from exc
-            lecturas = parse_current(payload)  # No cachear un cuerpo que no sirve.
-            await weather_cache.write(clave, payload, cache_ttl(response.headers.get("expires")))
-            resultado.append(lecturas)
+            payload = consulted.get(clave) or await weather_cache.read(clave)
+            if payload is None:
+                try:
+                    response = await client.get(URL, params=params)
+                except httpx.HTTPError as exc:
+                    raise MetNoError(f"No se pudo consultar MET Norway ({type(exc).__name__})") from exc
+                if response.status_code != 200:
+                    raise MetNoError(f"MET Norway respondio HTTP {response.status_code}")
+                try:
+                    payload = response.json()
+                except ValueError as exc:
+                    raise MetNoError("MET Norway devolvio un cuerpo que no es JSON") from exc
+                parse_current(payload)
+                await weather_cache.write(clave, payload, cache_ttl(response.headers.get("expires")))
+            parse_current(payload)
+            consulted[clave] = payload
+            resultado.append(payload)
     return resultado
+
+
+async def fetch_current_batch(points: Sequence[tuple[float, float]]) -> list[dict[str, float]]:
+    return [parse_current(payload) for payload in await fetch_forecast_batch(points)]

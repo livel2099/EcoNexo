@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -10,9 +11,10 @@ import httpx
 from fastapi import HTTPException
 from starlette.concurrency import run_in_threadpool
 
-from . import db
+from . import db, met_no
+from .weather_fallback import hourly_payload
 from .config import get_settings
-from .open_meteo_http import customer_url, get_response
+from .open_meteo_http import RateLimited, customer_url, get_response
 from .predictive_engine import (BASELINE_VERSION, baseline_version, baseline, drift, evaluation, future_features,
                                label_forecast, probability, train_model)
 
@@ -25,7 +27,7 @@ def decode(row) -> dict:
     return result
 
 
-async def forecasts_for_points(devices: list[dict], hazard: str = "fire") -> list[dict]:
+async def _open_meteo_forecasts(devices: list[dict], hazard: str = "fire") -> list[dict]:
     """Solo se invoca tras verificar la habilitación explícita de la organización."""
     settings = get_settings()
     key = settings.open_meteo_api_key.strip()
@@ -53,6 +55,19 @@ async def forecasts_for_points(devices: list[dict], hazard: str = "fire") -> lis
                 raise RuntimeError("La fuente no devolvió todos los territorios solicitados")
             results.extend(items)
     return results
+
+
+async def forecasts_for_points(devices: list[dict], hazard: str = "fire") -> list[dict]:
+    try:
+        return await _open_meteo_forecasts(devices, hazard)
+    except (RuntimeError, TimeoutError, httpx.HTTPError) as primary:
+        if hazard == 'health_air' or not getattr(get_settings(), 'met_no_fallback_enabled', False):
+            raise  # MET Norway no ofrece PM2.5.
+        try:
+            payloads = await met_no.fetch_forecast_batch([(d['lat'], d['lon']) for d in devices])
+            return [hourly_payload(payload, d['lat'], d['lon']) for d, payload in zip(devices, payloads, strict=True)]
+        except (met_no.MetNoError, httpx.HTTPError, ValueError):
+            raise primary
 
 
 async def issue_forecasts(org_id: UUID, actor_id: UUID | None, hazard: str | None = None, horizon: int | None = None) -> dict:
@@ -95,8 +110,19 @@ async def issue_forecasts(org_id: UUID, actor_id: UUID | None, hazard: str | Non
         try:
             payloads = await forecasts_for_points(unique) if risk == "fire" else await forecasts_for_points(unique, risk)
             payloads_by_risk.update({(risk, d["id"]): payload for d, payload in zip(unique, payloads)})
-        except (RuntimeError, TimeoutError, httpx.HTTPError):
-            errors.append(dict(hazard=risk, detail="Fuente externa no disponible; no se emitió un índice sustituto"))
+        except RateLimited as exc:
+            # Mensaje construido por nuestro cliente: incluye cupo y reintento,
+            # sin copiar URL, cabeceras ni credenciales de la petición.
+            errors.append(dict(hazard=risk, detail=str(exc)))
+        except (TimeoutError, httpx.TimeoutException):
+            errors.append(dict(hazard=risk, detail="El proveedor meteorológico agotó el tiempo de respuesta. Reintentá la consulta; no se generaron datos sustitutos."))
+        except httpx.HTTPStatusError as exc:
+            errors.append(dict(hazard=risk, detail=f"El proveedor meteorológico rechazó la consulta (HTTP {exc.response.status_code}). Revisar la configuración de la fuente."))
+        except (RuntimeError, httpx.HTTPError) as exc:
+            # Los errores HTTP de esta función son mensajes internos controlados.
+            status = re.search(r"HTTP (\d{3})", str(exc))
+            detail = f"El proveedor meteorológico rechazó la consulta (HTTP {status.group(1)}). Revisar la configuración de la fuente." if status else "No se pudo conectar con el proveedor meteorológico. Revisar conectividad y configuración de la fuente."
+            errors.append(dict(hazard=risk, detail=detail))
     available = [item for item in todo if (item[5], item[0]["id"]) in payloads_by_risk]
     result = await _archive_forecasts(org_id, actor_id, available, payloads_by_risk, len(existing))
     result["errors"].extend(errors)
@@ -119,6 +145,9 @@ async def _archive_forecasts(org_id: UUID, actor_id: UUID | None, todo: list, by
                     continue
                 try:
                     payload = by_device[(risk, device["id"])]
+                    if payload.get('_provider') == 'met-no' and artifact:
+                        errors.append(dict(device_id=str(device['id']), hazard=risk, horizon_hours=hours, detail='Se conserva el índice ambiental del respaldo. No se aplica el modelo entrenado a otro proveedor sin validación.'))
+                        continue
                     features, start, end, series = future_features(payload, issued_at, hours, risk)
                     index, reasons = baseline(features, risk)
                     prob = probability(features, artifact) if artifact else None
@@ -127,15 +156,15 @@ async def _archive_forecasts(org_id: UUID, actor_id: UUID | None, todo: list, by
                     action = "Preparar vigilancia y recursos; verificar combustible, fuentes de ignición y condiciones locales." if warning else "Mantener monitoreo y revisar cambios en el próximo pronóstico."
                     if warning and risk != "fire":
                         action = {"hydric": "Verificar drenajes, puntos anegables y mediciones locales; revisar protocolo hídrico con responsables.", "health_heat": "Revisar el protocolo de calor con responsables sanitarios y contrastar condiciones locales.", "health_air": "Contrastar con estaciones locales y revisar el protocolo de calidad del aire con responsables sanitarios."}[risk]
-                    provenance = dict(provider="open-meteo", data_kind="external_air_quality_forecast" if risk == "health_air" else "external_weather_forecast", hazard=risk, source_endpoint="air-quality" if risk == "health_air" else "forecast", received_at=issued_at.isoformat(),
-                                      provider_issued_at=None, provider_issue_time_known=False, max_cache_age_seconds=300,
+                    provenance = dict(provider=payload.get("_provider", "open-meteo"), data_kind="external_air_quality_forecast" if risk == "health_air" else "external_weather_forecast", hazard=risk, source_endpoint="locationforecast/2.0" if payload.get("_provider") == "met-no" else "air-quality" if risk == "health_air" else "forecast", received_at=issued_at.isoformat(),
+                                      provider_issued_at=None, provider_issue_time_known=False, max_cache_age_seconds=3600 if payload.get("_provider") == "met-no" else 300,
                                       grid_latitude=payload.get("latitude"), grid_longitude=payload.get("longitude"),
                                       hourly_time_convention="accumulation_start" if risk == "hydric" else "provider_timestamp",
                                       units=payload["hourly_units"], hourly=series, simulated=False,
                                       payload_sha256=hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest(),
                                       scope="Área de vigilancia de 5 km del nodo; confirmar cobertura en campo",
                                       spatial_limit="CAMS global: grilla aproximada de 45 km, no medición local" if risk == "health_air" else "Pronóstico de grilla, no medición local",
-                                      attribution="Copernicus CAMS global vía Open-Meteo" if risk == "health_air" else "Open-Meteo")
+                                      attribution=payload.get("_attribution") or ("Copernicus CAMS global vía Open-Meteo" if risk == "health_air" else "Open-Meteo"))
                     inserted = await conn.fetchval("""
                         INSERT INTO predictions(org_id,device_id,device_name,latitude,longitude,horizon_hours,
                           issued_at,valid_from,valid_to,issuance_day,model_id,model_version,risk_index,

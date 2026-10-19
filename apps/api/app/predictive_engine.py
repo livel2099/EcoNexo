@@ -65,7 +65,7 @@ def future_features(payload: dict, issued_at: datetime, hours: int, hazard: str 
             timestamp = timestamp.replace(tzinfo=timezone.utc)
         # Open-Meteo fecha la lluvia al final de la hora precedente. Para el
         # objetivo pluvial se archiva la hora de inicio de esa acumulación.
-        if hazard == "hydric":
+        if hazard == "hydric" and payload.get("precipitation_time") != "interval_start":
             timestamp -= timedelta(hours=1)
         if not start <= timestamp < end:
             continue
@@ -84,7 +84,7 @@ def future_features(payload: dict, issued_at: datetime, hours: int, hazard: str 
         series.append(item)
     expected = [(start + timedelta(hours=i)).isoformat() for i in range(hours)]
     if [item["time"] for item in series] != expected:
-        raise ValueError("Faltan horas futuras o hay timestamps duplicados/desordenados")
+        raise ValueError(f"MET Norway no cubre {hours} horas futuras con resolución horaria completa. Probá un horizonte de 6 o 24 h." if payload.get("_provider") == "met-no" else "Faltan horas futuras o hay timestamps duplicados/desordenados")
     if hazard == "hydric":
         rain = [item["precipitation"] for item in series]
         features = dict(zip(FEATURE_SETS[hazard], (sum(rain), max(rain), max(sum(rain[i:i + 6]) for i in range(len(rain) - 5)))))

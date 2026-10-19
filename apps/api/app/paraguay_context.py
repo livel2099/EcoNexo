@@ -3,8 +3,10 @@ import asyncio
 import math
 import httpx
 from datetime import datetime, timedelta, timezone
-from . import agro
+from . import agro, met_no
+from .weather_fallback import soy_context
 from .config import get_settings
+from .open_meteo_http import RateLimited
 
 
 def finite(value):
@@ -41,9 +43,15 @@ def parse_context(payload, lat, lon):
 async def load_context(lat,lon):
     params={'latitude':f'{lat:.6f}','longitude':f'{lon:.6f}','forecast_days':'7','timezone':'America/Asuncion','current':'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m','hourly':'soil_temperature_6cm,soil_moisture_3_to_9cm,soil_moisture_9_to_27cm','daily':','.join(agro.DAILY_VARIABLES)}
     try:
-        payload=await asyncio.wait_for(agro._consultar(get_settings().open_meteo_forecast_url,params,'clima Paraguay'),timeout=18)
+        payload=await asyncio.wait_for(agro._consultar(get_settings().open_meteo_forecast_url,params,'clima Paraguay'),timeout=12)
         return parse_context(payload,lat,lon)
     except (TimeoutError,ValueError,RuntimeError,httpx.HTTPError) as exc:
+        try:
+            if not get_settings().met_no_fallback_enabled: raise met_no.MetNoError('Respaldo deshabilitado')
+            payloads = await asyncio.wait_for(met_no.fetch_forecast_batch([(lat, lon)]), timeout=12)
+            return soy_context(payloads[0], lat, lon, 'Open-Meteo no disponible')
+        except (met_no.MetNoError, TimeoutError, httpx.HTTPError, ValueError, IndexError):
+            pass
         message=str(exc).lower()
-        reason='Tiempo de espera agotado' if isinstance(exc,TimeoutError) else 'Proveedor limitado (HTTP 429)' if '429' in message or 'límite' in message else 'Proveedor no disponible o respuesta inválida'
+        reason=str(exc) if isinstance(exc,RateLimited) else 'Tiempo de espera agotado' if isinstance(exc,TimeoutError) else 'Proveedor limitado (HTTP 429)' if '429' in message or 'límite' in message else 'Proveedor no disponible o respuesta inválida'
         return {'queried_at':datetime.now(timezone.utc).isoformat(),'source':'Open-Meteo','variables':{},'forecast':[],'error':reason+'. Reintentá la carga automática. Revisar conectividad, cuota y configuración del proveedor.','note':'Sin datos no se evalúa riesgo meteorológico bajo.'}

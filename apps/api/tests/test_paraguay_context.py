@@ -10,6 +10,12 @@ from app.ecocampo_satellite import Polygon
 from app.copernicus import CopernicusError
 
 
+@pytest.fixture(autouse=True)
+def offline_fallback(monkeypatch):
+    from app import met_no
+    monkeypatch.setattr(met_no, 'fetch_forecast_batch', AsyncMock(side_effect=met_no.MetNoError('Respaldo no disponible en esta prueba')))
+
+
 def payload():
     now=datetime.now(timezone.utc).replace(minute=0,second=0,microsecond=0)
     return {'utc_offset_seconds':0,'timezone':'America/Asuncion','latitude':-25.4,'longitude':-55.3,'elevation':277,'current':{'time':now.isoformat(),'temperature_2m':23,'relative_humidity_2m':55,'wind_speed_10m':0,'precipitation':0},'hourly':{'time':[now.isoformat()], 'soil_temperature_6cm':[24],'soil_moisture_3_to_9cm':[.3],'soil_moisture_9_to_27cm':[.28]},'daily':{'time':[(now+timedelta(days=i)).date().isoformat() for i in range(7)],'temperature_2m_max':[27]*7,'temperature_2m_min':[17]*7,'precipitation_sum':[0]*7,'et0_fao_evapotranspiration':[4]*7}}
@@ -66,3 +72,13 @@ async def test_satellite_failure_does_not_hide_weather(monkeypatch):
     polygon=Polygon(type='Polygon',coordinates=[[(-55.2,-25.5),(-55.19,-25.5),(-55.19,-25.51),(-55.2,-25.5)]])
     result=await routes.report_satellite(polygon)
     assert result['status']=='no_disponible' and result['series']==[]
+
+
+@pytest.mark.asyncio
+async def test_provider_quota_preserves_retry_guidance_without_creating_values(monkeypatch):
+    from app import agro
+    from app.open_meteo_http import RateLimited
+    monkeypatch.setattr(agro, '_consultar', AsyncMock(side_effect=RateLimited('Open-Meteo HTTP 429. Reintentá en 300 segundos.')))
+    result = await load_context(-25.4, -55.3)
+    assert '300 segundos' in result['error']
+    assert result['variables'] == {} and result['forecast'] == []

@@ -12,6 +12,8 @@ def test_fastapi_routes_and_openapi_can_be_created() -> None:
 
     schema = app.openapi()
     assert "/health" in schema["paths"]
+    assert "/paraguay/soja/context" in schema["paths"]
+    assert "/predictions/run" in schema["paths"]
     assert "/auth/register" in schema["paths"]
     assert "/auth/community/register" in schema["paths"]
     assert "/foi/posts" in schema["paths"]

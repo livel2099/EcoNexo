@@ -173,3 +173,26 @@ def test_independent_event_verification_is_audited_and_conflict_is_rejected(cont
     context.pool.fetchval.side_effect = [datetime(2026, 10, 6, tzinfo=timezone.utc), True]
     assert context.client.post("/predictions/observations", json=body).status_code == 409
     context.pool.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('cause,expected', [
+    (service.RateLimited('Open-Meteo HTTP 429. Reintentá en 300 segundos.'), '300 segundos'),
+    (TimeoutError(), 'tiempo de respuesta'),
+    (RuntimeError('Fuente HTTP 400 https://provider/?apikey=private-secret'), 'HTTP 400'),
+])
+async def test_provider_failure_is_actionable_and_never_archives_fake_values(context, monkeypatch, cause, expected):
+    now = datetime.now(timezone.utc)
+    context.pool.fetchval.return_value = now
+    context.pool.fetch.side_effect = [
+        [dict(horizon_hours=24, enabled=True, active_model_id=None)],
+        [dict(id=uuid4(), name='Nodo', lat=-26.92, lon=-54.78)], [],
+    ]
+    monkeypatch.setattr(service, 'get_settings', lambda: SimpleNamespace(pipeline_max_devices_per_run=10))
+    monkeypatch.setattr(service, 'forecasts_for_points', AsyncMock(side_effect=cause))
+    archive = AsyncMock(return_value=dict(created=0, skipped=0, errors=[], message='Sin emisiones'))
+    monkeypatch.setattr(service, '_archive_forecasts', archive)
+    result = await service.issue_forecasts(context.actor.org_id, context.actor.id)
+    assert result['created'] == 0 and expected in result['errors'][0]['detail']
+    assert 'private-secret' not in result['errors'][0]['detail']
+    assert archive.await_args.args[2] == []

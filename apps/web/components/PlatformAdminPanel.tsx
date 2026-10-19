@@ -12,6 +12,7 @@ import type {
   UserRole,
 } from "../app/lib/types";
 import "./workspace.css";
+import CircuitBackdrop from "./CircuitBackdrop";
 import SubscriptionPanel from "./SubscriptionPanel";
 import PlatformOperationsPanel from "./PlatformOperationsPanel";
 
@@ -218,6 +219,7 @@ export default function PlatformAdminPanel() {
 
   return (
     <main className="platform-console">
+      <CircuitBackdrop dense />
 
       <header className="platform-console-header">
         <div>

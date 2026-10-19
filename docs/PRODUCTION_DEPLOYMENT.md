@@ -80,3 +80,14 @@ El inicio del espacio de trabajo agrupa las tareas del campo y el seguimiento. L
 - FIRMS y Copernicus: la presencia de configuración no prueba conectividad, cuota ni permisos por organización. Comprobar una consulta real y la fecha/cobertura de sus resultados.
 
 El diagnóstico devuelve `configured_unverified` o `disabled_or_missing`, `verified=false` y pasos de revisión sin exponer valores de credenciales. La revisión del repositorio no acredita el estado del despliegue remoto. Para cerrar cada pendiente, configurar el servicio real y comprobar su operación desde ese entorno.
+
+
+## Incidente: soja sin contexto y predicciones sin fuente (19/10/2026)
+
+En producción se comprobó que la web consultaba `/paraguay/soja/context` mientras la API fijada a un commit anterior devolvía 404. La API tenía desactivado Auto-Deploy por haberse publicado un commit específico: publicar la web no actualiza ese servicio. Desplegar manualmente la misma revisión de API y web y verificar la ruta en `/openapi.json`.
+
+Los registros de la API mostraron Open-Meteo HTTP 429 con límite diario agotado. Predicciones usa ahora MET Norway Locationforecast como respaldo para incendio, lluvia y calor si MET_NO_FALLBACK_ENABLED está habilitado y MET_NO_USER_AGENT contiene la identificación y el contacto autorizados. Comparte el caché de la telemetría y deduplica coordenadas. La atribución y el proveedor se guardan en cada emisión. Los modelos entrenados no se aplican al otro proveedor sin validación; se conserva el índice heurístico con su fuente. PM2.5 sigue requiriendo su fuente de calidad del aire. Si faltan horas no se interpolan: un horizonte de 72 h puede no estar disponible en el respaldo, aunque 6/24 h sí.
+
+Soja consulta ese mismo respaldo si falla Open-Meteo. Presenta siete días completos en UTC desde mañana, agregando cuatro bloques de seis horas sin repartir lluvia entre intervalos. MET Norway no entrega ET0 ni variables del suelo: quedan ausentes y no se calcula balance hídrico. El informe identifica fuente, zona horaria y limitaciones. Esta cobertura parcial no se presenta como evaluación agronómica completa.
+
+La autorización para enviar coordenadas de nodos y lotes y el contacto comercial a api.met.no fue otorgada por el usuario durante la reparación. La interfaz de habilitación identifica ambos proveedores. Verificar primero el endpoint público y después una consulta autenticada real de cada módulo; `/health` por sí solo no comprueba estos contratos.

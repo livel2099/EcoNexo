@@ -17,6 +17,7 @@ import RulesPanel from "../../components/RulesPanel";
 import ObservatoryPanel from "../../components/ObservatoryPanel";
 import AdminPanel from "../../components/AdminPanel";
 import PredictivePanel from "../../components/PredictivePanel";
+import CircuitBackdrop from "../../components/CircuitBackdrop";
 import WorkspaceHome from "../../components/WorkspaceHome";
 import FireSmokePanel from "../../components/FireSmokePanel";
 import ForestryPestPanel from "../../components/ForestryPestPanel";
@@ -276,6 +277,7 @@ export default function Dashboard() {
   };
   return (
     <main className={`shell workspace-shell${menuOpen ? " nav-open" : ""}`}>
+      <CircuitBackdrop />
       <aside className="workspace-sidebar" aria-label="Menú de Econexo">
         <a className="workspace-brand" href="/dashboard"><img src="/brand/econexo-lockup.jpg" alt="Econexo" /></a>
         <div className="workspace-org"><small>ESPACIO DE TRABAJO</small><strong>{org?.name || "Tu organización"}</strong></div>

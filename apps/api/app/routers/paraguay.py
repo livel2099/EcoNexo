@@ -48,6 +48,7 @@ async def assessment(body: SoyEvidence, request: Request, user: CurrentUser = De
     automatic,satellite=await asyncio.gather(load_context(body.lat,body.lon),report_satellite(body.polygon))
     result=evaluate(body,automatic['forecast'],automatic['error'])
     result.update(method='py-soja-v2',automatic=automatic,satellite=satellite)
+    if automatic.get('provider')=='met-no': result['sources']=[*result['sources'],{'name':'MET Norway · CC BY 4.0','url':'https://api.met.no/weatherapi/locationforecast/2.0/documentation'}]
     modeled_temperature=automatic.get('variables',{}).get('soil_temperature_6cm',{}).get('value')
     if body.stage=='pre-siembra' and body.soil_temperature_c is None and modeled_temperature is not None and modeled_temperature<20:
         action='Contrastar la temperatura modelada con una medición a profundidad de siembra antes de iniciar la labor.'
