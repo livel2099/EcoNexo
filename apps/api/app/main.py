@@ -22,6 +22,7 @@ from .routers import (
     agro,
     paraguay,
     brazil,
+    brazil_soy,
     alerts,
     auth,
     copernicus,
@@ -160,6 +161,7 @@ app.include_router(agro.router)
 app.include_router(agro.ecocampo_router)
 app.include_router(paraguay.router)
 app.include_router(brazil.router)
+app.include_router(brazil_soy.router)
 app.include_router(foi.router)
 app.include_router(orgs.router)
 app.include_router(devices.router)

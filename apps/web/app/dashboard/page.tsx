@@ -265,7 +265,7 @@ export default function Dashboard() {
     comando:["Mapa y alertas","Monitoreo territorial de Misiones."],
     agro:["Mis cultivos","Seguimiento de lotes agrícolas con EcoNexo AG."],
     ecocampo:["Mi campo y forraje","Evaluación de terreno y planificación con EcoCampo."],
-    brasil:["Brasil · Mato Grosso","Exploración estatal y pronóstico por ubicación."],
+    brasil:["Brasil · Mato Grosso","Soja: pronóstico del lote, evaluación e informes para Mato Grosso."],
     paraguay:["Paraguay · Soja","El clima, tu lote y sus recomendaciones, paso a paso."],
     informes:["Informes","Información para revisar y compartir con tu equipo."],
     prediccion:["Pronósticos de riesgo","Señales anticipadas para planificar el seguimiento."],
@@ -342,7 +342,7 @@ export default function Dashboard() {
       </div>
 
       </>}
-      {view === "inicio" ? <WorkspaceHome name={org?.name || "Tu organización"} connected={kpi !== null && !accessNotice} alerts={localAlerts.filter(a=>!["descartada","resuelta"].includes(a.status)).length} devices={localDevices.length} onOpen={navigate} /> : view === "brasil" ? <BrazilPanel token={token || ""} /> : token && view === "paraguay" ? <ParaguaySoyPanel token={token} role={session?.role || "visualizador"} /> : view === "comando" ? (
+      {view === "inicio" ? <WorkspaceHome name={org?.name || "Tu organización"} connected={kpi !== null && !accessNotice} alerts={localAlerts.filter(a=>!["descartada","resuelta"].includes(a.status)).length} devices={localDevices.length} onOpen={navigate} /> : view === "brasil" ? <BrazilPanel token={token || ""} role={session?.role || "visualizador"} /> : token && view === "paraguay" ? <ParaguaySoyPanel token={token} role={session?.role || "visualizador"} /> : view === "comando" ? (
         <>
           <section className="mapwrap" aria-label="Mapa operacional">
             <MapView token={token} devices={localDevices} alerts={localAlerts} detections={localDetections} reports={localReports} zones={localZones} center={commandCenter} earth={earthIntel} sourceSettings={sourceSettings} initialSatelliteMode="TRUE_COLOR" />
