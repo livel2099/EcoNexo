@@ -40,7 +40,7 @@ class BrazilAlertsTests(unittest.TestCase):
         self.assertEqual(skipped, 0)
         self.assertEqual(rows[0]["properties"]["municipality_code"], "5103403")
         feature["properties"]["classname"] = "CICATRIZ_DE_QUEIMADA"
-        self.assertEqual(deforestation_features([feature], "INPE")[0], [])
+        self.assertEqual(deforestation_features([feature], "INPE")[0][0]["properties"]["kind"], "burned")
         feature["properties"]["classname"] = "DESMATAMENTO_CR"
         feature["properties"]["uf"] = "MS"
         self.assertEqual(deforestation_features([feature], "INPE")[0], [])

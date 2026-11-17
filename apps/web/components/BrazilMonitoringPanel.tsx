@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { GeoJSON, Map as LeafletMap, CircleMarker } from "leaflet";
 import BrazilAlerts from "./BrazilAlerts";
+import BrazilNdviLayer from "./BrazilNdviLayer";
 import type { FeatureCollection } from "geojson";
 
 type Point = { lat: number; lon: number; name: string };
@@ -11,6 +12,7 @@ export default function BrazilMonitoringPanel({ token }: { token: string }) {
   const map = useRef<LeafletMap|null>(null);
   const boundary = useRef<GeoJSON|null>(null);
   const marker = useRef<CircleMarker|null>(null);
+  const [alertKind, setAlertKind] = useState("all");
   const [geo, setGeo] = useState<FeatureCollection|null>(null);
   const [mapError, setMapError] = useState("");
   const [point, setPoint] = useState<Point|null>(null);
@@ -113,12 +115,14 @@ export default function BrazilMonitoringPanel({ token }: { token: string }) {
         </select></label>
         <button onClick={() => void selectMunicipality("")}>Ver todo el estado</button>
       </div>
+      <BrazilNdviLayer map={geo ? map.current : null}/>
+      <div className="workspace-map-tools"><button className={alertKind === "burned" ? "active" : ""} onClick={() => setAlertKind(alertKind === "burned" ? "all" : "burned")}>{alertKind === "burned" ? "Ver todas las alertas" : "Ver zonas quemadas"}</button><span>Violeta: cicatrices de quema DETER · observaciones de los últimos 30 días.</span></div>
       <div id="mato-grosso-map" ref={container} className="py-soy-map" style={{ height: "min(65vh, 620px)", minHeight: 320 }} role="region" aria-label="Mapa de los municipios de Mato Grosso"/>
       {mapError && <p role="alert">{mapError} <button onClick={() => setMapReload(v => v + 1)}>Reintentar mapa</button></p>}
       <p>Tocá un punto dentro de un municipio para consultar su pronóstico. El selector acerca el mapa; la consulta se realiza en el punto que elijas.</p>
       <p className="muted">Cartografía simplificada de IBGE: {geo?.features.length ?? "…"} polígonos municipales. El listado de localidades consultado el 17/11/2026 contiene 142 municipios; esta malla tiene 141 divisiones. Límites orientativos, no catastrales. El mapa base no es una imagen satelital.</p>
     </article>
-    <BrazilAlerts token={token} map={geo ? map.current : null} municipality={municipality} />
+    <BrazilAlerts token={token} map={geo ? map.current : null} municipality={municipality} kind={alertKind} onKindChange={setAlertKind} />
     <article className="agro-card">
       <h3>{point ? "Pronóstico · " + point.name : "Pronóstico por ubicación"}</h3>
       {!point && <p>Seleccioná un punto en el mapa para ver temperatura y lluvia previstas para los próximos siete días.</p>}

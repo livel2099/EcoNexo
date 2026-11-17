@@ -4,21 +4,21 @@ import type { Map as LeafletMap, GeoJSON } from "leaflet";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { API, IS_DEMO } from "../app/lib/api";
 
-type AlertProperties = { id: string; kind: "fire"|"deforestation"; source: string; observed_at: string; municipality: string; municipality_code: string; title: string; status: string; confidence?: string };
+type AlertProperties = { id: string; kind: "fire"|"deforestation"|"burned"; source: string; observed_at: string; municipality: string; municipality_code: string; title: string; status: string; confidence?: string };
 type AlertFeature = Feature<Geometry, AlertProperties>;
-type Source = { source: string; status: "ok"|"partial"|"not_configured"|"unavailable"; message: string; features: AlertFeature[] };
+type Source = { source: string; status: "ok"|"partial"|"not_configured"|"unavailable"|"stale"; queried_at?: string; message: string; features: AlertFeature[] };
 type Feed = { queried_at: string; sources: Source[] };
-const statusLabels = { ok: "Consulta disponible", partial: "Cobertura parcial", not_configured: "Sin configurar", unavailable: "No disponible" };
+const statusLabels = { stale: "Última consulta válida · desactualizada", ok: "Consulta disponible", partial: "Cobertura parcial", not_configured: "Sin configurar", unavailable: "No disponible" };
 
-export default function BrazilAlerts({ token, map, municipality }: { token: string; map: LeafletMap|null; municipality: string }) {
+export default function BrazilAlerts({ token, map, municipality, kind, onKindChange }: { token: string; map: LeafletMap|null; municipality: string; kind: string; onKindChange: (kind: string) => void }) {
   const [feed, setFeed] = useState<Feed|null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
-  const [kind, setKind] = useState("all");
   const [page, setPage] = useState(0);
+  useEffect(() => { setFeed(null); }, [token]);
   useEffect(() => {
-    setFeed(null); setError("");
+    setError("");
     if (IS_DEMO || !token) {
       setError(IS_DEMO ? "Las alertas reales requieren la API conectada. El modo demostración no genera detecciones." : "Iniciá sesión para consultar alertas.");
       return;
@@ -31,7 +31,7 @@ export default function BrazilAlerts({ token, map, municipality }: { token: stri
       const timeout = setTimeout(() => controller.abort(), 45000);
       setBusy(true); setError("");
       try {
-        const response = await fetch(API + "/brasil/mato-grosso/alerts", { headers: { Authorization: "Bearer " + token }, signal: controller.signal });
+        const response = await fetch(API + "/brasil/mato-grosso/alerts?refresh=" + (reload > 0), { headers: { Authorization: "Bearer " + token }, signal: controller.signal });
         if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? "Revisá tu sesión y permisos." : response.status === 402 ? "La licencia no está activa." : "No se pudieron actualizar las alertas.");
         const result: Feed = await response.json();
         if (!Array.isArray(result.sources)) throw new Error("Respuesta de alertas inválida.");
@@ -56,7 +56,7 @@ export default function BrazilAlerts({ token, map, municipality }: { token: stri
     void import("leaflet").then(L => {
       if (disposed) return;
       layer = L.geoJSON({ type: "FeatureCollection", features } as FeatureCollection, {
-        style: { color: "#ffd166", weight: 2, fillOpacity: .25 },
+        style: feature => ({ color: feature?.properties?.kind === "burned" ? "#d58cff" : "#ffd166", weight: 2, fillOpacity: feature?.properties?.kind === "burned" ? .5 : .25 }),
         pointToLayer: (_feature, latlng) => L.circleMarker(latlng, { radius: 7, color: "#ff6b55", fillOpacity: .8 }),
         onEachFeature: (feature, item) => {
           const p = feature.properties as AlertProperties;
@@ -78,20 +78,20 @@ export default function BrazilAlerts({ token, map, municipality }: { token: stri
 
   return <article className="agro-card" aria-label="Alertas de Mato Grosso">
     <h3>Alertas satelitales</h3>
-    <p>Focos de calor: últimos 2 días. Deforestación: observaciones de los últimos 30 días en las capas DETER de Amazonia y Cerrado. No se garantiza cobertura del Pantanal.</p>
-    <div className="workspace-map-tools"><label>Tipo de alerta <select value={kind} onChange={e => setKind(e.target.value)}><option value="all">Todas</option><option value="fire">Focos de calor</option><option value="deforestation">Deforestación</option></select></label><button disabled={busy || IS_DEMO || !token} onClick={() => setReload(n => n + 1)}>{busy ? "Actualizando…" : "Actualizar alertas"}</button></div>
-    <p>Rojo: foco de calor · Amarillo: polígono de deforestación. {municipality ? "Filtro del municipio seleccionado." : "Vista de todo Mato Grosso."}</p>
+    <p>Focos de calor: últimos 2 días. Deforestación y cicatrices de quema: observaciones de los últimos 30 días en las capas DETER de Amazonia y Cerrado. No se garantiza cobertura del Pantanal.</p>
+    <div className="workspace-map-tools"><label>Tipo de alerta <select value={kind} onChange={e => onKindChange(e.target.value)}><option value="all">Todas</option><option value="fire">Focos de calor</option><option value="deforestation">Deforestación</option><option value="burned">Zonas quemadas · cicatrices DETER</option></select></label><button disabled={busy || IS_DEMO || !token} onClick={() => setReload(n => n + 1)}>{busy ? "Actualizando…" : "Actualizar alertas"}</button></div>
+    <p>Rojo: foco de calor · Amarillo: deforestación · Violeta: zona quemada (cicatriz DETER). {municipality ? "Filtro del municipio seleccionado." : "Vista de todo Mato Grosso."}</p>
     {error && <p role="alert">{error} {feed ? "Se conserva la última consulta; los datos pueden estar desactualizados." : ""}</p>}
     {busy && <p role="status">Consultando las fuentes satelitales…</p>}
     {feed && <>
       <p>Última consulta: {new Date(feed.queried_at).toLocaleString("es-AR", { timeZone: "America/Cuiaba" })} (Cuiabá). Actualización cada 5 minutos con esta sección abierta; caché de hasta 5 minutos.</p>
-      <ul>{feed.sources.map(s => <li key={s.source}><strong>{s.source}: {statusLabels[s.status]}</strong>. {s.message}</li>)}</ul>
+      <ul>{feed.sources.map(s => <li key={s.source}><strong>{s.source}: {statusLabels[s.status]}</strong>. {s.message} {s.queried_at && <>Consulta de esta fuente: {new Date(s.queried_at).toLocaleString("es-AR", { timeZone: "America/Cuiaba" })} (Cuiabá).</>}</li>)}</ul>
       <p role="status">{features.length} avisos en la selección. {feed.sources.some(s => s.status !== "ok") ? "Hay fuentes incompletas o no disponibles; el conteo no representa todas las alertas." : ""}</p>
       {!features.length && <p>No hay avisos en los resultados disponibles para este filtro. Esto no garantiza ausencia de incendios o deforestación.</p>}
       {!!features.length && <div className="agro-series-table"><table><caption>Avisos por verificar · fecha de observación del proveedor</caption><thead><tr><th>Tipo</th><th>Municipio</th><th>Fecha</th><th>Fuente / estado</th><th>Ubicación</th></tr></thead><tbody>{features.slice(page * 25, page * 25 + 25).map(f => <tr key={f.properties.id}><td>{f.properties.title}</td><td>{f.properties.municipality}</td><td>{f.properties.observed_at.replace("T", " ").replace("+00:00", " UTC")}</td><td>{f.properties.source}<br/>{f.properties.status}{f.properties.confidence && <><br/>Confianza del proveedor: {f.properties.confidence}</>}</td><td><button disabled={!map} onClick={() => void focus(f)}>Ver en mapa</button></td></tr>)}</tbody></table></div>}
       {features.length > 25 && <div className="workspace-map-tools"><button disabled={page === 0} onClick={() => setPage(p => p - 1)}>Anterior</button><span>Página {page + 1} de {Math.ceil(features.length / 25)}</span><button disabled={(page + 1) * 25 >= features.length} onClick={() => setPage(p => p + 1)}>Siguiente</button></div>}
     </>}
-    <p>Un foco de calor no confirma un incendio. DETER es un aviso satelital y no determina por sí solo ilegalidad ni sustituye una verificación en campo. Las alertas aparecen en esta pantalla; no se envían correos ni notificaciones externas.</p>
+    <p>Un foco de calor no confirma un incendio ni delimita una zona quemada. Las cicatrices DETER son polígonos observados por satélite; pueden omitir quemas pequeñas y no cubren necesariamente todo el estado. DETER es un aviso satelital y no determina por sí solo ilegalidad ni sustituye una verificación en campo. Las alertas aparecen en esta pantalla; no se envían correos ni notificaciones externas.</p>
     <p>Fuentes: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a> · <a href="https://terrabrasilis.dpi.inpe.br/">INPE TerraBrasilis</a>.</p>
   </article>;
 }

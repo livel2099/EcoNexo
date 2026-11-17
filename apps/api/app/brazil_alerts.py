@@ -81,7 +81,7 @@ def deforestation_features(features, source):
     by_name = {normalized(f["properties"]["name"]): f["properties"]["codarea"] for f in municipalities()}
     for feature in features:
         p = feature.get("properties") or {}
-        if p.get("uf") != "MT" or p.get("classname") not in {"DESMATAMENTO_CR", "DESMATAMENTO_VEG"}:
+        if p.get("uf") != "MT" or p.get("classname") not in {"DESMATAMENTO_CR", "DESMATAMENTO_VEG", "CICATRIZ_DE_QUEIMADA"}:
             continue
         try:
             observed = datetime.strptime(str(p["view_date"])[:10], "%Y-%m-%d").date().isoformat()
@@ -90,9 +90,9 @@ def deforestation_features(features, source):
                 raise ValueError()
             code = p.get("mun_geocod") or by_name.get(normalized(p.get("municipality", "")), "")
             result.append({"type": "Feature", "geometry": geometry, "properties": {
-                "id": source + ":" + str(feature.get("id") or p["gid"]), "kind": "deforestation",
+                "id": source + ":" + str(feature.get("id") or p["gid"]), "kind": "burned" if p["classname"] == "CICATRIZ_DE_QUEIMADA" else "deforestation",
                 "source": source, "observed_at": observed, "municipality": p.get("municipality", "Sin municipio"),
-                "municipality_code": str(code), "title": "Aviso de deforestación · " + p["classname"],
+                "municipality_code": str(code), "title": "Zona quemada · cicatriz DETER" if p["classname"] == "CICATRIZ_DE_QUEIMADA" else "Aviso de deforestación · " + p["classname"],
                 "status": "Aviso DETER · no verificado en campo"}})
         except (ValueError, KeyError, TypeError):
             skipped += 1
