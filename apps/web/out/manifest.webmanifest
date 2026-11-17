@@ -1,15 +1,12 @@
 {
-  "name": "EcoNexo — Inteligencia bioclimática activa",
+  "name": "EcoNexo",
   "short_name": "EcoNexo",
-  "description": "Centro de comando ambiental, reportes ciudadanos e informes institucionales.",
-  "start_url": "/",
+  "description": "Inteligencia bioclimatica activa",
+  "start_url": "/reportar",
   "display": "standalone",
-  "background_color": "#020608",
-  "theme_color": "#061115",
-  "lang": "es-AR",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }],
-  "shortcuts": [
-    { "name": "Reportar incidente", "short_name": "Reportar", "url": "/reportar", "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }] },
-    { "name": "Centro de comando", "short_name": "Dashboard", "url": "/dashboard", "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }] }
+  "background_color": "#0E1613",
+  "theme_color": "#0E1613",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
   ]
 }

@@ -49,6 +49,12 @@
 <priority>0.4</priority>
 </url>
 <url>
+<loc>https://econexo.example/documentacion</loc>
+<lastmod>2026-07-27T00:00:00.000Z</lastmod>
+<changefreq>monthly</changefreq>
+<priority>0.4</priority>
+</url>
+<url>
 <loc>https://econexo.example/estado</loc>
 <lastmod>2026-07-27T00:00:00.000Z</lastmod>
 <changefreq>monthly</changefreq>

@@ -24,6 +24,7 @@ import ForestryPestPanel from "../../components/ForestryPestPanel";
 
 import EcoCampoPanel from "../../components/EcoCampoPanel";
 import AgroPanel from "../../components/AgroPanel";
+import BrazilPanel from "../../components/BrazilPanel";
 import ParaguaySoyPanel from "../../components/ParaguaySoyPanel";
 import "../../components/workspace.css";
 
@@ -66,7 +67,7 @@ const DEFAULT_SOURCE_SETTINGS: EnvironmentalSourceSettings = {
   updated_at: new Date(0).toISOString(),
 };
 
-type View = "inicio" | "paraguay" | "comando" | "fuego" | "plagas" | "agro" | "ecocampo" | "observatorio" | "dispositivos" | "reglas" | "reportes" | "informes" | "admin" | "prediccion";
+type View = "inicio" | "brasil" | "paraguay" | "comando" | "fuego" | "plagas" | "agro" | "ecocampo" | "observatorio" | "dispositivos" | "reglas" | "reportes" | "informes" | "admin" | "prediccion";
 
 function pct(value: number | null) {
   return value == null ? "—" : `${Math.round(value * 100)}%`;
@@ -264,6 +265,7 @@ export default function Dashboard() {
     comando:["Mapa y alertas","Monitoreo territorial de Misiones."],
     agro:["Mis cultivos","Seguimiento de lotes agrícolas con EcoNexo AG."],
     ecocampo:["Mi campo y forraje","Evaluación de terreno y planificación con EcoCampo."],
+    brasil:["Brasil · Mato Grosso","Exploración estatal y pronóstico por ubicación."],
     paraguay:["Paraguay · Soja","El clima, tu lote y sus recomendaciones, paso a paso."],
     informes:["Informes","Información para revisar y compartir con tu equipo."],
     prediccion:["Pronósticos de riesgo","Señales anticipadas para planificar el seguimiento."],
@@ -287,6 +289,7 @@ export default function Dashboard() {
           {navItem("agro", "Mis cultivos")}
           {navItem("ecocampo", "Campo y forraje")}
           {navItem("paraguay", "Paraguay · Soja")}
+          {navItem("brasil", "Brasil · Mato Grosso")}
           <span className="workspace-nav-label">SEGUIMIENTO</span>
           {navItem("comando", "Mapa y alertas")}
           {navItem("prediccion", "Pronósticos de riesgo")}
@@ -307,7 +310,7 @@ export default function Dashboard() {
         <div className="workspace-account"><strong>{session?.name || "Usuario"}</strong><small>{session?.role || ""}</small><button onClick={() => { clearSession(); router.replace("/"); }}>Cerrar sesión</button></div>
       </aside>
       <div className={`workspace-content${view === "comando" ? " command-view" : ""}`}>
-        <header className="workspace-heading"><div><button className="workspace-menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}>Menú</button><span className="workspace-eyebrow">ECONEXO / {view === "paraguay" ? "PARAGUAY" : "TU ORGANIZACIÓN"}</span><h1>{viewNames[view][0]}</h1><p>{viewNames[view][1]}</p></div>{view !== "inicio" && <button className="workspace-back" onClick={()=>navigate("inicio")}>Volver al inicio</button>}</header>
+        <header className="workspace-heading"><div><button className="workspace-menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}>Menú</button><span className="workspace-eyebrow">ECONEXO / {view === "brasil" ? "BRASIL" : view === "paraguay" ? "PARAGUAY" : "TU ORGANIZACIÓN"}</span><h1>{viewNames[view][0]}</h1><p>{viewNames[view][1]}</p></div>{view !== "inicio" && <button className="workspace-back" onClick={()=>navigate("inicio")}>Volver al inicio</button>}</header>
       {accessNotice && <div className="workspace-message error kpirow" role="alert">{accessNotice} {session?.role === "admin" && <button onClick={() => setView("admin")}>Abrir Admin Core</button>}</div>}
       {view === "comando" && <>
       <div className={`banner ${accessNotice ? "atencion" : globalStatus} kpirow`}>
@@ -339,7 +342,7 @@ export default function Dashboard() {
       </div>
 
       </>}
-      {view === "inicio" ? <WorkspaceHome name={org?.name || "Tu organización"} connected={kpi !== null && !accessNotice} alerts={localAlerts.filter(a=>!["descartada","resuelta"].includes(a.status)).length} devices={localDevices.length} onOpen={navigate} /> : token && view === "paraguay" ? <ParaguaySoyPanel token={token} role={session?.role || "visualizador"} /> : view === "comando" ? (
+      {view === "inicio" ? <WorkspaceHome name={org?.name || "Tu organización"} connected={kpi !== null && !accessNotice} alerts={localAlerts.filter(a=>!["descartada","resuelta"].includes(a.status)).length} devices={localDevices.length} onOpen={navigate} /> : view === "brasil" ? <BrazilPanel token={token || ""} /> : token && view === "paraguay" ? <ParaguaySoyPanel token={token} role={session?.role || "visualizador"} /> : view === "comando" ? (
         <>
           <section className="mapwrap" aria-label="Mapa operacional">
             <MapView token={token} devices={localDevices} alerts={localAlerts} detections={localDetections} reports={localReports} zones={localZones} center={commandCenter} earth={earthIntel} sourceSettings={sourceSettings} initialSatelliteMode="TRUE_COLOR" />

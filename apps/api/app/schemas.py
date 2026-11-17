@@ -464,7 +464,7 @@ class AlertShareOut(BaseModel):
 # --- Suscripciones, límites y mensajes administrativos ---
 SubscriptionPlanKey = Literal[
     "sandbox", "diagnostic", "pilot_8_weeks", "municipal",
-    "province_pro", "enterprise", "agro_productor", "academy"
+    "province_pro", "enterprise", "agro_productor", "soja", "academy"
 ]
 SubscriptionStatus = Literal[
     "pending", "trial", "active", "past_due", "suspended", "expired", "cancelled"

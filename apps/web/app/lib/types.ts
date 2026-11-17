@@ -345,7 +345,7 @@ export interface AlertShareInput {
 export interface AlertShareResult { id: string; created_at: string; }
 
 // --- Suscripciones comerciales y mensajes administrativos ---
-export type SubscriptionPlanKey = "sandbox" | "diagnostic" | "pilot_8_weeks" | "municipal" | "province_pro" | "enterprise" | "agro_productor" | "academy";
+export type SubscriptionPlanKey = "sandbox" | "diagnostic" | "pilot_8_weeks" | "municipal" | "province_pro" | "enterprise" | "agro_productor" | "soja" | "academy";
 export type SubscriptionStatus = "pending" | "trial" | "active" | "past_due" | "suspended" | "expired" | "cancelled";
 
 export interface SubscriptionPlan {

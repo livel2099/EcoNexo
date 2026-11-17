@@ -30,6 +30,14 @@ def test_business_plan_prices_are_encoded() -> None:
     assert PLAN_DEFINITIONS["enterprise"]["price_min_usd"] == 12000
 
 
+def test_soy_license_price_and_modules() -> None:
+    plan = PLAN_DEFINITIONS["soja"]
+    assert plan["price_min_usd"] == plan["price_max_usd"] == 750
+    assert plan["billing_period"] == "monthly"
+    assert "agro" in plan["entitlements"]["included_modules"]
+    assert LicenseRequestIn(requested_plan="soja", message="Licencia soja").requested_plan == "soja"
+    assert PLAN_DEFINITIONS["agro_productor"]["price_min_usd"] == 400
+
 def test_sandbox_is_limited_and_temporary() -> None:
     sandbox = PLAN_DEFINITIONS["sandbox"]
     assert sandbox["duration_days"] == 14

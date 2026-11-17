@@ -198,6 +198,34 @@ PLAN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "included_modules": ["core", "agro", "ecocampo"],
         },
     },
+    "soja": {
+        "name": "Soja · EcoNexo",
+        "description": (
+            "Lotes, NDVI Sentinel-2, aptitud agropecuaria, presupuesto forrajero y riesgos "
+            "sobre datos meteorológicos reales."
+        ),
+        "price_min_usd": 750,
+        "price_max_usd": 750,
+        "billing_period": "monthly",
+        "duration_days": None,
+        "entitlements": {
+            "max_users": 8,
+            "max_devices": 25,
+            "max_zones": 10,
+            "max_rules": 25,
+            "max_critical_layers": 3,
+            "municipality_limit": 3,
+            "report_frequency": "quincenal",
+            "support_level": "acompañamiento agronómico",
+            "api_access": False,
+            "audit_export": True,
+            "custom_models": False,
+            "sla": False,
+            "community_reports": True,
+            "operational_alerts": True,
+            "included_modules": ["core", "agro", "ecocampo"],
+        },
+    },
     "academy": {
         "name": "Academia EcoNexo",
         "description": "Capacitación operativa, manuales, certificación interna y simulacros.",
