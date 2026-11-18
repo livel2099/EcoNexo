@@ -1,4 +1,5 @@
 "use client";
+import { useBrazilLanguage } from "./BrazilLanguage";
 import { useEffect, useMemo, useState } from "react";
 import type { Map as LeafletMap, GeoJSON } from "leaflet";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -11,6 +12,8 @@ type Feed = { queried_at: string; sources: Source[] };
 const statusLabels = { stale: "Última consulta válida · desactualizada", ok: "Consulta disponible", partial: "Cobertura parcial", not_configured: "Sin configurar", unavailable: "No disponible" };
 
 export default function BrazilAlerts({ token, map, municipality, kind, onKindChange }: { token: string; map: LeafletMap|null; municipality: string; kind: string; onKindChange: (kind: string) => void }) {
+ const { t, locale } = useBrazilLanguage();
+
   const [feed, setFeed] = useState<Feed|null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -61,13 +64,13 @@ export default function BrazilAlerts({ token, map, municipality, kind, onKindCha
         onEachFeature: (feature, item) => {
           const p = feature.properties as AlertProperties;
           const text = document.createElement("span");
-          text.textContent = p.title + " · " + p.municipality + " · " + p.observed_at + " · " + p.source;
+          text.textContent = t(p.title) + " · " + p.municipality + " · " + p.observed_at + " · " + p.source;
           item.bindPopup(text);
         },
       }).addTo(map);
     });
     return () => { disposed = true; layer?.remove(); };
-  }, [map, features]);
+  }, [map, features, t]);
 
   async function focus(feature: AlertFeature) {
     if (!map) return;
@@ -76,22 +79,22 @@ export default function BrazilAlerts({ token, map, municipality, kind, onKindCha
     document.getElementById("mato-grosso-map")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
-  return <article className="agro-card" aria-label="Alertas de Mato Grosso">
-    <h3>Alertas satelitales</h3>
-    <p>Focos de calor: últimos 2 días. Deforestación y cicatrices de quema: observaciones de los últimos 30 días en las capas DETER de Amazonia y Cerrado. No se garantiza cobertura del Pantanal.</p>
-    <div className="workspace-map-tools"><label>Tipo de alerta <select value={kind} onChange={e => onKindChange(e.target.value)}><option value="all">Todas</option><option value="fire">Focos de calor</option><option value="deforestation">Deforestación</option><option value="burned">Zonas quemadas · cicatrices DETER</option></select></label><button disabled={busy || IS_DEMO || !token} onClick={() => setReload(n => n + 1)}>{busy ? "Actualizando…" : "Actualizar alertas"}</button></div>
-    <p>Rojo: foco de calor · Amarillo: deforestación · Violeta: zona quemada (cicatriz DETER). {municipality ? "Filtro del municipio seleccionado." : "Vista de todo Mato Grosso."}</p>
-    {error && <p role="alert">{error} {feed ? "Se conserva la última consulta; los datos pueden estar desactualizados." : ""}</p>}
-    {busy && <p role="status">Consultando las fuentes satelitales…</p>}
+  return <article className="agro-card" aria-label={t("Alertas de Mato Grosso")}>
+    <h3>{t("Alertas satelitales")}</h3>
+    <p>{t("Focos de calor: últimos 2 días. Deforestación y cicatrices de quema: observaciones de los últimos 30 días en las capas DETER de Amazonia y Cerrado. No se garantiza cobertura del Pantanal.")}</p>
+    <div className="workspace-map-tools"><label>{t("Tipo de alerta ")}<select value={kind} onChange={e => onKindChange(e.target.value)}><option value="all">{t("Todas")}</option><option value="fire">{t("Focos de calor")}</option><option value="deforestation">{t("Deforestación")}</option><option value="burned">{t("Zonas quemadas · cicatrices DETER")}</option></select></label><button disabled={busy || IS_DEMO || !token} onClick={() => setReload(n => n + 1)}>{busy ? t("Actualizando…") : t("Actualizar alertas")}</button></div>
+    <p>{t("Rojo: foco de calor · Amarillo: deforestación · Violeta: zona quemada (cicatriz DETER). ")}{municipality ? t("Filtro del municipio seleccionado.") : t("Vista de todo Mato Grosso.")}</p>
+    {error && <p role="alert">{t(error)} {feed ? t("Se conserva la última consulta; los datos pueden estar desactualizados.") : ""}</p>}
+    {busy && <p role="status">{t("Consultando las fuentes satelitales…")}</p>}
     {feed && <>
-      <p>Última consulta: {new Date(feed.queried_at).toLocaleString("es-AR", { timeZone: "America/Cuiaba" })} (Cuiabá). Actualización cada 5 minutos con esta sección abierta; caché de hasta 5 minutos.</p>
-      <ul>{feed.sources.map(s => <li key={s.source}><strong>{s.source}: {statusLabels[s.status]}</strong>. {s.message} {s.queried_at && <>Consulta de esta fuente: {new Date(s.queried_at).toLocaleString("es-AR", { timeZone: "America/Cuiaba" })} (Cuiabá).</>}</li>)}</ul>
-      <p role="status">{features.length} avisos en la selección. {feed.sources.some(s => s.status !== "ok") ? "Hay fuentes incompletas o no disponibles; el conteo no representa todas las alertas." : ""}</p>
-      {!features.length && <p>No hay avisos en los resultados disponibles para este filtro. Esto no garantiza ausencia de incendios o deforestación.</p>}
-      {!!features.length && <div className="agro-series-table"><table><caption>Avisos por verificar · fecha de observación del proveedor</caption><thead><tr><th>Tipo</th><th>Municipio</th><th>Fecha</th><th>Fuente / estado</th><th>Ubicación</th></tr></thead><tbody>{features.slice(page * 25, page * 25 + 25).map(f => <tr key={f.properties.id}><td>{f.properties.title}</td><td>{f.properties.municipality}</td><td>{f.properties.observed_at.replace("T", " ").replace("+00:00", " UTC")}</td><td>{f.properties.source}<br/>{f.properties.status}{f.properties.confidence && <><br/>Confianza del proveedor: {f.properties.confidence}</>}</td><td><button disabled={!map} onClick={() => void focus(f)}>Ver en mapa</button></td></tr>)}</tbody></table></div>}
-      {features.length > 25 && <div className="workspace-map-tools"><button disabled={page === 0} onClick={() => setPage(p => p - 1)}>Anterior</button><span>Página {page + 1} de {Math.ceil(features.length / 25)}</span><button disabled={(page + 1) * 25 >= features.length} onClick={() => setPage(p => p + 1)}>Siguiente</button></div>}
+      <p>{t("Última consulta: ")}{new Date(feed.queried_at).toLocaleString(locale, { timeZone: "America/Cuiaba" })} {t("(Cuiabá). Actualización cada 5 minutos con esta sección abierta; caché de hasta 5 minutos.")}</p>
+      <ul>{feed.sources.map(s => <li key={s.source}><strong>{s.source}: {t(statusLabels[s.status])}</strong>. {t(s.message)} {s.queried_at && <>{t("Consulta de esta fuente: ")}{new Date(s.queried_at).toLocaleString(locale, { timeZone: "America/Cuiaba" })} (Cuiabá).</>}</li>)}</ul>
+      <p role="status">{features.length} {t("avisos en la selección. ")}{feed.sources.some(s => s.status !== "ok") ? t("Hay fuentes incompletas o no disponibles; el conteo no representa todas las alertas.") : ""}</p>
+      {!features.length && <p>{t("No hay avisos en los resultados disponibles para este filtro. Esto no garantiza ausencia de incendios o deforestación.")}</p>}
+      {!!features.length && <div className="agro-series-table"><table><caption>{t("Avisos por verificar · fecha de observación del proveedor")}</caption><thead><tr><th>Tipo</th><th>{t("Municipio")}</th><th>{t("Fecha")}</th><th>{t("Fuente / estado")}</th><th>{t("Ubicación")}</th></tr></thead><tbody>{features.slice(page * 25, page * 25 + 25).map(f => <tr key={f.properties.id}><td>{t(f.properties.title)}</td><td>{f.properties.municipality}</td><td>{f.properties.observed_at.replace("T", " ").replace("+00:00", " UTC")}</td><td>{f.properties.source}<br/>{t(f.properties.status)}{f.properties.confidence && <><br/>{t("Confianza del proveedor: ")}{t(f.properties.confidence)}</>}</td><td><button disabled={!map} onClick={() => void focus(f)}>{t("Ver en mapa")}</button></td></tr>)}</tbody></table></div>}
+      {features.length > 25 && <div className="workspace-map-tools"><button disabled={page === 0} onClick={() => setPage(p => p - 1)}>{t("Anterior")}</button><span>{t("Página ")}{page + 1} de {Math.ceil(features.length / 25)}</span><button disabled={(page + 1) * 25 >= features.length} onClick={() => setPage(p => p + 1)}>{t("Siguiente")}</button></div>}
     </>}
-    <p>Un foco de calor no confirma un incendio ni delimita una zona quemada. Las cicatrices DETER son polígonos observados por satélite; pueden omitir quemas pequeñas y no cubren necesariamente todo el estado. DETER es un aviso satelital y no determina por sí solo ilegalidad ni sustituye una verificación en campo. Las alertas aparecen en esta pantalla; no se envían correos ni notificaciones externas.</p>
-    <p>Fuentes: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a> · <a href="https://terrabrasilis.dpi.inpe.br/">INPE TerraBrasilis</a>.</p>
+    <p>{t("Un foco de calor no confirma un incendio ni delimita una zona quemada. Las cicatrices DETER son polígonos observados por satélite; pueden omitir quemas pequeñas y no cubren necesariamente todo el estado. DETER es un aviso satelital y no determina por sí solo ilegalidad ni sustituye una verificación en campo. Las alertas aparecen en esta pantalla; no se envían correos ni notificaciones externas.")}</p>
+    <p>{t("Fuentes: ")}<a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a> · <a href="https://terrabrasilis.dpi.inpe.br/">INPE TerraBrasilis</a>.</p>
   </article>;
 }

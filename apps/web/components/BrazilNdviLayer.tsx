@@ -1,4 +1,5 @@
 "use client";
+import { useBrazilLanguage } from "./BrazilLanguage";
 import { useEffect, useRef, useState } from "react";
 import type { Map as LeafletMap, TileLayer } from "leaflet";
 
@@ -23,6 +24,8 @@ function catalog() {
 }
 
 export default function BrazilNdviLayer({ map }: { map: LeafletMap|null }) {
+ const { t } = useBrazilLanguage();
+
   const [enabled, setEnabled] = useState(false);
   const [metadata, setMetadata] = useState<Catalog|null>(null);
   const [date, setDate] = useState("");
@@ -69,13 +72,13 @@ export default function BrazilNdviLayer({ map }: { map: LeafletMap|null }) {
   useEffect(() => { active.current?.setOpacity(opacity); }, [opacity, enabled, date, metadata, retry]);
   return <div className="workspace-technical" style={{ padding: 16, marginBottom: 16 }}>
     <div className="workspace-map-tools">
-      <label><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)}/> Vegetación NDVI · NASA</label>
-      {enabled && <><label>Fecha de composición <input type="date" value={date} min={metadata?.ranges[0]?.split("/")[0]} max={metadata?.latest} onChange={e => setDate(e.target.value)}/></label>
-      <label>Opacidad <input type="range" min="0.2" max="1" step="0.1" value={opacity} onChange={e => setOpacity(Number(e.target.value))}/></label>
-      <button onClick={() => { catalogPromise = null; setRetry(n => n + 1); }}>Reintentar NDVI</button></>}
+      <label><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)}/> {t("Vegetación NDVI · NASA")}</label>
+      {enabled && <><label>{t("Fecha de composición ")}<input type="date" value={date} min={metadata?.ranges[0]?.split("/")[0]} max={metadata?.latest} onChange={e => setDate(e.target.value)}/></label>
+      <label>{t("Opacidad ")}<input type="range" min="0.2" max="1" step="0.1" value={opacity} onChange={e => setOpacity(Number(e.target.value))}/></label>
+      <button onClick={() => { catalogPromise = null; setRetry(n => n + 1); }}>{t("Reintentar NDVI")}</button></>}
     </div>
-    {enabled && <><p role="status">{status}</p><p>MODIS Terra · composición móvil de 8 días · resolución nominal de 250 m. Última fecha publicada: {metadata?.latest || "consultando"}. Cobertura regional: puede incluir zonas vecinas a Mato Grosso. Al acercar el mapa se amplían los píxeles; no aumenta el detalle.</p>
-      <img src={GIBS + "/legends/MODIS_NDVI_H.svg"} alt="Escala oficial del índice NDVI de NASA" style={{ maxWidth: "100%", background: "white", padding: 8 }}/>
-      <p>NDVI representa vegetación, no exclusivamente soja; no mide rendimiento ni diagnostica plagas. Transparencia no significa ausencia de vegetación. Para el detalle del lote, usá Sentinel-2 en Satélite.</p></>}
+    {enabled && <><p role="status">{t(status)}</p><p>{t("MODIS Terra · composición móvil de 8 días · resolución nominal de 250 m. Última fecha publicada: ")}{metadata?.latest || t("consultando")}{t(". Cobertura regional: puede incluir zonas vecinas a Mato Grosso. Al acercar el mapa se amplían los píxeles; no aumenta el detalle.")}</p>
+      <img src={GIBS + "/legends/MODIS_NDVI_H.svg"} alt={t("Escala oficial del índice NDVI de NASA")} style={{ maxWidth: "100%", background: "white", padding: 8 }}/>
+      <p>{t("NDVI representa vegetación, no exclusivamente soja; no mide rendimiento ni diagnostica plagas. Transparencia no significa ausencia de vegetación. Para el detalle del lote, usá Sentinel-2 en Satélite.")}</p></>}
   </div>;
 }
