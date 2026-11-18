@@ -37,4 +37,13 @@
 .workspace-shell .workspace-steps button.active{background:rgba(143,240,106,.10)!important;color:var(--green-bright)}
 .workspace-steps button.active span{background:var(--green-bright);color:#031208}
 .workspace-technical>summary{color:var(--muted)}
+.br-ops-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:20px 0}
+.br-ops-metrics article{padding:18px;border:1px solid var(--border-soft);border-radius:12px;background:var(--panel);display:grid;gap:10px}
+.br-ops-metrics strong{font-size:clamp(20px,2vw,28px);overflow-wrap:anywhere;color:var(--green-bright)}
+.br-ops-metrics small,.br-ops-metrics span{color:var(--muted);line-height:1.5}
+.br-ops-alert{border-bottom:1px solid var(--border-soft);padding:12px 0}
+.brazil-operations .agro-card{min-width:0}.brazil-operations textarea{width:100%;min-height:80px}
+.brazil-operations input[type=checkbox]{width:auto;min-height:0;margin-right:8px}
+.brazil-operations .agro-form{margin:18px 0}.brazil-operations td{vertical-align:top}
+@media(max-width:600px){.br-ops-metrics{grid-template-columns:1fr 1fr;gap:8px}.br-ops-metrics article{padding:12px}.br-ops-metrics strong{font-size:20px}.brazil-operations .workspace-map-tools label{width:100%}}
 @media(max-width:760px){.workspace-shell .workspace-heading{background:var(--bg-2)}}

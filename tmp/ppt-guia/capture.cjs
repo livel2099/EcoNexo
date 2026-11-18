@@ -1,0 +1,36 @@
+const { chromium } = require('../../apps/web/node_modules/playwright');
+const path = require('path');
+(async()=>{
+ const browser=await chromium.launch({channel:'chrome',headless:true});
+ const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});
+ await page.goto('http://localhost:3110/login/');
+ const cookies=page.getByRole('button',{name:'Solo esenciales',exact:true});
+ await cookies.waitFor({state:'visible'});
+ await cookies.click();
+ await cookies.waitFor({state:'hidden'});
+ await page.screenshot({path:path.join(__dirname,'login.png')});
+ await page.getByRole('button',{name:'Ingresar',exact:true}).click();
+ await page.getByRole('button',{name:/Abrir Brasil/}).waitFor({timeout:45000});
+ await page.screenshot({path:path.join(__dirname,'home.png')});
+ await page.getByRole('button',{name:/Abrir Brasil/}).click();
+ await page.getByRole('button',{name:'Português',exact:true}).click();
+ await page.getByRole('heading',{name:'Previsão para soja · próximos 7 dias'}).waitFor();
+ async function snap(name){await page.locator('.workspace-step-content:visible').first().screenshot({path:path.join(__dirname,name+'.png')});}
+ await snap('clima');
+ await page.getByRole('button',{name:'1 Localização',exact:true}).click();
+ await page.locator('.leaflet-container').first().waitFor();
+ await page.locator('.leaflet-container').first().screenshot({path:path.join(__dirname,'localizacao.png')});
+ await page.getByRole('button',{name:'3 Avaliação',exact:true}).click();
+ await page.getByLabel('Nome do talhão',{exact:true}).fill('Talhão de exemplo');
+ await page.locator('form').scrollIntoViewIfNeeded();
+ const box=await page.locator('form').boundingBox();
+ await page.screenshot({path:path.join(__dirname,'avaliacao.png'),clip:{x:box.x,y:box.y,width:box.width,height:Math.min(680,box.height)}});
+ await page.getByRole('button',{name:'4 Satélite',exact:true}).click();
+ await snap('satelite');
+ await page.getByRole('button',{name:'Mapa estadual e alertas',exact:true}).click();
+ await page.getByRole('heading',{name:'Monitoramento de Mato Grosso'}).waitFor();
+ await page.getByRole('button',{name:'Ver todo o estado',exact:true}).waitFor();
+ await page.locator('#mato-grosso-map').screenshot({path:path.join(__dirname,'territorio.png')});
+ await browser.close();
+ console.log('Captured 7 platform screens.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

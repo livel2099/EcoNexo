@@ -48,7 +48,7 @@ def normalized(value):
     return "".join(c for c in unicodedata.normalize("NFKD", str(value).casefold()) if not unicodedata.combining(c))
 
 
-def fire_features(text, source):
+def fire_features(text, source, clip_to_state=True):
     reader = csv.DictReader(io.StringIO(text))
     if not {"latitude", "longitude", "acq_date", "acq_time"}.issubset(reader.fieldnames or []):
         raise ValueError("Respuesta FIRMS inválida")
@@ -62,8 +62,9 @@ def fire_features(text, source):
             time = row["acq_time"].zfill(4)
             observed = datetime.strptime(row["acq_date"] + time, "%Y-%m-%d%H%M").replace(tzinfo=timezone.utc).isoformat()
             place = locate(lon, lat)
-            if not place:
+            if not place and clip_to_state:
                 continue
+            place = place or {"name": "Entorno de Mato Grosso", "codarea": ""}
             key = hashlib.sha256(f"{source}|{lat}|{lon}|{observed}".encode()).hexdigest()
             result[key] = {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]},
                 "properties": {"id": key, "kind": "fire", "source": "NASA FIRMS · " + source,

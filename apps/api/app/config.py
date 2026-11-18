@@ -101,6 +101,17 @@ class Settings(BaseSettings):
     nasa_firms_key: str = ""
     firms_inline_enabled: bool = True
     firms_source: str = "VIIRS_SNPP_NRT"
+    # Migration 30 and per-organization opt-in are required before enabling workers.
+    brazil_operations_enabled: bool = False
+    brazil_smtp_host: str = ""
+    brazil_smtp_port: int = 587
+    brazil_smtp_user: str = ""
+    brazil_smtp_password: str = ""
+    brazil_mail_from: str = ""
+    brazil_whatsapp_token: str = ""
+    brazil_whatsapp_phone_id: str = ""
+    brazil_whatsapp_template: str = ""
+    brazil_whatsapp_version: str = "v27.0"
     pipeline_max_devices_per_run: int = 100
     pipeline_http_timeout_seconds: float = 20.0
     pipeline_scheduler_enabled: bool = True

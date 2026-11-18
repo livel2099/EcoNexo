@@ -13,6 +13,8 @@ test('cambia idioma, conserva el formulario y recuerda la selección', async ({ 
   await expect(page.getByRole('button', { name: /Abrir Brasil/ })).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: /Abrir Brasil/ }).click();
   await page.getByRole('button', { name: 'Português', exact: true }).click();
+  await expect(page.getByRole('heading', {name:'Laranja e eucalipto: acompanhamento por propriedade'})).toBeVisible();
+  await page.getByRole('button', {name:'Soja · previsão e avaliação',exact:true}).click();
   await expect(page.getByRole('heading', { name: 'Previsão para soja · próximos 7 dias' })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar para a avaliação', exact: true }).click();
   await page.getByLabel('Nome do talhão', { exact: true }).fill('Talhão São José');
@@ -27,5 +29,6 @@ test('cambia idioma, conserva el formulario y recuerda la selección', async ({ 
   await page.reload();
   await page.getByRole('button', { name: /Abrir Brasil/ }).click();
   await expect(page.getByRole('button', { name: 'Português', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', {name:'Soja · previsão e avaliação',exact:true}).click();
   await expect(page.getByRole('heading', { name: 'Previsão para soja · próximos 7 dias' })).toBeVisible();
 });

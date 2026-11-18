@@ -265,7 +265,7 @@ export default function Dashboard() {
     comando:["Mapa y alertas","Monitoreo territorial de Misiones."],
     agro:["Mis cultivos","Seguimiento de lotes agrícolas con EcoNexo AG."],
     ecocampo:["Mi campo y forraje","Evaluación de terreno y planificación con EcoCampo."],
-    brasil:["Brasil · Mato Grosso","Soja: pronóstico del lote, evaluación e informes para Mato Grosso."],
+    brasil:["Brasil · Mato Grosso","Naranja, eucalipto y soja: predios, suelo, incendios y sanidad."],
     paraguay:["Paraguay · Soja","El clima, tu lote y sus recomendaciones, paso a paso."],
     informes:["Informes","Información para revisar y compartir con tu equipo."],
     prediccion:["Pronósticos de riesgo","Señales anticipadas para planificar el seguimiento."],

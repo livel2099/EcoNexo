@@ -23,6 +23,7 @@ from .routers import (
     paraguay,
     brazil,
     brazil_soy,
+    brazil_operations,
     alerts,
     auth,
     copernicus,
@@ -76,6 +77,9 @@ async def lifespan(app: FastAPI):
             "No se pudo asegurar el administrador general"
         )
     workers = [asyncio.create_task(mqtt_bridge(stop), name="mqtt-bridge")]
+    if s.brazil_operations_enabled:
+        from .brazil_operations_worker import operations_scheduler
+        workers.append(asyncio.create_task(operations_scheduler(stop),name="brazil-operations"))
     if s.pipeline_scheduler_enabled:
         workers.append(
             asyncio.create_task(pipeline_scheduler(stop), name="telemetry-pipeline-scheduler")
@@ -162,6 +166,7 @@ app.include_router(agro.ecocampo_router)
 app.include_router(paraguay.router)
 app.include_router(brazil.router)
 app.include_router(brazil_soy.router)
+app.include_router(brazil_operations.router)
 app.include_router(foi.router)
 app.include_router(orgs.router)
 app.include_router(devices.router)

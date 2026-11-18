@@ -1,0 +1,11 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+const dir=path.dirname(fileURLToPath(import.meta.url));
+const workspaceDir=path.resolve(dir,'../..');
+const skill='C:/Users/Livel/.codex/plugins/cache/openai-primary-runtime/presentations/26.1117.12345/skills/presentations';
+const runtime='C:/Program Files/WindowsApps/OpenAI.CodexPrimaryRuntime.v26-1117-1425-0_26.1117.1425.0_x64__3k8sg7r9htsxt/dependencies';
+const {finalizePresentation}=await import(pathToFileURL(skill+'/container_tools/artifact_tool_utils.mjs'));
+await fs.mkdir(path.join(workspaceDir,'output'),{recursive:true});
+const result=await finalizePresentation({workspaceDir,candidatePath:path.join(dir,'candidate.pptx'),finalPath:path.join(workspaceDir,'output','Econexo_Guia_de_Uso_Portugues.pptx'),pythonExecutable:runtime+'/python/python.exe',integrityValidatorPath:skill+'/container_tools/inspect_presentation_package_integrity.py',layoutValidatorPath:skill+'/container_tools/inspect_presentation_layout_geometry.py',layoutArgs:['--expected-slide-size-emu','12192000,6858000','--validate-bullet-geometry','--validate-heading-fit'],fontPolicy:{basis:'design',families:['Arial']},explicitTotalSlideCount:15,requiredNativeTableOwnerSlides:[],requiredNativeChartOwnerSlides:[],verifyArtifactToolImport:true,receiptPath:path.join(dir,'validation.json')});
+console.log(JSON.stringify(result));
